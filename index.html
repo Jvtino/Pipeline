@@ -1,0 +1,1131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pipeline — job applications from your inbox</title>
+<style>
+  /* ============================================================
+     THEME — dark, near-black background with blue accents
+     ============================================================ */
+  :root{
+    --bg:        #07090e;
+    --panel:     #0c111b;
+    --panel-2:   #10182640;
+    --elev:      #0f1622;
+    --border:    rgba(255,255,255,.07);
+    --border-2:  rgba(255,255,255,.13);
+
+    --text:      #e8edf5;
+    --text-dim:  #9aa6b8;
+    --text-faint:#61708a;
+
+    --blue:      #2f81f7;
+    --blue-2:    #4f9cff;
+    --blue-deep: #163a86;
+
+    /* status colors (user-defined) */
+    --c-applied:  #8b97a8; /* gray  — active / pending  */
+    --c-interview:#f5c542; /* yellow— meeting / interview*/
+    --c-offer:    #34d399; /* green — offer / accepted   */
+    --c-rejected: #f0556b; /* red   — rejected           */
+
+    --radius: 16px;
+    --shadow: 0 10px 30px rgba(0,0,0,.45);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1100px 560px at 50% -12%, rgba(47,129,247,.16), transparent 62%),
+      radial-gradient(800px 500px at 92% 8%, rgba(47,129,247,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font:15px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:rgba(47,129,247,.35)}
+  ::-webkit-scrollbar{width:11px;height:11px}
+  ::-webkit-scrollbar-thumb{background:#1b2433;border-radius:8px;border:3px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:#283447;background-clip:padding-box}
+
+  .wrap{max-width:1140px;margin:0 auto;padding:0 22px 64px}
+
+  /* sticky top section: header + stats + toolbar stay visible while the board scrolls */
+  .topbar{
+    position:sticky;top:0;z-index:40;margin:0 -22px;padding:22px 22px 16px;
+    background:rgba(7,9,14,.86);
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    border-bottom:1px solid var(--border);
+  }
+
+  /* ---------------- Header ---------------- */
+  header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px;margin-right:auto}
+  .logo{
+    width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+    background:linear-gradient(155deg,#2f81f7,#163a86);
+    box-shadow:0 6px 18px rgba(47,129,247,.40), inset 0 1px 0 rgba(255,255,255,.25);
+    color:#fff;flex:0 0 auto;
+  }
+  .logo svg{width:22px;height:22px}
+  .brand h1{font-size:19px;margin:0;letter-spacing:-.2px;font-weight:700}
+  .brand p{margin:1px 0 0;font-size:12.5px;color:var(--text-dim)}
+
+  .chip{
+    display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-family:inherit;
+    padding:7px 12px;border-radius:999px;border:1px solid var(--border-2);
+    background:rgba(255,255,255,.03);color:var(--text-dim);font-size:12.5px;font-weight:600;
+    transition:border-color .14s, color .14s;
+  }
+  .chip:hover{border-color:var(--blue);color:var(--text)}
+  .chip .live{width:7px;height:7px;border-radius:50%;background:var(--blue-2);box-shadow:0 0 9px var(--blue-2)}
+  .chip.syncing .live{width:11px;height:11px;background:transparent;box-shadow:none;border:2px solid rgba(79,156,255,.35);border-top-color:var(--blue-2);animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .bigspin{width:26px;height:26px;border-radius:50%;border:3px solid rgba(79,156,255,.25);border-top-color:var(--blue-2);animation:spin .8s linear infinite;margin:0 auto 12px}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+    padding:9px 15px;border-radius:11px;border:1px solid transparent;
+    font-size:13.5px;font-weight:650;color:#fff;
+    background:linear-gradient(180deg,#3b8bff,#2f81f7);
+    box-shadow:0 6px 16px rgba(47,129,247,.35), inset 0 1px 0 rgba(255,255,255,.25);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .btn:hover{transform:translateY(-1px);box-shadow:0 9px 22px rgba(47,129,247,.45)}
+  .btn:active{transform:translateY(0)}
+  .btn svg{width:16px;height:16px}
+
+  /* ---------------- Stats ---------------- */
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:18px 0 14px}
+  @media (max-width:760px){.stats{grid-template-columns:repeat(2,1fr)}}
+  .stat{
+    text-align:left;cursor:pointer;color:var(--text);border:1px solid var(--border);border-radius:14px;
+    padding:14px 15px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0));
+    transition:border-color .15s, transform .12s, background .15s;
+  }
+  .stat:hover{transform:translateY(-2px);border-color:var(--border-2)}
+  .stat.active{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue), 0 10px 26px rgba(47,129,247,.18)}
+  .stat .n{font-size:27px;font-weight:760;letter-spacing:-.5px;line-height:1}
+  .stat .l{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:12.5px;color:var(--text-dim);font-weight:600}
+
+  /* ---------------- Toolbar ---------------- */
+  .toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .search{position:relative;flex:1 1 240px;min-width:200px}
+  .search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-faint)}
+  .search input{
+    width:100%;padding:10px 12px 10px 36px;border-radius:11px;
+    background:var(--panel);border:1px solid var(--border);color:var(--text);font-size:14px;outline:none;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .search input::placeholder{color:var(--text-faint)}
+  .search input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,129,247,.22)}
+  .toolbar-right{margin-left:auto;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  select.sel{
+    background:var(--panel);border:1px solid var(--border);color:var(--text-dim);
+    padding:9px 12px;border-radius:11px;font-size:13px;font-weight:600;cursor:pointer;outline:none;
+  }
+  select.sel:focus{border-color:var(--blue)}
+  select.sel.active{border-color:var(--blue);color:#cfe2ff;background:rgba(47,129,247,.10)}
+
+  /* ---------------- Status dots / pills ---------------- */
+  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;display:inline-block}
+  .s-applied  {background:var(--c-applied);  box-shadow:0 0 8px rgba(139,151,168,.55)}
+  .s-interview{background:var(--c-interview);box-shadow:0 0 9px rgba(245,197,66,.55)}
+  .s-offer    {background:var(--c-offer);    box-shadow:0 0 9px rgba(52,211,153,.6)}
+  .s-rejected {background:var(--c-rejected); box-shadow:0 0 8px rgba(240,85,107,.5)}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px 3px 8px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid transparent;white-space:nowrap}
+  .pill.s-applied  {color:#cdd5e1;background:rgba(139,151,168,.12);border-color:rgba(139,151,168,.28)}
+  .pill.s-interview{color:#f7d272;background:rgba(245,197,66,.12);border-color:rgba(245,197,66,.30)}
+  .pill.s-offer    {color:#5fe0b0;background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.30)}
+  .pill.s-rejected {color:#ff7d90;background:rgba(240,85,107,.12);border-color:rgba(240,85,107,.30)}
+  .pill .dot{box-shadow:none}
+
+  /* ---------------- Company cards ---------------- */
+  /* masonry: 1px implicit rows; each child spans its measured height (see layoutMasonry) */
+  .board{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));grid-auto-rows:1px;gap:0 14px;align-items:start;margin-top:20px}
+  .board > *{margin:0}
+  .card{
+    border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;
+    background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0));
+    transition:border-color .15s, transform .12s, box-shadow .15s;
+  }
+  .card:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
+  .card .chead{cursor:grab}
+  .card .chead:active{cursor:grabbing}
+  .card.dragging{opacity:.45;transform:scale(.985)}
+  .card.dragover{border-color:var(--blue);box-shadow:0 0 0 1.5px var(--blue), var(--shadow)}
+  .card .chead{display:flex;align-items:center;gap:12px;padding:15px 16px}
+  .avatar{
+    width:40px;height:40px;border-radius:11px;flex:0 0 auto;display:grid;place-items:center;
+    font-weight:800;font-size:16px;position:relative;
+  }
+  .avatar .ring{position:absolute;inset:-3px;border-radius:14px;border:2px solid transparent}
+  .avatar .logo-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border-radius:inherit;background:#fff;padding:5px;box-sizing:border-box;opacity:0;transition:opacity .2s}
+  .avatar .logo-img.ok{opacity:1}
+  .cmeta{min-width:0;flex:1;overflow:hidden}
+  .cmeta .cname{font-weight:720;font-size:15.5px;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cmeta .csub{font-size:12px;color:var(--text-dim);margin-top:2px;display:flex;align-items:center;gap:8px;overflow:hidden}
+  .summ-dots{display:flex;gap:4px;align-items:center;flex-shrink:0}
+  .dots-more{font-size:11px;font-weight:700;color:var(--text-faint);white-space:nowrap;flex-shrink:0}
+  .roles{border-top:1px solid var(--border);padding:5px 8px 9px;max-height:208px;overflow-y:auto}
+  .card.thread-open .roles{height:208px}  /* fixed height while a thread is open: card never grows, content scrolls */
+  .role{
+    display:flex;align-items:center;gap:11px;padding:11px 9px;border-radius:11px;cursor:pointer;
+    height:48px;transition:background .13s;
+  }
+  .role:hover{background:rgba(255,255,255,.035)}
+  .role .rtitle{flex:1;min-width:0;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .role .when{font-size:11.5px;color:var(--text-faint);white-space:nowrap}
+  .chev{width:15px;height:15px;color:var(--text-faint);transition:transform .18s;flex:0 0 auto}
+  .role.open .chev{transform:rotate(90deg)}
+
+  /* timeline */
+  .timeline{display:none;padding:8px 12px;margin:2px 9px 8px;background:rgba(0,0,0,.18);border:1px solid var(--border);border-radius:10px}
+  .role.open + .timeline{display:block;animation:tlIn .18s ease}
+  @keyframes tlIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+  @keyframes cardIn{from{opacity:.5;transform:translateY(5px)}to{opacity:1;transform:none}}
+  .card{animation:cardIn .18s ease}
+  @media (prefers-reduced-motion: reduce){.card,.role.open + .timeline{animation:none}}
+  .tl{position:relative;padding-left:20px}
+  .tl::before{content:"";position:absolute;left:5px;top:4px;bottom:4px;width:2px;background:linear-gradient(var(--border-2),transparent)}
+  .ev{position:relative;padding:7px 0}
+  .ev .node{position:absolute;left:-19px;top:11px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg)}
+  .ev .esub{font-size:13px;font-weight:600;color:var(--text)}
+  .ev .ebody{font-size:12px;color:var(--text-dim);margin-top:2px;line-height:1.45}
+  .ev .emeta{font-size:11px;color:var(--text-faint);margin-top:3px;display:flex;gap:8px;align-items:center}
+
+  /* pin button + pinned section */
+  .chead .pin{
+    flex:0 0 auto;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;
+    background:transparent;border:1px solid transparent;color:var(--text-faint);cursor:pointer;
+    opacity:0;transition:opacity .14s, color .14s, background .14s, border-color .14s, transform .12s;
+  }
+  .card:hover .pin{opacity:1}
+  .pin:hover{background:rgba(255,255,255,.05);color:var(--text-dim);border-color:var(--border);transform:translateY(-1px)}
+  .pin svg{width:16px;height:16px}
+  .pin.on{opacity:1;color:var(--blue-2)}
+  .pin.on:hover{color:var(--blue-2);background:rgba(47,129,247,.12);border-color:rgba(47,129,247,.30)}
+  @media (hover:none){ .chead .pin{opacity:.5} }
+  /* ignore button + restore chips */
+  .chead .ign{
+    flex:0 0 auto;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;
+    background:transparent;border:1px solid transparent;color:var(--text-faint);cursor:pointer;
+    opacity:0;transition:opacity .14s, color .14s, background .14s, border-color .14s;
+  }
+  .card:hover .ign{opacity:1}
+  .ign:hover{background:rgba(240,85,107,.12);color:#ff7d90;border-color:rgba(240,85,107,.30)}
+  .ign svg{width:15px;height:15px}
+  @media (hover:none){ .chead .ign{opacity:.5} }
+  .igrow{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+  .igchip{
+    cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:7px;
+    padding:7px 12px;border-radius:999px;border:1px solid var(--border);
+    background:rgba(255,255,255,.02);color:var(--text-faint);font-size:12.5px;font-weight:600;
+    text-decoration:line-through;transition:all .14s;
+  }
+  .igchip:hover{color:var(--text);border-color:var(--blue);text-decoration:none;background:rgba(47,129,247,.08)}
+  .igchip .x{font-size:13px;color:var(--blue-2)}
+  .card.pinned{border-color:rgba(47,129,247,.32);box-shadow:0 0 0 1px rgba(47,129,247,.10)}
+  .card.pinned:hover{border-color:rgba(47,129,247,.5);box-shadow:0 0 0 1px rgba(47,129,247,.18), var(--shadow)}
+  .seclabel{grid-column:1/-1;display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--text-dim);margin:0;padding:6px 2px 0}
+  .seclabel svg{width:13px;height:13px;color:var(--blue-2)}
+  .seclabel.dim{color:rgba(154,166,184,.45)}
+  .seclabel.dim svg{display:none}
+
+  /* position-level pin (within a company card) */
+  .role .rpin{
+    flex:0 0 auto;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+    background:transparent;border:1px solid transparent;color:var(--text-faint);cursor:pointer;
+    opacity:0;transition:opacity .14s, color .14s, background .14s, border-color .14s;
+  }
+  .role:hover .rpin{opacity:.85}
+  .rpin:hover{opacity:1;background:rgba(255,255,255,.06);color:var(--text-dim);border-color:var(--border)}
+  .rpin svg{width:13px;height:13px}
+  .rpin.on{opacity:1;color:var(--blue-2)}
+  .rpin.on:hover{color:var(--blue-2);background:rgba(47,129,247,.12);border-color:rgba(47,129,247,.30)}
+  @media (hover:none){ .role .rpin{opacity:.5} }
+  .role.role-pinned{background:rgba(47,129,247,.07)}
+  .role.role-pinned:hover{background:rgba(47,129,247,.11)}
+
+  /* interview prep button */
+  .role .prep{
+    flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;
+    padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;
+    color:var(--c-interview);background:rgba(245,197,66,.08);border:1px solid rgba(245,197,66,.25);
+    cursor:pointer;white-space:nowrap;font-family:inherit;
+    transition:background .14s,border-color .14s;
+  }
+  .role .prep:hover{background:rgba(245,197,66,.18);border-color:rgba(245,197,66,.5)}
+  .role .prep svg{width:11px;height:11px}
+
+  .empty{grid-column:1/-1;text-align:center;padding:70px 20px;color:var(--text-faint)}
+  .empty svg{width:40px;height:40px;opacity:.5;margin-bottom:10px}
+
+  footer.note{margin-top:28px;text-align:center;font-size:12px;color:var(--text-faint)}
+  footer.note b{color:var(--text-dim);font-weight:700}
+
+  /* ---------------- Modal ---------------- */
+  .overlay{position:fixed;inset:0;background:rgba(3,5,9,.72);backdrop-filter:blur(4px);display:none;place-items:center;z-index:50;padding:20px}
+  .overlay.open{display:grid}
+  .modal{
+    width:100%;max-width:460px;background:var(--elev);border:1px solid var(--border-2);border-radius:18px;
+    box-shadow:var(--shadow);padding:22px;
+  }
+  .modal h2{margin:0 0 6px;font-size:18px}
+  .modal p{margin:0 0 16px;color:var(--text-dim);font-size:13.5px}
+  .prov{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:12px;margin-bottom:9px}
+  .prov .pi{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:rgba(255,255,255,.05);font-size:15px;flex:0 0 auto}
+  .prov .pt{flex:1;min-width:0}
+  .prov .pt b{font-size:13.5px}
+  .prov .pt span{display:block;font-size:11.5px;color:var(--text-faint)}
+  .prov .tag{font-size:10.5px;font-weight:700;color:#9cc2ff;background:rgba(47,129,247,.14);padding:3px 8px;border-radius:999px;border:1px solid rgba(47,129,247,.3)}
+  .modal .x{margin-top:8px;width:100%;justify-content:center}
+  .codeline{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:#9cc2ff;background:#0a0f18;border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin:6px 0 14px;overflow-x:auto}
+  /* connect / provider picker */
+  .provbtn{width:100%;text-align:left;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:12px;margin-bottom:9px;background:rgba(255,255,255,.02);color:var(--text);transition:border-color .14s,background .14s}
+  .provbtn:hover{border-color:var(--blue);background:rgba(47,129,247,.08)}
+  .provbtn .pi{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:rgba(255,255,255,.06);font-size:16px;flex:0 0 auto}
+  .provbtn b{font-size:13.5px}
+  .provbtn span{display:block;font-size:11.5px;color:var(--text-faint)}
+  .or{display:flex;align-items:center;gap:10px;color:var(--text-faint);font-size:11px;margin:14px 0 10px;text-transform:uppercase;letter-spacing:.08em}
+  .or::before,.or::after{content:"";height:1px;background:var(--border);flex:1}
+  .imapform input{width:100%;padding:9px 11px;margin-bottom:8px;border-radius:9px;background:var(--panel);border:1px solid var(--border);color:var(--text);font-size:13px;outline:none}
+  .imapform input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,129,247,.18)}
+  .acct-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px}
+  .acct-row .e{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .acct-row .badge{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em}
+  .acct-row .rm{cursor:pointer;border:none;background:transparent;color:var(--text-faint);font-size:14px;padding:2px 7px;border-radius:6px}
+  .acct-row .rm:hover{color:#ff7d90;background:rgba(240,85,107,.12)}
+  .cmsg{font-size:12px;margin:10px 0 2px;min-height:1em}
+  .cmsg.err{color:#ff7d90}.cmsg.ok{color:#5fe0b0}.cmsg.busy{color:var(--text-dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+  <header class="top">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7.5 8.5 6 8.5-6"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Pipeline</h1>
+        <p>Job applications, straight from your inbox</p>
+      </div>
+    </div>
+    <button class="chip" id="acct" type="button" title="Sync now"><span class="live" id="syncDot"></span><span id="syncLabel">Demo data</span></button>
+    <button class="btn" id="connectBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7a4 4 0 0 1 0 6m-2-6a4 4 0 0 0 0 6"/><path d="M7 10v4m10-4v4M4 12h.01M20 12h.01"/></svg>
+      Connect email
+    </button>
+  </header>
+
+  <section class="stats" id="stats"></section>
+
+  <div class="toolbar">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+      <input id="q" type="text" placeholder="Search company or role…  ( / )" autocomplete="off" />
+    </div>
+    <select class="sel" id="timeframe" title="Limit results by recency">
+      <option value="all">All time</option>
+      <option value="7d">Last 7 days</option>
+      <option value="30d">Last 30 days</option>
+      <option value="90d">Last 3 months</option>
+      <option value="180d">Last 6 months</option>
+      <option value="365d">Last 12 months</option>
+    </select>
+    <select class="sel" id="sort">
+      <option value="recent">Recent activity</option>
+      <option value="az">Company A–Z</option>
+      <option value="count">Most positions</option>
+      <option value="custom">Custom order</option>
+    </select>
+  </div>
+  </div>
+
+  <main class="board" id="board"></main>
+
+  <footer class="note" id="foot"></footer>
+</div>
+
+<!-- Connect-email modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2>Connect a mailbox</h2>
+    <div id="connectBody"></div>
+    <button class="btn x" id="closeModal">Close</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   1) DATA LAYER  —  two providers, same shape
+   ----------------------------------------------------------------------------
+   A Provider exposes one async method: fetch() -> RawEmail[]
+   RawEmail = { threadId, domain, subject, messages:[{date, from, body}] }
+   Each thread = the email conversation about ONE application.
+
+   - MockProvider: the demo data below.
+   - LiveProvider: reads a real mailbox via the local backend (server.py).
+   init() (bottom) tries LiveProvider first and falls back to MockProvider.
+   To read your own mail, just run server.py with IMAP credentials — see README.
+   ========================================================================== */
+
+const MockProvider = {
+  async fetch(){ return generateExampleThreads(); }
+};
+
+/* Example data: ~10 positions per company, generated deterministically so the
+   layout, thread ids and pins stay stable across reloads. Each thread is a
+   realistic email conversation; statuses are inferred by the same classifier
+   used for real mail. Tweak COMPANIES / ROLES / COUNT below to taste. */
+function generateExampleThreads(){
+  const COMPANIES = [
+    { name:"Stripe",  domain:"stripe.com" },
+    { name:"Google",  domain:"google.com" },
+    { name:"Notion",  domain:"notion.so" },
+    { name:"Airbnb",  domain:"airbnb.com" },
+    { name:"Spotify", domain:"spotify.com" },
+    { name:"Figma",   domain:"figma.com" },
+    { name:"Datadog", domain:"datadoghq.com" },
+    { name:"Amazon",  domain:"amazon.com" },
+    { name:"Vercel",  domain:"vercel.com" },
+  ];
+  const ROLES = [
+    "Software Engineer","Senior Software Engineer","Staff Software Engineer","Backend Engineer",
+    "Frontend Engineer","Full Stack Engineer","Mobile Engineer, iOS","Android Engineer",
+    "Platform Engineer","Site Reliability Engineer","DevOps Engineer","Data Analyst",
+    "Data Scientist","Machine Learning Engineer","Data Engineer","Product Manager",
+    "Senior Product Manager","Technical Program Manager","Product Designer","UX Researcher",
+    "Design Engineer","Solutions Engineer","Sales Engineer","Developer Advocate",
+    "Security Engineer","QA Engineer","Engineering Manager","Business Analyst",
+  ];
+  const COUNT = 10; // positions per company
+
+  const BODY = {
+    applied: [
+      "Thanks for applying to the {role} role at {company}. We've received your application and our team is reviewing it.",
+      "Thank you for your application for the {role} position. It has been received and is now under review.",
+      "We've received your application for {role} at {company} and it's now with our recruiting team.",
+    ],
+    interview: [
+      "Good news — we'd like to invite you to a first interview for the {role} role. Are you available next week for a video call?",
+      "We enjoyed reviewing your background. The next step for {role} is a technical screen — please share your availability to schedule a call.",
+      "We'd love to take your {role} application further. Let's set up a call with the hiring manager — what's your availability?",
+    ],
+    offer: [
+      "We're thrilled to extend you an offer to join {company} as a {role}! The full details are attached. Welcome to the team.",
+      "We are pleased to offer you the {role} position at {company}. Congratulations — we'd love to have you on board.",
+    ],
+    rejected: [
+      "Thank you for your interest in {company}. Unfortunately, after careful consideration we've decided to move forward with other candidates for the {role} role.",
+      "We regret to inform you that we will not be moving forward with your application for {role}. We wish you the best in your search.",
+      "Thank you for applying. Unfortunately the {role} position has been filled and we are no longer moving forward with other candidates.",
+    ],
+  };
+
+  const hash = n => { let x = Math.imul(n ^ 0x9e3779b9, 2654435761); x ^= x >>> 15; return x >>> 0; };
+  const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  const daysAgoISO = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  const fill = (t, role, company) => t.replace(/{role}/g, role).replace(/{company}/g, company);
+  const pick = (arr, n) => arr[n % arr.length];
+
+  const threads = [];
+  COMPANIES.forEach((co, i) => {
+    for (let j = 0; j < COUNT; j++){
+      const seed = i * COUNT + j;
+      const role = ROLES[(i * 3 + j) % ROLES.length];        // distinct roles within a company
+      const r = hash(seed) % 100;                            // status mix, varied per company
+      const status = r < 42 ? "rejected" : r < 70 ? "applied" : r < 88 ? "interview" : "offer";
+
+      const appliedAgo  = 40 + (hash(seed + 5) % 200);
+      const middleAgo   = appliedAgo - 20;
+      const terminalAgo = appliedAgo - 35;
+      const env = (n, who, kind) => ({ date: daysAgoISO(n), from: `${who}@${co.domain}`, body: fill(pick(BODY[kind], hash(seed + kind.length)), role, co.name) });
+
+      const msgs = [ env(appliedAgo, "careers", "applied") ];
+      if (status === "interview"){
+        msgs.push(env(middleAgo, "recruiting", "interview"));
+      } else if (status === "offer"){
+        msgs.push(env(middleAgo, "recruiting", "interview"));
+        msgs.push(env(terminalAgo, "talent", "offer"));
+      } else if (status === "rejected"){
+        if (hash(seed + 4) % 2 === 0) msgs.push(env(middleAgo, "recruiting", "interview"));
+        msgs.push(env(terminalAgo, "careers", "rejected"));
+      }
+
+      threads.push({
+        threadId: `${slug(co.name)}-${slug(role)}`,
+        domain: co.domain,
+        subject: `Your application for ${role} at ${co.name}`,
+        messages: msgs,
+      });
+    }
+  });
+  return threads;
+}
+
+// LiveProvider — talks to the local backend (server.py), which reads a real
+// mailbox over IMAP and returns the same thread shape as MockProvider above.
+// If the backend isn't running, isn't configured, or errors, fetch() throws
+// and we fall back to demo data (see init() at the bottom).
+const LiveProvider = {
+  account: null,
+  async fetch(){
+    // Desktop app (Electron): secure IPC bridge → Microsoft Graph (OAuth).
+    if (window.pipelineAPI && window.pipelineAPI.fetchThreads){
+      const res = await window.pipelineAPI.fetchThreads();
+      if (!res || res.error) throw new Error((res && res.error) || "not connected");
+      this.account = res.account || "mailbox";
+      return Array.isArray(res.threads) ? res.threads : [];
+    }
+    // Web: local backend (server.py).
+    const r = await fetch("api/threads", { cache:"no-store" });
+    if (!r.ok) throw new Error("backend http " + r.status);
+    const data = await r.json();
+    if (data && data.error) throw new Error(data.error);
+    if (!Array.isArray(data)) throw new Error("unexpected response shape");
+    this.account = r.headers.get("X-Mail-Account") || "mailbox";
+    return data;
+  }
+};
+
+/* ============================================================================
+   2) CLASSIFIER  —  turn raw email text into a status
+   ----------------------------------------------------------------------------
+   Pure keyword rules for the prototype. This is the natural place to later
+   drop in an LLM call for higher accuracy across messy real-world emails.
+   ========================================================================== */
+
+const STATUS = {
+  applied:  { key:"applied",   label:"Active",    cls:"s-applied",   color:"var(--c-applied)"   },
+  interview:{ key:"interview", label:"Interview", cls:"s-interview", color:"var(--c-interview)" },
+  offer:    { key:"offer",     label:"Offer",     cls:"s-offer",     color:"var(--c-offer)"     },
+  rejected: { key:"rejected",  label:"Rejected",  cls:"s-rejected",  color:"var(--c-rejected)"  },
+};
+// precedence for a company's "headline" status (most exciting first)
+const HEADLINE_ORDER = ["offer","interview","applied","rejected"];
+
+function detectStatus(text){
+  const t = text.toLowerCase();
+  if (/\b(pleased to offer|extend (?:you )?an offer|thrilled to extend|offer of employment|we are excited to offer|job offer|welcome to the team)\b/.test(t)) return "offer";
+  if (/\b(unfortunately|we regret|regret to inform|not (?:be )?moving forward|will not be (?:moving|proceeding)|decided (?:not to|to (?:move|proceed))|move forward with other|other candidates|not (?:be )?selected|position has been filled|no longer (?:moving|under consideration)|decided not to proceed)\b/.test(t)) return "rejected";
+  if (/\b(phone (?:screen|interview)|technical (?:screen|interview)|video (?:screen|interview)|coding (?:challenge|assessment|test)|take[- ]home|invite(?:d)? you (?:to|for)|we(?:'d| would) like to (?:schedule|meet|speak|chat|connect)|schedule (?:a |an )?(?:call|interview|meeting|screen)|set up (?:a |an )?(?:call|interview|meeting)|please (?:share|provide|confirm|let us know) your availability|would love to (?:chat|meet|speak|connect|talk)|moving (?:you )?forward|advancing your application|next round|hiring manager (?:call|interview|chat|meeting)|on-?site interview)\b/.test(t)) return "interview";
+  if (/\b(thank you for applying|application (?:has been )?received|received your application|thank you for your (?:interest|application)|we have received|successfully submitted|under review)\b/.test(t)) return "applied";
+  return null;
+}
+
+// company display name from a domain (small map + capitalized fallback)
+const NAME_MAP = { "datadoghq":"Datadog", "notion":"Notion", "spotify":"Spotify", "figma":"Figma", "vercel":"Vercel", "airbnb":"Airbnb", "amazon":"Amazon", "google":"Google", "stripe":"Stripe" };
+function companyFromDomain(domain){
+  const root = domain.split(".").slice(-2)[0] || domain;
+  return NAME_MAP[root] || root.charAt(0).toUpperCase()+root.slice(1);
+}
+
+// ATS / recruiting platforms — emails from these domains have the real company
+// name in the subject, not in the sender domain.
+const ATS_DOMAINS = new Set([
+  "greenhouse","lever","workday","myworkdaysite","workdayjobs",
+  "linkedin","jobvite","icims","taleo","smartrecruiters","ashbyhq",
+  "breezy","recruitee","workable","bamboohr","personio",
+  "jazzhr","successfactors","dayforce","rippling","teamtailor",
+  "comeet","dover","gem","jobscore","freshteam","zohorecruit",
+  "indeed","glassdoor","ziprecruiter","wellfound","angellist",
+]);
+function isAtsDomain(domain){
+  const root = (domain || "").split(".").slice(-2)[0] || "";
+  return ATS_DOMAINS.has(root.toLowerCase());
+}
+// Extract the hiring company from the subject line when the sender is an ATS.
+function extractCompanyFromSubject(subject){
+  const s = subject || "";
+  // "…role at Company Name" — by far the most common pattern across all ATS
+  const m1 = s.match(/\bat ([A-Z][A-Za-z0-9 &.,'-]+?)(?:\s*[-–—(]|\s+via\b|\s*$)/);
+  if (m1){ const c = tidy(m1[1]).replace(/\.+$/,""); if (c.length > 1) return c; }
+  // "Thank you for applying to Company" / "application to Company for role"
+  const m2 = s.match(/\bto ([A-Z][A-Za-z0-9 &.,'-]+?)(?:\s+for\b|\s*[-–—(]|\s*$)/);
+  if (m2){ const c = tidy(m2[1]).replace(/\.+$/,""); if (c.length > 1 && !/^(the|a|an|us|our|you|your)$/i.test(c)) return c; }
+  return null;
+}
+// Best-effort domain guess for logos when the real domain is an ATS.
+function guessCompanyDomain(company){
+  return company.toLowerCase().replace(/[^a-z0-9]/g,"") + ".com";
+}
+
+// pull a role title out of an email subject
+function extractRole(subject){
+  const pats = [
+    /application for (?:the )?(.+?) at .+/i,
+    /applying (?:to|for) (?:the )?(.+?) at .+/i,
+    /application[\s—–-]+(.+?) at .+/i,
+    /applying[\s—–-]+(.+?) at .+/i,
+  ];
+  for (const re of pats){ const m = subject.match(re); if (m && m[1]) return tidy(m[1]); }
+  const m2 = subject.match(/(.+?) at .+/i);
+  return m2 ? tidy(m2[1]) : subject;
+}
+function tidy(s){ return s.replace(/\s+/g," ").replace(/[\s,;:–—-]+$/,"").trim(); }
+
+/* ============================================================================
+   3) AGGREGATION  —  emails → applications → grouped by company
+   ========================================================================== */
+
+function buildApplications(threads){
+  return threads.map(th => {
+    const msgs = [...th.messages].sort((a,b)=> a.date.localeCompare(b.date));
+    let status = "applied";
+    const timeline = msgs.map(m => {
+      const s = detectStatus(m.body) ;
+      if (s) status = s;
+      return { date:m.date, from:m.from, body:m.body, status:s || status };
+    });
+    let company = companyFromDomain(th.domain);
+    let domain  = th.domain;
+    if (isAtsDomain(th.domain)){
+      const extracted = extractCompanyFromSubject(th.subject);
+      if (extracted){ company = extracted; domain = guessCompanyDomain(extracted); }
+    }
+    return {
+      id: th.threadId,
+      company,
+      domain,
+      role: extractRole(th.subject),
+      subject: th.subject,
+      status,
+      firstDate: msgs[0].date,
+      lastDate: msgs[msgs.length-1].date,
+      timeline,
+    };
+  });
+}
+
+function groupByCompany(apps){
+  const map = new Map();
+  for (const a of apps){
+    if (!map.has(a.company)) map.set(a.company, { company:a.company, domain:a.domain, apps:[] });
+    map.get(a.company).apps.push(a);
+  }
+  const groups = [...map.values()];
+  for (const g of groups){
+    g.apps.sort((x,y)=> y.lastDate.localeCompare(x.lastDate));
+    g.lastDate = g.apps[0].lastDate;
+    g.headline = HEADLINE_ORDER.find(s => g.apps.some(a=>a.status===s)) || "applied";
+  }
+  return groups;
+}
+
+/* ============================================================================
+   4) UI  —  render stats, filters and the company board
+   ========================================================================== */
+
+// pinned favorites persist across reloads: companies (by name) + positions (by id)
+function loadSet(key){ try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch(e){ return new Set(); } }
+function saveSet(key, set){ try { localStorage.setItem(key, JSON.stringify([...set])); } catch(e){} }
+
+const TIMEFRAMES = [
+  { key:"all",  label:"All time",       days:0   },
+  { key:"7d",   label:"Last 7 days",    days:7   },
+  { key:"30d",  label:"Last 30 days",   days:30  },
+  { key:"90d",  label:"Last 3 months",  days:90  },
+  { key:"180d", label:"Last 6 months",  days:180 },
+  { key:"365d", label:"Last 12 months", days:365 },
+];
+function loadTimeframe(){ try { return localStorage.getItem("pipeline.timeframe") || "all"; } catch(e){ return "all"; } }
+function loadSort(){
+  try { const s = localStorage.getItem("pipeline.sort"); return ["recent","az","count","custom"].includes(s) ? s : "recent"; }
+  catch(e){ return "recent"; }
+}
+function loadOrder(){ try { return JSON.parse(localStorage.getItem("pipeline.cardOrder") || "[]"); } catch(e){ return []; } }
+function saveOrder(){ try { localStorage.setItem("pipeline.cardOrder", JSON.stringify(state.cardOrder)); localStorage.setItem("pipeline.sort", state.sort); } catch(e){} }
+
+const state = { filter:"all", query:"", sort:loadSort(), timeframe:loadTimeframe(),
+                cardOrder:loadOrder(), expanded:new Set(),
+                pinned:loadSet("pipeline.pins"), pinnedRoles:loadSet("pipeline.pinnedRoles"),
+                ignored:loadSet("pipeline.ignored"), apps:[] };
+const $ = sel => document.querySelector(sel);
+
+// timeframe ("fresh start") — only show applications whose latest activity is recent enough
+function tfMeta(){ return TIMEFRAMES.find(t => t.key === state.timeframe) || TIMEFRAMES[0]; }
+function inTimeframe(a){
+  const days = tfMeta().days;
+  if (!days) return true;
+  return new Date(a.lastDate + "T00:00:00").getTime() >= Date.now() - days*86400000;
+}
+function visibleApps(){ return state.apps.filter(a => inTimeframe(a) && !state.ignored.has(a.company)); }
+
+const PIN_SVG  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>`;
+const IGN_SVG  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>`;
+const PREP_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6"/><path d="M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`;
+
+function counts(apps){
+  const c = { all:apps.length, applied:0, interview:0, offer:0, rejected:0 };
+  apps.forEach(a => c[a.status]++);
+  return c;
+}
+
+function appMatches(a){
+  if (state.ignored.has(a.company)) return false;
+  if (!inTimeframe(a)) return false;
+  if (state.filter !== "all" && a.status !== state.filter) return false;
+  if (state.query){
+    const q = state.query.toLowerCase();
+    if (!a.company.toLowerCase().includes(q) && !a.role.toLowerCase().includes(q)) return false;
+  }
+  return true;
+}
+
+function fmtDate(d){
+  const dt = new Date(d+"T00:00:00");
+  return dt.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+}
+function timeAgo(d){
+  const days = Math.round((Date.now() - new Date(d+"T00:00:00")) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return days+"d ago";
+  if (days < 30) return Math.floor(days/7)+"w ago";
+  if (days < 365) return Math.floor(days/30)+"mo ago";
+  return Math.floor(days/365)+"y ago";
+}
+function hueFor(name){ let h=0; for(const ch of name) h=(h*31+ch.charCodeAt(0))%360; return h; }
+function esc(s){ return s.replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+// Company logos: derived from the sender's domain via a favicon service. Real
+// domains return a 128px logo; unknown ones return a tiny generic icon, so we
+// keep the logo only if it's big enough and otherwise fall back to the initial.
+// Set SHOW_LOGOS = false to use plain lettered avatars everywhere.
+const SHOW_LOGOS = true;
+const logoUrl = d => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(d)}&sz=128`;
+function onLogoLoad(img){ if (!img.naturalWidth || img.naturalWidth < 48) img.remove(); else img.classList.add("ok"); }
+
+function renderStats(){
+  const c = counts(visibleApps());
+  const tiles = [
+    { key:"all",       n:c.all,       label:"Total",     cls:"" },
+    { key:"applied",   n:c.applied,   label:"Active",    cls:"s-applied" },
+    { key:"interview", n:c.interview, label:"Interview", cls:"s-interview" },
+    { key:"offer",     n:c.offer,     label:"Offers",    cls:"s-offer" },
+    { key:"rejected",  n:c.rejected,  label:"Rejected",  cls:"s-rejected" },
+  ];
+  $("#stats").innerHTML = tiles.map(t => `
+    <button class="stat ${state.filter===t.key?"active":""}" data-filter="${t.key}">
+      <div class="n" style="color:${t.key==="all" ? "var(--text)" : STATUS[t.key].color}">${t.n}</div>
+      <div class="l">${t.cls?`<span class="dot ${t.cls}"></span>`:""}${t.label}</div>
+    </button>`).join("");
+}
+
+function renderCard(g){
+  const hue = hueFor(g.company);
+  const ringColor = STATUS[g.headline].color;
+  const isPinned = state.pinned.has(g.company);
+  const apps = [...g.apps].sort((a,b)=>
+    (state.pinnedRoles.has(a.id)?0:1) - (state.pinnedRoles.has(b.id)?0:1));  // pinned positions first
+  // Fixed-height mode only matters when other positions can scroll out of the
+  // way; a single-position card sizes naturally so it never shows dead space.
+  const threadOpen = apps.length > 1 && apps.some(a => state.expanded.has(a.id));
+  const roles = apps.map(a => {
+    const st = STATUS[a.status];
+    const open = state.expanded.has(a.id);
+    const rolePinned = state.pinnedRoles.has(a.id);
+    const events = a.timeline.map(ev => `
+      <div class="ev">
+        <span class="node s-${ev.status}"></span>
+        <div class="esub">${STATUS[ev.status].label} · <span style="color:var(--text-dim);font-weight:500">${esc(ev.from)}</span></div>
+        <div class="ebody">${esc(ev.body)}</div>
+        <div class="emeta">${fmtDate(ev.date)}</div>
+      </div>`).join("");
+    return `
+      <div class="role ${open?"open":""} ${rolePinned?"role-pinned":""}" data-id="${a.id}">
+        <span class="dot ${st.cls}"></span>
+        <span class="rtitle">${esc(a.role)}</span>
+        <span class="pill ${st.cls}">${st.label}</span>
+        <span class="when">${timeAgo(a.lastDate)}</span>
+        ${a.status === "interview" ? `<button type="button" class="prep" data-prep="${esc(a.id)}" title="Search interview prep">${PREP_SVG}Prep</button>` : ""}
+        <button type="button" class="rpin ${rolePinned?"on":""}" data-pin-role="${esc(a.id)}"
+                title="${rolePinned?"Unpin position":"Pin position"}" aria-label="${rolePinned?"Unpin ":"Pin "}${esc(a.role)}" aria-pressed="${rolePinned}">${PIN_SVG}</button>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </div>
+      <div class="timeline"><div class="tl">${events}</div></div>`;
+  }).join("");
+
+  const summDots = g.apps.slice(0,8).map(a=>`<span class="dot ${STATUS[a.status].cls}" title="${esc(a.role)}: ${STATUS[a.status].label}"></span>`).join("")
+    + (g.apps.length > 8 ? `<span class="dots-more">+${g.apps.length - 8}</span>` : "");
+
+  return `
+    <section class="card ${isPinned?"pinned":""} ${threadOpen?"thread-open":""}" draggable="true" data-company="${esc(g.company)}">
+      <div class="chead">
+        <div class="avatar" style="background:hsl(${hue} 42% 20%);color:hsl(${hue} 75% 74%)">
+          <span class="ring" style="border-color:${ringColor}"></span>
+          <span class="initial">${esc(g.company[0])}</span>
+          ${SHOW_LOGOS ? `<img class="logo-img" src="${logoUrl(g.domain)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="onLogoLoad(this)" onerror="this.remove()">` : ""}
+        </div>
+        <div class="cmeta">
+          <div class="cname">${esc(g.company)}</div>
+          <div class="csub">
+            <span>${g.apps.length} position${g.apps.length>1?"s":""}</span>
+            <span class="summ-dots">${summDots}</span>
+          </div>
+        </div>
+        <button class="pin ${isPinned?"on":""}" data-pin="${esc(g.company)}"
+                title="${isPinned?"Unpin":"Pin to top"}" aria-label="${isPinned?"Unpin ":"Pin "}${esc(g.company)}" aria-pressed="${isPinned}">
+          ${PIN_SVG}
+        </button>
+        <button class="ign" data-ignore="${esc(g.company)}"
+                title="Ignore ${esc(g.company)} (not job mail)" aria-label="Ignore ${esc(g.company)}">
+          ${IGN_SVG}
+        </button>
+      </div>
+      <div class="roles">${roles}</div>
+    </section>`;
+}
+
+function renderBoard(){
+  const groups = groupByCompany(state.apps.filter(appMatches));
+
+  const orderIdx = new Map(state.cardOrder.map((c,i)=>[c,i]));
+  const oi = g => orderIdx.has(g.company) ? orderIdx.get(g.company) : Infinity;
+  const cmp = ({
+    az:     (a,b)=> a.company.localeCompare(b.company),
+    count:  (a,b)=> b.apps.length - a.apps.length || b.lastDate.localeCompare(a.lastDate),
+    recent: (a,b)=> b.lastDate.localeCompare(a.lastDate),
+    custom: (a,b)=> oi(a) - oi(b) || b.lastDate.localeCompare(a.lastDate),  // unknown companies append by recency
+  })[state.sort] || ((a,b)=> b.lastDate.localeCompare(a.lastDate));
+
+  if (!groups.length){
+    const msg = state.apps.length === 0
+      ? "No job-application emails found yet."
+      : (visibleApps().length === 0 && state.timeframe !== "all")
+        ? `No applications in the ${tfMeta().label.toLowerCase()}.`
+        : "No applications match this view.";
+    setBoardHtml(`<div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+      <div>${msg}</div></div>` + renderIgnoredSection());
+    return;
+  }
+
+  const pinned = groups.filter(g => state.pinned.has(g.company)).sort(cmp);
+  const rest   = groups.filter(g => !state.pinned.has(g.company)).sort(cmp);
+
+  let html = "";
+  if (pinned.length){
+    html += `<div class="seclabel">${PIN_SVG} Pinned</div>`;
+    html += pinned.map(renderCard).join("");
+    if (rest.length) html += `<div class="seclabel dim">More</div>`;
+  }
+  html += rest.map(renderCard).join("");
+  html += renderIgnoredSection();
+  setBoardHtml(html);
+}
+
+/* Swap board content while holding the board's height: when the new children
+   land they have no row spans yet, so the page would momentarily collapse and
+   the browser would clamp the scroll position (= the "page jumps up" bug). */
+function setBoardHtml(html){
+  const board = $("#board");
+  const savedScroll = window.scrollY;
+  board.style.minHeight = board.offsetHeight + "px";
+  board.innerHTML = html;
+  layoutMasonry();
+  board.style.minHeight = "";
+  window.scrollTo(0, savedScroll);
+}
+
+/* Masonry packing: the board uses 1px implicit rows, and every child spans
+   exactly its own measured height (+14px breathing room). Cards therefore sit
+   directly under the previous card in their column — no dead space when
+   neighbors have different heights. Re-run on every render and on resize. */
+function layoutMasonry(){
+  const board = $("#board");
+  if (!board) return;
+  const prevLock = board.style.minHeight;
+  board.style.minHeight = board.offsetHeight + "px";   // hold page height while spans reset (prevents scroll clamp)
+  for (const k of board.children) k.style.gridRowEnd = "auto";   // reset, then measure natural heights
+  for (const k of board.children){
+    const h = k.getBoundingClientRect().height;
+    k.style.gridRowEnd = "span " + (Math.max(1, Math.ceil(h)) + 14);
+  }
+  board.style.minHeight = prevLock;
+}
+let masonryTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(masonryTimer);
+  masonryTimer = setTimeout(layoutMasonry, 120);
+});
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => layoutMasonry());
+
+function renderIgnoredSection(){
+  if (!state.ignored.size) return "";
+  const chips = [...state.ignored].sort((a,b)=>a.localeCompare(b)).map(c => `
+    <button class="igchip" data-restore="${esc(c)}" title="Restore ${esc(c)}">
+      ${esc(c)} <span class="x">↩</span>
+    </button>`).join("");
+  return `<div class="seclabel dim">Ignored — click to restore</div>
+          <div class="igrow">${chips}</div>`;
+}
+
+function renderFoot(){
+  const apps = visibleApps();
+  const totalCos = new Set(apps.map(a=>a.company)).size;
+  const scope = state.timeframe === "all" ? "" : ` · ${tfMeta().label.toLowerCase()}`;
+  $("#foot").innerHTML = `Prototype on demo data · <b>${apps.length}</b> applications across <b>${totalCos}</b> companies${scope} · classified locally from email text`;
+}
+
+function renderControls(){
+  const tf = $("#timeframe");
+  if (tf){ tf.value = state.timeframe; tf.classList.toggle("active", state.timeframe !== "all"); }
+  const so = $("#sort"); if (so) so.value = state.sort;
+}
+
+function render(){ renderControls(); renderStats(); renderBoard(); renderFoot(); }
+
+/* ---- connect / provider picker (interactive in the desktop app) ---- */
+function renderConnectModal(){
+  const body = $("#connectBody");
+  if (!body) return;
+  if (!(window.pipelineAPI && window.pipelineAPI.connect)){
+    body.innerHTML = `<p style="color:var(--text-dim);font-size:13.5px;margin:0 0 6px">
+      You're viewing the web/demo build. The <b>desktop app</b> adds one-click sign-in for any
+      mailbox — Google, Microsoft, or any IMAP provider (iCloud, Yahoo, Fastmail…) — with
+      credentials stored only on your device.</p>
+      <div class="codeline">npm start &nbsp;·&nbsp; see DESKTOP.md</div>`;
+    return;
+  }
+  body.innerHTML = `
+    <button class="provbtn" data-connect="google"><div class="pi" style="background:#fff;color:#ea4335;font-weight:800">G</div><div><b>Continue with Google</b><span>Gmail</span></div></button>
+    <button class="provbtn" data-connect="microsoft"><div class="pi" style="background:#fff;color:#0a66c2;font-weight:800">M</div><div><b>Continue with Microsoft</b><span>Outlook · Hotmail · Live</span></div></button>
+    <div class="or">or any other mailbox</div>
+    <div class="imapform">
+      <input id="imap-email" type="email" placeholder="you@icloud.com · yahoo · fastmail · work…" autocomplete="off">
+      <input id="imap-pass" type="password" placeholder="app password" autocomplete="off">
+      <input id="imap-host" type="text" placeholder="IMAP host (optional — auto-detected)" autocomplete="off">
+      <button class="btn" id="imap-connect" style="width:100%;justify-content:center">Connect via IMAP</button>
+    </div>
+    <div class="cmsg" id="connect-msg"></div>
+    <div id="acct-list"></div>`;
+  renderAccountList();
+}
+async function renderAccountList(){
+  const el = $("#acct-list");
+  if (!el || !(window.pipelineAPI && window.pipelineAPI.listAccounts)) return;
+  let accts = [];
+  try { accts = await window.pipelineAPI.listAccounts(); } catch(e){}
+  el.innerHTML = accts.length
+    ? `<div class="or">connected</div>` + accts.map(a =>
+        `<div class="acct-row"><span class="e">${esc(a.email)}</span><span class="badge">${esc(a.provider)}</span><button class="rm" data-disconnect="${esc(a.id)}" title="Disconnect">✕</button></div>`).join("")
+    : "";
+}
+async function connectProvider(provider, opts){
+  const msg = $("#connect-msg");
+  if (msg){ msg.className = "cmsg busy"; msg.textContent = "Connecting… a sign-in window may open."; }
+  try {
+    const res = await window.pipelineAPI.connect(provider, opts);
+    if (!res || res.ok === false || res.error) throw new Error((res && res.error) || "connection failed");
+    if (msg){ msg.className = "cmsg ok"; msg.textContent = "Connected " + (res.email || ""); }
+    await renderAccountList();
+    await sync();
+  } catch(e){
+    if (msg){ msg.className = "cmsg err"; msg.textContent = "Couldn't connect: " + ((e && e.message) || e); }
+  }
+}
+
+/* ---- events ---- */
+document.addEventListener("click", e => {
+  const rpin = e.target.closest("[data-pin-role]");
+  if (rpin){
+    const id = rpin.dataset.pinRole;
+    state.pinnedRoles.has(id) ? state.pinnedRoles.delete(id) : state.pinnedRoles.add(id);
+    saveSet("pipeline.pinnedRoles", state.pinnedRoles);
+    renderBoard();
+    return;
+  }
+  const ign = e.target.closest("[data-ignore]");
+  if (ign){
+    state.ignored.add(ign.dataset.ignore);
+    saveSet("pipeline.ignored", state.ignored);
+    render();   // stats + board both change
+    return;
+  }
+  const restore = e.target.closest("[data-restore]");
+  if (restore){
+    state.ignored.delete(restore.dataset.restore);
+    saveSet("pipeline.ignored", state.ignored);
+    render();
+    return;
+  }
+  const pin = e.target.closest("[data-pin]");
+  if (pin){
+    const c = pin.dataset.pin;
+    state.pinned.has(c) ? state.pinned.delete(c) : state.pinned.add(c);
+    saveSet("pipeline.pins", state.pinned);
+    renderBoard();
+    return;
+  }
+  const prep = e.target.closest("[data-prep]");
+  if (prep){
+    const a = state.apps.find(x => x.id === prep.dataset.prep);
+    if (a){
+      const q = encodeURIComponent(a.company + " " + a.role + " interview questions");
+      const url = "https://www.google.com/search?q=" + q;
+      if (window.pipelineAPI && window.pipelineAPI.openExternal) window.pipelineAPI.openExternal(url);
+      else window.open(url, "_blank", "noopener");
+    }
+    return;
+  }
+  const role = e.target.closest(".role");
+  if (role){
+    const id = role.dataset.id;
+    const opening = !state.expanded.has(id);
+    if (opening){
+      const company = state.apps.find(a => a.id === id)?.company;   // accordion: only one open per card
+      for (const openId of [...state.expanded])
+        if (state.apps.find(a => a.id === openId)?.company === company) state.expanded.delete(openId);
+      state.expanded.add(id);
+    } else {
+      state.expanded.delete(id);
+    }
+    renderBoard();
+    if (opening){   // bring the opened thread to the top of its card's fixed scroll area
+      const sel = '.role.open[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]';
+      const el = document.querySelector(sel);
+      const box = el && el.closest(".roles");
+      if (box) box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    }
+    return;
+  }
+  const f = e.target.closest("[data-filter]");
+  if (f){ state.filter = f.dataset.filter; render(); }
+});
+$("#q").addEventListener("input", e => { state.query = e.target.value.trim(); renderBoard(); });
+
+// keyboard shortcuts: "/" focus search · Esc clear/close · 1–5 status filters
+const FILTER_KEYS = { "1":"all", "2":"applied", "3":"interview", "4":"offer", "5":"rejected" };
+document.addEventListener("keydown", e => {
+  const inField = /^(INPUT|SELECT|TEXTAREA)$/.test((e.target.tagName||"")) ;
+  if (e.key === "Escape"){
+    if ($("#overlay").classList.contains("open")){ $("#overlay").classList.remove("open"); return; }
+    if (state.query || document.activeElement === $("#q")){
+      $("#q").value = ""; state.query = ""; $("#q").blur(); renderBoard();
+    }
+    return;
+  }
+  if (inField || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === "/"){ e.preventDefault(); $("#q").focus(); return; }
+  if (FILTER_KEYS[e.key]){ state.filter = FILTER_KEYS[e.key]; render(); }
+});
+
+/* ---- drag & drop card reordering ----
+   Drop a card onto another to take its position. The full board order is saved
+   and the sort switches to "Custom order" (pick any other sort to leave it). */
+let dragCompany = null;
+document.addEventListener("dragstart", e => {
+  const card = e.target.closest && e.target.closest(".card[data-company]");
+  if (!card) return;
+  dragCompany = card.dataset.company;
+  card.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+  try { e.dataTransfer.setData("text/plain", dragCompany); } catch(err){}
+});
+document.addEventListener("dragend", () => {
+  dragCompany = null;
+  document.querySelectorAll(".card.dragging,.card.dragover").forEach(c=>c.classList.remove("dragging","dragover"));
+});
+document.addEventListener("dragover", e => {
+  const card = e.target.closest && e.target.closest(".card[data-company]");
+  if (!card || !dragCompany || card.dataset.company === dragCompany) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  document.querySelectorAll(".card.dragover").forEach(c=>{ if (c!==card) c.classList.remove("dragover"); });
+  card.classList.add("dragover");
+});
+document.addEventListener("drop", e => {
+  const card = e.target.closest && e.target.closest(".card[data-company]");
+  if (!card || !dragCompany) return;
+  e.preventDefault();
+  moveCompany(dragCompany, card.dataset.company);
+  dragCompany = null;
+});
+function moveCompany(from, to){
+  if (from === to) return;
+  const order = [...document.querySelectorAll(".card[data-company]")].map(c=>c.dataset.company);
+  const fi = order.indexOf(from), ti = order.indexOf(to);
+  if (fi < 0 || ti < 0) return;
+  order.splice(fi, 1);
+  order.splice(ti, 0, from);   // dragged card takes the target's position
+  state.cardOrder = order;
+  state.sort = "custom";
+  saveOrder();
+  render();
+}
+$("#sort").addEventListener("change", e => {
+  state.sort = e.target.value;
+  try { localStorage.setItem("pipeline.sort", state.sort); } catch(err){}
+  renderBoard();
+});
+$("#timeframe").addEventListener("change", e => {
+  state.timeframe = e.target.value;
+  try { localStorage.setItem("pipeline.timeframe", state.timeframe); } catch(err){}
+  render();
+});
+$("#connectBtn").addEventListener("click", ()=>{ renderConnectModal(); $("#overlay").classList.add("open"); });
+$("#closeModal").addEventListener("click", ()=> $("#overlay").classList.remove("open"));
+$("#overlay").addEventListener("click", e => { if (e.target.id==="overlay") $("#overlay").classList.remove("open"); });
+$("#overlay").addEventListener("click", e => {
+  const c = e.target.closest("[data-connect]");
+  if (c){ connectProvider(c.dataset.connect); return; }
+  if (e.target.closest("#imap-connect")){
+    const email = ($("#imap-email").value || "").trim();
+    const pass  = $("#imap-pass").value || "";
+    const host  = ($("#imap-host").value || "").trim();
+    const msg = $("#connect-msg");
+    if (!email || !pass){ if (msg){ msg.className = "cmsg err"; msg.textContent = "Enter your email and app password."; } return; }
+    connectProvider("imap", { email, pass, host: host || undefined });
+    return;
+  }
+  const d = e.target.closest("[data-disconnect]");
+  if (d){ window.pipelineAPI.disconnect(d.dataset.disconnect).then(()=> renderAccountList()); return; }
+});
+
+/* ---- sync ----
+   Pull fresh mail on open, when the tab is reopened/refocused, and on demand.
+   The current view (filters, pins, expansions) is preserved across a sync;
+   if the backend isn't available we fall back to demo data. */
+let lastSync = 0;
+let syncing = false;
+
+async function sync(){
+  if (syncing) return;
+  syncing = true;
+  $("#acct").classList.add("syncing");
+  $("#syncLabel").textContent = "Syncing…";
+  if (!state.apps.length){
+    $("#board").innerHTML = `<div class="empty"><div class="bigspin"></div><div>Syncing your inbox…</div></div>`;
+  }
+  let account = null;
+  try {
+    const threads = await LiveProvider.fetch();           // real mailbox
+    account = LiveProvider.account;
+    state.apps = buildApplications(threads);
+  } catch (e) {
+    state.apps = buildApplications(await MockProvider.fetch());  // demo fallback
+  }
+  lastSync = Date.now();
+  syncing = false;
+  $("#acct").classList.remove("syncing");
+  const when = new Date(lastSync).toLocaleTimeString([], { hour:"numeric", minute:"2-digit" });
+  $("#syncLabel").textContent = (account ? `Live · ${account}` : "Demo data") + ` · synced ${when}`;
+  render();
+}
+
+sync();                                                   // on open
+const maybeSync = () => { if (!document.hidden && Date.now() - lastSync > 30000) sync(); };
+document.addEventListener("visibilitychange", maybeSync); // on tab reopen
+window.addEventListener("focus", maybeSync);              // on window refocus
+$("#acct").addEventListener("click", sync);              // on demand
+</script>
+</body>
+</html>

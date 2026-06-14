@@ -1,0 +1,54 @@
+name: Build Pipeline installers
+
+# Builds the macOS (.dmg) and Windows (.exe) installers on GitHub's machines.
+# Run it manually from the Actions tab, or push a version tag like v0.1.0.
+#
+# One-time setup:
+#   1. Create a repo and push this project (config.json stays out — it's gitignored).
+#   2. Repo → Settings → Secrets and variables → Actions → New repository secret
+#        Name:  CONFIG_JSON
+#        Value: paste the full contents of your local config.json
+#   3. Actions tab → "Build Pipeline installers" → Run workflow.
+#   4. When it finishes, download the installers from the run's "Artifacts".
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            script: "dist:mac"
+          - os: windows-latest
+            script: "dist:win"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+
+      # Recreate config.json from the encrypted secret (never stored in the repo).
+      - name: Write config.json
+        shell: bash
+        run: printf '%s' "$CONFIG_JSON" > config.json
+        env:
+          CONFIG_JSON: ${{ secrets.CONFIG_JSON }}
+
+      - name: Build installer
+        run: npm run ${{ matrix.script }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-${{ matrix.os }}
+          path: |
+            dist/*.dmg
+            dist/*.exe

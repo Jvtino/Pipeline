@@ -1,0 +1,10 @@
+{
+  "_comment": "Copy this file to config.json (git-ignored) and fill in the providers you want to enable. Only OAuth providers need IDs here; IMAP credentials are entered in the app. See DESKTOP.md.",
+  "microsoft": {
+    "clientId": "AZURE-APPLICATION-CLIENT-ID"
+  },
+  "google": {
+    "clientId": "GOOGLE-OAUTH-CLIENT-ID.apps.googleusercontent.com",
+    "clientSecret": "GOOGLE-OAUTH-CLIENT-SECRET"
+  }
+}

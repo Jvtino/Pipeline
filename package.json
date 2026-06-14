@@ -1,0 +1,29 @@
+{
+  "name": "pipeline-desktop",
+  "version": "0.1.0",
+  "description": "Pipeline — job applications from your inbox (desktop app)",
+  "main": "main.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac --universal",
+    "dist:win": "electron-builder --win",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "imapflow": "^1.0.150",
+    "mailparser": "^3.6.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.pipeline.desktop",
+    "productName": "Pipeline",
+    "files": ["main.js", "preload.js", "msgraph.js", "gmail.js", "imap.js", "index.html", "config.json"],
+    "mac": { "target": "dmg", "category": "public.app-category.productivity", "icon": "build/icon.icns" },
+    "win": { "target": "nsis" }
+  }
+}

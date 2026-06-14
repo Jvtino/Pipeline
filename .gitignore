@@ -1,0 +1,14 @@
+# Local IMAP credentials — never commit these
+.imap_pw
+.imap_user
+.imap_*
+
+# Desktop app (Electron)
+node_modules/
+dist/
+config.json
+
+# macOS + local tooling
+.DS_Store
+**/.DS_Store
+.claude/settings.local.json

@@ -12,7 +12,6 @@ zero third-party dependencies.
 ## Quick start (demo data)
 
 ```bash
-cd "email app"
 python3 server.py
 # open http://localhost:8000
 ```
@@ -35,7 +34,7 @@ IMAP_USER="you@gmail.com" IMAP_PASSWORD="your-app-password" python3 server.py
 > only on `127.0.0.1` (your machine), opens the mailbox **read-only**, and never
 > stores or logs the password.
 
-### Gmail  (`you@gmail.com`)
+### Gmail
 1. Turn on **2-Step Verification**: <https://myaccount.google.com/security>
 2. Create an **App password**: <https://myaccount.google.com/apppasswords>
 3. Run:
@@ -45,7 +44,7 @@ IMAP_USER="you@gmail.com" IMAP_PASSWORD="your-app-password" python3 server.py
    Tip: to include archived mail (not just the inbox), add
    `IMAP_FOLDER="[Gmail]/All Mail"`.
 
-### Outlook / Live  (`you@outlook.com`)
+### Outlook / Live
 1. Turn on **Two-step verification** in your Microsoft account security settings.
 2. Create an **app password** (Security → Advanced security options → App passwords).
 3. Run:
@@ -76,13 +75,18 @@ Everything lives in two files.
    status = the latest status in the thread) and groups applications by company.
 4. **UI** — stats, filters, search, and the company board.
 
-**Pinning (two levels):**
-- Click the 📌 on a **company** card header to pin the whole company — it floats
-  into a "Pinned" section at the top, above the active sort.
-- Hover a **position** row and click its 📌 to pin that role to the top of its
-  company's list (the company itself stays where it is).
+**Pinning:** click the 📌 on a **company** card header to pin the whole company —
+it floats into a "Pinned" section at the top, above the active sort. Persists
+across reloads via `localStorage`; click again to unpin.
 
-Both kinds persist across reloads via `localStorage`; click again to unpin.
+**Change status manually:** click any position's status pill to set it by hand
+(Active / Interview / Offer / Rejected). Useful when a recruiter calls or texts
+instead of emailing, so there's nothing to auto-classify. The change is recorded
+as a timeline entry, bumps the position to "recent", and persists across syncs.
+
+**Add a position manually:** the **+ Add position** button (header) opens a form
+to track an application the inbox scan missed, or one that never produced email.
+Manual entries group, filter and sort like any other; expand one to remove it.
 
 **Company logos:** each card shows the company's real logo, derived from the
 sender's email domain via a favicon service (`google.com/s2/favicons`). The logo
@@ -113,7 +117,7 @@ IMAP search, new application emails show up on the next sync.
 
 **Dense cards:** each company lists **all** its positions in a fixed-height,
 scrollable area, so cards stay a uniform, tidy size no matter how many roles a
-company has (pinned positions float to the top). Opening a position's email thread
+company has. Opening a position's email thread
 keeps the card the same height — the thread appears in that scroll area and the
 other positions scroll down out of the way.
 

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Pipeline — job applications from your inbox (desktop app)",
   "main": "main.js",
-  "author": "",
+  "author": "Haci Ahmet Ilhan",
   "license": "MIT",
   "scripts": {
     "start": "electron .",

@@ -43,6 +43,9 @@ function encryptSecret(obj) {
   if (safeStorage && safeStorage.isEncryptionAvailable()) {
     return { enc: true, data: safeStorage.encryptString(s).toString("base64") };
   }
+  // No OS encryption backend — store base64 (NOT encrypted). Warn so the docs'
+  // "OS keychain" claim and the actual behaviour can't silently diverge.
+  console.warn("[pipeline] safeStorage unavailable — account tokens stored UNENCRYPTED (base64) in userData.");
   return { enc: false, data: Buffer.from(s, "utf8").toString("base64") };
 }
 function decryptSecret(rec) {

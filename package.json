@@ -7,9 +7,10 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dist:mac": "electron-builder --mac --universal",
-    "dist:win": "electron-builder --win",
-    "dist": "electron-builder"
+    "licenses": "npx --yes license-checker --production --markdown --out THIRD-PARTY-LICENSES.md",
+    "dist:mac": "npm run licenses && electron-builder --mac --universal",
+    "dist:win": "npm run licenses && electron-builder --win",
+    "dist": "npm run licenses && electron-builder"
   },
   "dependencies": {
     "imapflow": "^1.0.150",
@@ -23,6 +24,7 @@
     "appId": "com.pipeline.desktop",
     "productName": "Pipeline",
     "files": ["main.js", "preload.js", "msgraph.js", "gmail.js", "imap.js", "index.html", "config.json"],
+    "extraResources": ["LICENSE", "THIRD-PARTY-NOTICES.md", "THIRD-PARTY-LICENSES.md"],
     "mac": { "target": "dmg", "category": "public.app-category.productivity", "icon": "build/icon.icns" },
     "win": { "target": "nsis" }
   }

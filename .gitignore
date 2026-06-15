@@ -16,3 +16,6 @@ config.json
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Generated at build time (npm run licenses)
+THIRD-PARTY-LICENSES.md

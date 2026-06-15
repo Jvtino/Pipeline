@@ -62,6 +62,13 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
+## Application icon
+
+The application icon (`build/icon.svg`, `icon.png`, `icon_1024.png`, `icon.icns`,
+and `build/icon.iconset/*`) is original artwork created for this project. It is not
+derived from, or copied from, any third-party icon set, template, or stock source,
+and is covered by the project's own copyright and MIT license.
+
 ## Company logos
 
 Company logos shown on cards are fetched at runtime from Google's favicon service

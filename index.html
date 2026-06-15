@@ -234,20 +234,25 @@
   .seclabel.dim{color:rgba(154,166,184,.45)}
   .seclabel.dim svg{display:none}
 
-  /* position-level pin (within a company card) */
-  .role .rpin{
-    flex:0 0 auto;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
-    background:transparent;border:1px solid transparent;color:var(--text-faint);cursor:pointer;
-    opacity:0;transition:opacity .14s, color .14s, background .14s, border-color .14s;
+  /* manual status control — the status pill doubles as a "change status" trigger */
+  .pill.statbtn{cursor:pointer;font-family:inherit;line-height:1.15;gap:5px;padding-right:6px}
+  .pill.statbtn:hover{filter:brightness(1.18)}
+  .pill.statbtn .caret{width:11px;height:11px;opacity:.65;margin-left:-1px}
+  .pill.statbtn.manual{box-shadow:0 0 0 1px var(--border-2)}
+  .statmenu{
+    position:fixed;z-index:60;min-width:158px;padding:6px;
+    background:var(--elev);border:1px solid var(--border-2);border-radius:12px;box-shadow:var(--shadow);
+    animation:tlIn .12s ease;
   }
-  .role:hover .rpin{opacity:.85}
-  .rpin:hover{opacity:1;background:rgba(255,255,255,.06);color:var(--text-dim);border-color:var(--border)}
-  .rpin svg{width:13px;height:13px}
-  .rpin.on{opacity:1;color:var(--blue-2)}
-  .rpin.on:hover{color:var(--blue-2);background:rgba(47,129,247,.12);border-color:rgba(47,129,247,.30)}
-  @media (hover:none){ .role .rpin{opacity:.5} }
-  .role.role-pinned{background:rgba(47,129,247,.07)}
-  .role.role-pinned:hover{background:rgba(47,129,247,.11)}
+  .statopt{
+    width:100%;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:inherit;text-align:left;
+    padding:8px 10px;border-radius:8px;border:1px solid transparent;background:transparent;
+    color:var(--text);font-size:13px;font-weight:600;transition:background .12s,border-color .12s;
+  }
+  .statopt:hover{background:rgba(255,255,255,.05);border-color:var(--border)}
+  .statopt .lbl{flex:1}
+  .statopt .ck{color:var(--blue-2);font-weight:800}
+  .statopt .dot{box-shadow:none}
 
   /* interview prep button */
   .role .prep{
@@ -300,6 +305,25 @@
   .acct-row .rm:hover{color:#ff7d90;background:rgba(240,85,107,.12)}
   .cmsg{font-size:12px;margin:10px 0 2px;min-height:1em}
   .cmsg.err{color:#ff7d90}.cmsg.ok{color:#5fe0b0}.cmsg.busy{color:var(--text-dim)}
+
+  /* secondary button (e.g. Add position) + manual-entry form */
+  .btn.secondary{background:rgba(255,255,255,.04);border:1px solid var(--border-2);color:var(--text);box-shadow:none}
+  .btn.secondary:hover{border-color:var(--blue);background:rgba(47,129,247,.10);box-shadow:none}
+  .field{margin-bottom:11px}
+  .field > label{display:block;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim);margin-bottom:5px}
+  .field input,.field select{width:100%;padding:9px 11px;border-radius:9px;background:var(--panel);border:1px solid var(--border);color:var(--text);font-size:13.5px;outline:none;font-family:inherit}
+  .field input:focus,.field select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,129,247,.18)}
+  .field.row{display:flex;gap:10px}
+  .field.row > div{flex:1;min-width:0}
+  .modal .actions{display:flex;gap:9px;margin-top:4px}
+  .modal .actions .btn{flex:1;justify-content:center;margin-top:0}
+  .rm-manual{
+    margin:2px 9px 8px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;
+    padding:6px 11px;border-radius:9px;border:1px solid rgba(240,85,107,.3);
+    background:rgba(240,85,107,.08);color:#ff7d90;font-size:12px;font-weight:600;
+  }
+  .rm-manual:hover{background:rgba(240,85,107,.16);border-color:rgba(240,85,107,.5)}
+  .rm-manual svg{width:13px;height:13px}
 </style>
 </head>
 <body>
@@ -318,6 +342,10 @@
       </div>
     </div>
     <button class="chip" id="acct" type="button" title="Sync now"><span class="live" id="syncDot"></span><span id="syncLabel">Demo data</span></button>
+    <button class="btn secondary" id="addPosBtn" type="button" title="Manually add a position the app missed">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      Add position
+    </button>
     <button class="btn" id="connectBtn">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7a4 4 0 0 1 0 6m-2-6a4 4 0 0 0 0 6"/><path d="M7 10v4m10-4v4M4 12h.01M20 12h.01"/></svg>
       Connect email
@@ -359,6 +387,32 @@
     <h2>Connect a mailbox</h2>
     <div id="connectBody"></div>
     <button class="btn x" id="closeModal">Close</button>
+  </div>
+</div>
+
+<!-- Add-position modal -->
+<div class="overlay" id="addOverlay">
+  <div class="modal">
+    <h2>Add a position</h2>
+    <p>Track an application the app didn't pick up from your inbox — e.g. one a recruiter raised by phone.</p>
+    <div class="field"><label for="add-company">Company</label><input id="add-company" type="text" placeholder="e.g. Acme Corp" autocomplete="off"></div>
+    <div class="field"><label for="add-role">Role / title</label><input id="add-role" type="text" placeholder="e.g. Senior Software Engineer" autocomplete="off"></div>
+    <div class="field row">
+      <div><label for="add-status">Status</label>
+        <select id="add-status">
+          <option value="applied">Active</option>
+          <option value="interview">Interview</option>
+          <option value="offer">Offer</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <div><label for="add-date">Date</label><input id="add-date" type="date"></div>
+    </div>
+    <div class="cmsg" id="add-msg"></div>
+    <div class="actions">
+      <button class="btn secondary" id="add-cancel" type="button">Cancel</button>
+      <button class="btn" id="add-save" type="button">Add position</button>
+    </div>
   </div>
 </div>
 
@@ -575,8 +629,32 @@ function tidy(s){ return s.replace(/\s+/g," ").replace(/[\s,;:–—-]+$/,"").tr
    3) AGGREGATION  —  emails → applications → grouped by company
    ========================================================================== */
 
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+// A manually-added position: explicit company/role/status, no email to classify.
+function buildManualApp(th){
+  const base = STATUS[th.initialStatus] ? th.initialStatus : "applied";
+  let status = base;
+  const date = th.date || todayISO();
+  const timeline = [{ date, from:"Added manually", body:`Added manually — ${th.role} at ${th.company}.`, status:base, manual:true }];
+  let lastDate = date;
+  const ov = state.statusOverrides && state.statusOverrides.get(th.threadId);
+  if (ov && STATUS[ov.status]){
+    status = ov.status;
+    const od = ov.date || todayISO();
+    timeline.push({ date:od, from:"Manually updated", body:`Status changed to ${STATUS[ov.status].label}.`, status:ov.status, manual:true });
+    if (od > lastDate) lastDate = od;
+  }
+  return {
+    id: th.threadId, company: th.company, domain: th.domain || guessCompanyDomain(th.company),
+    role: th.role, subject: `${th.role} at ${th.company}`,
+    status, firstDate: date, lastDate, timeline, manual: true,
+  };
+}
+
 function buildApplications(threads){
   return threads.map(th => {
+    if (th.manual) return buildManualApp(th);
     const msgs = [...th.messages].sort((a,b)=> a.date.localeCompare(b.date));
     let status = "applied";
     const timeline = msgs.map(m => {
@@ -590,6 +668,17 @@ function buildApplications(threads){
       const extracted = extractCompanyFromSubject(th.subject);
       if (extracted){ company = extracted; domain = guessCompanyDomain(extracted); }
     }
+    let lastDate = msgs[msgs.length-1].date;
+    // Manual status override — e.g. a recruiter called instead of emailing, so the
+    // outcome can't be inferred from mail. Recorded as a timeline event and treated
+    // as the latest activity so the position resurfaces in "Recent".
+    const ov = state.statusOverrides && state.statusOverrides.get(th.threadId);
+    if (ov && STATUS[ov.status]){
+      status = ov.status;
+      const od = ov.date || new Date().toISOString().slice(0,10);
+      timeline.push({ date:od, from:"Manually updated", body:`Status changed to ${STATUS[ov.status].label}.`, status:ov.status, manual:true });
+      if (od > lastDate) lastDate = od;
+    }
     return {
       id: th.threadId,
       company,
@@ -598,7 +687,7 @@ function buildApplications(threads){
       subject: th.subject,
       status,
       firstDate: msgs[0].date,
-      lastDate: msgs[msgs.length-1].date,
+      lastDate,
       timeline,
     };
   });
@@ -626,6 +715,12 @@ function groupByCompany(apps){
 // pinned favorites persist across reloads: companies (by name) + positions (by id)
 function loadSet(key){ try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch(e){ return new Set(); } }
 function saveSet(key, set){ try { localStorage.setItem(key, JSON.stringify([...set])); } catch(e){} }
+// manual status overrides: appId -> { status, date } (persisted, re-applied each sync)
+function loadMap(key){ try { return new Map(Object.entries(JSON.parse(localStorage.getItem(key) || "{}"))); } catch(e){ return new Map(); } }
+function saveMap(key, map){ try { localStorage.setItem(key, JSON.stringify(Object.fromEntries(map))); } catch(e){} }
+// manually-added positions: synthetic threads with explicit company/role/status
+function loadManual(){ try { const a = JSON.parse(localStorage.getItem("pipeline.manualPositions") || "[]"); return Array.isArray(a) ? a : []; } catch(e){ return []; } }
+function saveManual(){ try { localStorage.setItem("pipeline.manualPositions", JSON.stringify(state.manualThreads)); } catch(e){} }
 
 const TIMEFRAMES = [
   { key:"all",  label:"All time",       days:0   },
@@ -645,8 +740,10 @@ function saveOrder(){ try { localStorage.setItem("pipeline.cardOrder", JSON.stri
 
 const state = { filter:"all", query:"", sort:loadSort(), timeframe:loadTimeframe(),
                 cardOrder:loadOrder(), expanded:new Set(),
-                pinned:loadSet("pipeline.pins"), pinnedRoles:loadSet("pipeline.pinnedRoles"),
-                ignored:loadSet("pipeline.ignored"), apps:[] };
+                pinned:loadSet("pipeline.pins"),
+                statusOverrides:loadMap("pipeline.statusOverrides"),
+                manualThreads:loadManual(),
+                ignored:loadSet("pipeline.ignored"), apps:[], rawThreads:[] };
 const $ = sel => document.querySelector(sel);
 
 // timeframe ("fresh start") — only show applications whose latest activity is recent enough
@@ -661,6 +758,8 @@ function visibleApps(){ return state.apps.filter(a => inTimeframe(a) && !state.i
 const PIN_SVG  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>`;
 const IGN_SVG  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>`;
 const PREP_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6"/><path d="M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`;
+const CARET_SVG = `<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+const STATUS_ORDER = ["applied","interview","offer","rejected"];
 
 function counts(apps){
   const c = { all:apps.length, applied:0, interview:0, offer:0, rejected:0 };
@@ -723,34 +822,33 @@ function renderCard(g){
   const hue = hueFor(g.company);
   const ringColor = STATUS[g.headline].color;
   const isPinned = state.pinned.has(g.company);
-  const apps = [...g.apps].sort((a,b)=>
-    (state.pinnedRoles.has(a.id)?0:1) - (state.pinnedRoles.has(b.id)?0:1));  // pinned positions first
+  const apps = g.apps;   // already ordered by latest activity in groupByCompany
   // Fixed-height mode only matters when other positions can scroll out of the
   // way; a single-position card sizes naturally so it never shows dead space.
   const threadOpen = apps.length > 1 && apps.some(a => state.expanded.has(a.id));
   const roles = apps.map(a => {
     const st = STATUS[a.status];
     const open = state.expanded.has(a.id);
-    const rolePinned = state.pinnedRoles.has(a.id);
+    const manual = !!(state.statusOverrides && state.statusOverrides.has(a.id));
     const events = a.timeline.map(ev => `
       <div class="ev">
         <span class="node s-${ev.status}"></span>
         <div class="esub">${STATUS[ev.status].label} · <span style="color:var(--text-dim);font-weight:500">${esc(ev.from)}</span></div>
         <div class="ebody">${esc(ev.body)}</div>
-        <div class="emeta">${fmtDate(ev.date)}</div>
+        <div class="emeta">${fmtDate(ev.date)}${ev.manual ? ` · <span style="color:var(--blue-2)">edited</span>` : ""}</div>
       </div>`).join("");
     return `
-      <div class="role ${open?"open":""} ${rolePinned?"role-pinned":""}" data-id="${a.id}">
+      <div class="role ${open?"open":""}" data-id="${a.id}">
         <span class="dot ${st.cls}"></span>
         <span class="rtitle">${esc(a.role)}</span>
-        <span class="pill ${st.cls}">${st.label}</span>
-        <span class="when">${timeAgo(a.lastDate)}</span>
         ${a.status === "interview" ? `<button type="button" class="prep" data-prep="${esc(a.id)}" title="Search interview prep">${PREP_SVG}Prep</button>` : ""}
-        <button type="button" class="rpin ${rolePinned?"on":""}" data-pin-role="${esc(a.id)}"
-                title="${rolePinned?"Unpin position":"Pin position"}" aria-label="${rolePinned?"Unpin ":"Pin "}${esc(a.role)}" aria-pressed="${rolePinned}">${PIN_SVG}</button>
+        <button type="button" class="pill statbtn ${st.cls} ${manual?"manual":""}" data-setstatusfor="${esc(a.id)}"
+                title="${manual?"Status set manually — click to change":"Change status manually"}"
+                aria-haspopup="menu" aria-label="Change status for ${esc(a.role)}, currently ${st.label}">${st.label}${CARET_SVG}</button>
+        <span class="when">${timeAgo(a.lastDate)}</span>
         <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
       </div>
-      <div class="timeline"><div class="tl">${events}</div></div>`;
+      <div class="timeline"><div class="tl">${events}</div>${a.manual ? `<button type="button" class="rm-manual" data-removemanual="${esc(a.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m1 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>Remove position</button>` : ""}</div>`;
   }).join("");
 
   const summDots = g.apps.slice(0,8).map(a=>`<span class="dot ${STATUS[a.status].cls}" title="${esc(a.role)}: ${STATUS[a.status].label}"></span>`).join("")
@@ -933,14 +1031,122 @@ async function connectProvider(provider, opts){
   }
 }
 
+/* ---- manual status menu ----
+   Lets the user set an application's status by hand — useful when a recruiter
+   calls or texts instead of emailing, so there's nothing to auto-classify. The
+   choice persists in localStorage and is re-applied on every sync. */
+let statusMenuEl = null, statusMenuAnchor = null;
+function allThreads(){ return [...state.manualThreads, ...(state.rawThreads || [])]; }  // manual positions + fetched mail
+function rebuildApps(){ state.apps = buildApplications(allThreads()); }
+function setStatus(appId, statusKey){
+  if (!STATUS[statusKey]) return;
+  state.statusOverrides.set(appId, { status: statusKey, date: new Date().toISOString().slice(0,10) });
+  saveMap("pipeline.statusOverrides", state.statusOverrides);
+  rebuildApps();   // so counts, company headline and timeline all reflect the change
+  render();
+}
+function closeStatusMenu(){
+  if (!statusMenuEl) return;
+  statusMenuEl.remove(); statusMenuEl = null; statusMenuAnchor = null;
+  document.removeEventListener("click", onStatusDocClick, true);
+  document.removeEventListener("keydown", onStatusKey, true);
+  window.removeEventListener("resize", closeStatusMenu);
+  window.removeEventListener("scroll", closeStatusMenu, true);
+}
+function onStatusDocClick(e){
+  if (!statusMenuEl) return;
+  if (statusMenuEl.contains(e.target)) return;               // selection handled by the menu itself
+  const sameAnchor = statusMenuAnchor && statusMenuAnchor.contains(e.target);
+  closeStatusMenu();
+  if (sameAnchor){ e.stopPropagation(); e.preventDefault(); } // clicking the trigger again = toggle closed
+}
+function onStatusKey(e){ if (e.key === "Escape"){ e.stopPropagation(); closeStatusMenu(); } }
+function openStatusMenu(appId, anchor){
+  closeStatusMenu();
+  const a = state.apps.find(x => x.id === appId);
+  if (!a) return;
+  const menu = document.createElement("div");
+  menu.className = "statmenu";
+  menu.setAttribute("role", "menu");
+  menu.innerHTML = STATUS_ORDER.map(k => {
+    const s = STATUS[k];
+    return `<button type="button" role="menuitemradio" aria-checked="${k===a.status}" class="statopt ${k===a.status?"cur":""}" data-setstatus="${k}">
+      <span class="dot ${s.cls}"></span><span class="lbl">${s.label}</span>${k===a.status?`<span class="ck">✓</span>`:""}</button>`;
+  }).join("");
+  menu.addEventListener("click", e => {
+    const opt = e.target.closest("[data-setstatus]");
+    if (!opt) return;
+    e.stopPropagation();
+    setStatus(appId, opt.dataset.setstatus);
+    closeStatusMenu();
+  });
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();   // position:fixed → viewport coords
+  let left = Math.min(r.left, window.innerWidth - menu.offsetWidth - 8);
+  let top = r.bottom + 6;
+  if (top + menu.offsetHeight > window.innerHeight - 8) top = r.top - 6 - menu.offsetHeight;
+  menu.style.left = Math.max(8, left) + "px";
+  menu.style.top = Math.max(8, top) + "px";
+  statusMenuEl = menu; statusMenuAnchor = anchor;
+  document.addEventListener("click", onStatusDocClick, true);
+  document.addEventListener("keydown", onStatusKey, true);
+  window.addEventListener("resize", closeStatusMenu);
+  window.addEventListener("scroll", closeStatusMenu, true);
+}
+
+/* ---- add a position manually ----
+   For applications the inbox scan misses (or that never produced email — e.g. a
+   recruiter reached out by phone). Stored as a synthetic thread and merged with
+   fetched mail, so it groups, filters, sorts and changes status like any other. */
+function openAddModal(){
+  $("#add-company").value = "";
+  $("#add-role").value = "";
+  $("#add-status").value = "applied";
+  $("#add-date").value = todayISO();
+  const m = $("#add-msg"); if (m){ m.className = "cmsg"; m.textContent = ""; }
+  $("#addOverlay").classList.add("open");
+  setTimeout(() => $("#add-company").focus(), 30);
+}
+function closeAddModal(){ $("#addOverlay").classList.remove("open"); }
+function submitAddPosition(){
+  const company = ($("#add-company").value || "").trim();
+  const role    = ($("#add-role").value || "").trim();
+  const status  = $("#add-status").value;
+  const date    = $("#add-date").value || todayISO();
+  const msg = $("#add-msg");
+  if (!company || !role){
+    if (msg){ msg.className = "cmsg err"; msg.textContent = "Enter a company and a role."; }
+    return;
+  }
+  const id = "manual-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  state.manualThreads.unshift({
+    threadId: id, manual: true, company, role,
+    initialStatus: STATUS[status] ? status : "applied",
+    date, domain: guessCompanyDomain(company),
+  });
+  saveManual();
+  rebuildApps();
+  state.filter = "all";            // make sure the new card is visible
+  closeAddModal();
+  render();
+}
+function removeManual(id){
+  state.manualThreads = state.manualThreads.filter(t => t.threadId !== id);
+  saveManual();
+  if (state.statusOverrides.has(id)){ state.statusOverrides.delete(id); saveMap("pipeline.statusOverrides", state.statusOverrides); }
+  state.expanded.delete(id);
+  rebuildApps();
+  render();
+}
+
 /* ---- events ---- */
 document.addEventListener("click", e => {
-  const rpin = e.target.closest("[data-pin-role]");
-  if (rpin){
-    const id = rpin.dataset.pinRole;
-    state.pinnedRoles.has(id) ? state.pinnedRoles.delete(id) : state.pinnedRoles.add(id);
-    saveSet("pipeline.pinnedRoles", state.pinnedRoles);
-    renderBoard();
+  const rmm = e.target.closest("[data-removemanual]");
+  if (rmm){ removeManual(rmm.dataset.removemanual); return; }
+  const sset = e.target.closest("[data-setstatusfor]");
+  if (sset){
+    e.stopPropagation();   // don't also toggle the role's timeline
+    openStatusMenu(sset.dataset.setstatusfor, sset);
     return;
   }
   const ign = e.target.closest("[data-ignore]");
@@ -1007,6 +1213,7 @@ const FILTER_KEYS = { "1":"all", "2":"applied", "3":"interview", "4":"offer", "5
 document.addEventListener("keydown", e => {
   const inField = /^(INPUT|SELECT|TEXTAREA)$/.test((e.target.tagName||"")) ;
   if (e.key === "Escape"){
+    if ($("#addOverlay").classList.contains("open")){ closeAddModal(); return; }
     if ($("#overlay").classList.contains("open")){ $("#overlay").classList.remove("open"); return; }
     if (state.query || document.activeElement === $("#q")){
       $("#q").value = ""; state.query = ""; $("#q").blur(); renderBoard();
@@ -1073,6 +1280,12 @@ $("#timeframe").addEventListener("change", e => {
 });
 $("#connectBtn").addEventListener("click", ()=>{ renderConnectModal(); $("#overlay").classList.add("open"); });
 $("#closeModal").addEventListener("click", ()=> $("#overlay").classList.remove("open"));
+// add-position modal
+$("#addPosBtn").addEventListener("click", openAddModal);
+$("#add-save").addEventListener("click", submitAddPosition);
+$("#add-cancel").addEventListener("click", closeAddModal);
+$("#addOverlay").addEventListener("click", e => { if (e.target.id === "addOverlay") closeAddModal(); });
+$("#addOverlay").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.tagName === "INPUT"){ e.preventDefault(); submitAddPosition(); } });
 $("#overlay").addEventListener("click", e => { if (e.target.id==="overlay") $("#overlay").classList.remove("open"); });
 $("#overlay").addEventListener("click", e => {
   const c = e.target.closest("[data-connect]");
@@ -1105,19 +1318,29 @@ async function sync(){
   if (!state.apps.length){
     $("#board").innerHTML = `<div class="empty"><div class="bigspin"></div><div>Syncing your inbox…</div></div>`;
   }
-  let account = null;
+  let account = null, fetchError = null;
   try {
     const threads = await LiveProvider.fetch();           // real mailbox
     account = LiveProvider.account;
-    state.apps = buildApplications(threads);
+    state.rawThreads = threads;
+    rebuildApps();                                         // merges in manual positions
   } catch (e) {
-    state.apps = buildApplications(await MockProvider.fetch());  // demo fallback
+    // "not configured"/"not connected" = expected (no credentials) → quietly show
+    // demo data. Any other error is a real failure (bad password, IMAP down, …)
+    // and must be surfaced, not hidden behind a normal-looking "Demo data" chip.
+    const m = String((e && e.message) || e);
+    if (!/not configured|not connected/i.test(m)) fetchError = m;
+    state.rawThreads = await MockProvider.fetch();        // demo fallback
+    rebuildApps();
   }
   lastSync = Date.now();
   syncing = false;
   $("#acct").classList.remove("syncing");
   const when = new Date(lastSync).toLocaleTimeString([], { hour:"numeric", minute:"2-digit" });
-  $("#syncLabel").textContent = (account ? `Live · ${account}` : "Demo data") + ` · synced ${when}`;
+  $("#syncLabel").textContent = account ? `Live · ${account} · synced ${when}`
+    : fetchError ? `⚠ Sync failed · showing demo`
+    : `Demo data · synced ${when}`;
+  $("#acct").title = fetchError ? ("Live sync failed: " + fetchError) : "Sync now";
   render();
 }
 

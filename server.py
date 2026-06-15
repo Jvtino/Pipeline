@@ -32,7 +32,7 @@ import os, re, sys, ssl, json, email, imaplib, hashlib
 from email.header import decode_header, make_header
 from email.utils import parsedate_to_datetime, parseaddr
 from datetime import datetime, timedelta, timezone
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 # IMAP host auto-detection from the email domain, so users usually only need
 # to provide IMAP_USER + IMAP_PASSWORD.
@@ -237,11 +237,30 @@ def fetch_threads(cfg):
 # ----------------------------------------------------------------------------
 # HTTP server (static files + /api/threads)
 # ----------------------------------------------------------------------------
-class Handler(SimpleHTTPRequestHandler):
+class Handler(BaseHTTPRequestHandler):
+    # The UI is a single self-contained page, so we serve ONLY index.html and the
+    # API — never arbitrary files. A generic file server would otherwise hand out
+    # .imap_pw, config.json, .git/… to anything that can reach 127.0.0.1:PORT.
     def do_GET(self):
-        if self.path.split("?")[0] == "/api/threads":
+        path = self.path.split("?")[0]
+        if path == "/api/threads":
             return self.handle_threads()
-        return super().do_GET()
+        if path in ("/", "/index.html"):
+            return self.serve_index()
+        return self.send_error(404, "Not found")
+
+    def serve_index(self):
+        try:
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html"), "rb") as f:
+                body = f.read()
+        except OSError:
+            return self.send_error(404, "index.html not found")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
     def handle_threads(self):
         cfg = get_config()
@@ -268,15 +287,18 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, fmt, *args):  # quieter logs
-        if "/api/threads" in (args[0] if args else ""):
+    def log_message(self, fmt, *args):  # quieter logs — only the API line
+        # str() so a non-str first arg (e.g. an HTTPStatus on error responses)
+        # can't raise "argument of type 'HTTPStatus' is not iterable".
+        first = str(args[0]) if args else ""
+        if "/api/threads" in first:
             super().log_message(fmt, *args)
 
 
 if __name__ == "__main__":
     cfg = get_config()
     port = int(os.environ.get("PORT", "8000"))
-    httpd = HTTPServer(("127.0.0.1", port), Handler)
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     print(f"\n  Pipeline  →  http://localhost:{port}\n")
     if cfg["user"] and cfg["host"]:
         print(f"  IMAP: {cfg['user']}  via  {cfg['host']}:{cfg['port']}  (folder: {cfg['folder']})")

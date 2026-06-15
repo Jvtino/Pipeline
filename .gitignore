@@ -12,3 +12,7 @@ config.json
 .DS_Store
 **/.DS_Store
 .claude/settings.local.json
+
+# Python bytecode
+__pycache__/
+*.pyc

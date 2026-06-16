@@ -34,7 +34,7 @@ jobs:
         with:
           node-version: 20
 
-      - run: npm install
+      - run: npm ci
 
       # Recreate config.json from the encrypted secret (never stored in the repo).
       - name: Write config.json

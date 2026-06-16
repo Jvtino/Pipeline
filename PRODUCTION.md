@@ -63,9 +63,11 @@ real step (privacy + no servers); hosted web wins on reach.
 Because email is sensitive, you can't flip OAuth on for the whole world on day one:
 
 - **Google** (`gmail.readonly` is a *restricted* scope): up to **100 test users**
-  immediately, no verification. Public launch requires **OAuth app verification +
-  a yearly third-party security assessment (CASA)** — real cost and lead time.
-  Needs a privacy policy + homepage.
+  immediately, no verification. Public launch requires **OAuth app verification**
+  (verified domain, published homepage, privacy policy). Restricted-scope apps
+  *may also* require an **annual third-party security assessment (CASA)** depending
+  on how the app stores/transmits Gmail data — confirm the exact requirement for a
+  local-only desktop client against Google's current restricted-scope docs.
 - **Microsoft**: app registration is free; **personal accounts consent
   individually**, so a small audience works without admin steps. **Publisher
   verification** recommended; heavier programs apply only at scale. Generally

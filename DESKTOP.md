@@ -10,8 +10,11 @@ A downloadable desktop version of Pipeline. It reuses the exact same UI
   work accounts… using an app password
 
 You can connect **several at once** — their applications merge into one view.
-Credentials/tokens are encrypted with your **OS keychain** (Electron `safeStorage`)
-and stored only in your user-data dir — never in this repo.
+Credentials/tokens are stored only in your user-data dir — never in this repo.
+When your OS provides an encryption backend, they're encrypted with the **OS
+keychain** (Electron `safeStorage`). If no backend is available (some Linux setups),
+they fall back to **base64-encoded** local storage — which is *not* encryption — and
+the app logs a warning. Treat the user-data dir as sensitive in that case.
 
 ```
 index.html   the UI (shared with the web version)
@@ -26,7 +29,7 @@ imap.js      generic IMAP (imapflow + mailparser)
 
 ## Run it (development)
 ```bash
-cd "/Users/jv/email app"
+cd path/to/pipeline
 npm install        # electron + imapflow + mailparser (first time only)
 npm start
 ```

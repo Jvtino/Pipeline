@@ -288,6 +288,11 @@
   .codeline{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:#9cc2ff;background:#0a0f18;border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin:6px 0 14px;overflow-x:auto}
   /* connect / provider picker */
   .provbtn{width:100%;text-align:left;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:12px;margin-bottom:9px;background:rgba(255,255,255,.02);color:var(--text);transition:border-color .14s,background .14s}
+  /* Google-brand-compliant "Sign in with Google" button (light variant) */
+  .gbtn{display:flex;align-items:center;width:100%;height:40px;padding:0;margin-bottom:9px;cursor:pointer;font-family:Roboto,inherit;background:#fff;border:1px solid #dadce0;border-radius:8px;overflow:hidden}
+  .gbtn:hover{background:#f7f8f8;box-shadow:0 1px 3px rgba(60,64,67,.3)}
+  .gbtn .gicon{flex:0 0 auto;width:40px;height:38px;display:grid;place-items:center}
+  .gbtn .gtext{flex:1;text-align:center;padding-right:40px;color:#3c4043;font-size:14px;font-weight:500;letter-spacing:.25px}
   .provbtn:hover{border-color:var(--blue);background:rgba(47,129,247,.08)}
   .provbtn .pi{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:rgba(255,255,255,.06);font-size:16px;flex:0 0 auto}
   .provbtn b{font-size:13.5px}
@@ -453,16 +458,19 @@ const MockProvider = {
    realistic email conversation; statuses are inferred by the same classifier
    used for real mail. Tweak COMPANIES / ROLES / COUNT below to taste. */
 function generateExampleThreads(){
+  // Fictional sample companies (Microsoft's standard placeholders) on the
+  // RFC-2606 reserved ".example" TLD — so public demos/screenshots never use real
+  // brands or fetch real logos. Swap freely.
   const COMPANIES = [
-    { name:"Stripe",  domain:"stripe.com" },
-    { name:"Google",  domain:"google.com" },
-    { name:"Notion",  domain:"notion.so" },
-    { name:"Airbnb",  domain:"airbnb.com" },
-    { name:"Spotify", domain:"spotify.com" },
-    { name:"Figma",   domain:"figma.com" },
-    { name:"Datadog", domain:"datadoghq.com" },
-    { name:"Amazon",  domain:"amazon.com" },
-    { name:"Vercel",  domain:"vercel.com" },
+    { name:"Contoso",   domain:"contoso.example" },
+    { name:"Fabrikam",  domain:"fabrikam.example" },
+    { name:"Northwind", domain:"northwind.example" },
+    { name:"Proseware", domain:"proseware.example" },
+    { name:"Tailspin",  domain:"tailspin.example" },
+    { name:"Wingtip",   domain:"wingtip.example" },
+    { name:"Adatum",    domain:"adatum.example" },
+    { name:"Litware",   domain:"litware.example" },
+    { name:"Coho",      domain:"coho.example" },
   ];
   const ROLES = [
     "Software Engineer","Senior Software Engineer","Staff Software Engineer","Backend Engineer",
@@ -808,11 +816,13 @@ function timeAgo(d){
 function hueFor(name){ let h=0; for(const ch of name) h=(h*31+ch.charCodeAt(0))%360; return h; }
 function esc(s){ return s.replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
-// Company logos: derived from the sender's domain via a favicon service. Real
-// domains return a 128px logo; unknown ones return a tiny generic icon, so we
-// keep the logo only if it's big enough and otherwise fall back to the initial.
-// Set SHOW_LOGOS = false to use plain lettered avatars everywhere.
-const SHOW_LOGOS = true;
+// Company logos are fetched from a third-party favicon service (Google's
+// s2/favicons), so each company's domain is sent to Google. OFF by default for
+// privacy; set SHOW_LOGOS = true to enable it — and disclose that third-party
+// call in your privacy policy (see PRIVACY.md). When on: real domains return a
+// 128px logo and unknown ones a tiny icon, so we keep the logo only if it's big
+// enough and otherwise fall back to the lettered avatar.
+const SHOW_LOGOS = false;
 const logoUrl = d => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(d)}&sz=128`;
 function onLogoLoad(img){ if (!img.naturalWidth || img.naturalWidth < 48) img.remove(); else img.classList.add("ok"); }
 
@@ -1008,7 +1018,7 @@ function renderConnectModal(){
     return;
   }
   body.innerHTML = `
-    <button class="provbtn" data-connect="google"><div class="pi" style="background:#fff;color:#ea4335;font-weight:800">G</div><div><b>Continue with Google</b><span>Gmail</span></div></button>
+    <button class="gbtn" data-connect="google" aria-label="Sign in with Google"><span class="gicon"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg></span><span class="gtext">Sign in with Google</span></button>
     <button class="provbtn" data-connect="microsoft"><div class="pi" style="background:#fff;color:#0a66c2;font-weight:800">M</div><div><b>Continue with Microsoft</b><span>Outlook · Hotmail · Live</span></div></button>
     <div class="or">or any other mailbox</div>
     <div class="imapform">

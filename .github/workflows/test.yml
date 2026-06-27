@@ -17,4 +17,7 @@ jobs:
         with:
           node-version: 20
       - name: Run unit tests
-        run: node --test
+        # Explicit file globs (shell-expanded) keep this dependency-free legacy
+        # suite isolated from the TypeScript packages, which have their own
+        # pnpm/vitest job (packages.yml) and must not be picked up here.
+        run: node --test test/*.test.js

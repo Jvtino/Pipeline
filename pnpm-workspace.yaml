@@ -1,0 +1,8 @@
+# Pipeline monorepo (Phase 1 — Architecture Foundation).
+#
+# Only the new TypeScript packages live in the workspace. The existing Electron
+# desktop app (root package.json + package-lock.json) and the zero-dependency
+# Python local build (server.py / providers.py) are deliberately LEFT ALONE and
+# keep shipping via npm — see docs/Pipeline-Transformation-Plan.md §13 (Migration).
+packages:
+  - "packages/*"

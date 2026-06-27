@@ -1,0 +1,37 @@
+name: Packages (TypeScript)
+
+# Builds + tests the monorepo TS packages (@pipeline/contracts, @pipeline/classify).
+# Separate from test.yml (the dependency-free legacy node --test suite) and from
+# build.yml (the Electron installer build). The classifier PARITY test here is the
+# gate that keeps the TS port and the frozen legacy classify.js from drifting.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  packages:
+    runs-on: ubuntu-latest
+    env:
+      # We never need the Electron binary in this job — only the TS packages.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install (only the TS packages + their deps)
+        run: pnpm install --filter "@pipeline/classify..." --filter "@pipeline/contracts..." --frozen-lockfile
+
+      - name: Build (topological)
+        run: pnpm --filter "@pipeline/*" build
+
+      - name: Test (unit + classifier parity gate)
+        run: pnpm --filter "@pipeline/*" test

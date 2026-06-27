@@ -1,0 +1,55 @@
+{
+  "_comment": "Golden corpus for the classifier. Seeded from the legacy test/classify.test.js. Drives BOTH the TS unit tests (expected outputs) and the parity test (legacy classify.js must agree with @pipeline/classify on every case). Grow this file with every real-world misclassification — see plan §14.",
+  "status": [
+    { "text": "Thank you for applying to the Backend Engineer role. We've received your application.", "expected": "applied" },
+    { "text": "Your application has been received and is currently under review.", "expected": "applied" },
+    { "text": "We appreciate your interest and will review your application shortly.", "expected": "applied" },
+    { "text": "We'd like to schedule a phone screen — please share your availability.", "expected": "interview" },
+    { "text": "Good news! We'd love to invite you for a first interview next week.", "expected": "interview" },
+    { "text": "The next step is a technical assessment / coding challenge. Here's the link.", "expected": "interview" },
+    { "text": "Our hiring manager would like to set up a call. Are you available Thursday?", "expected": "interview" },
+    { "text": "We're moving you forward to the next round — please book a time via Calendly.", "expected": "interview" },
+    { "text": "We are pleased to offer you the position of Data Scientist at Acme.", "expected": "offer" },
+    { "text": "Congratulations! We'd like to extend an offer of employment. Your start date is Monday.", "expected": "offer" },
+    { "text": "Please find your offer letter attached. Welcome to the team!", "expected": "offer" },
+    { "text": "Unfortunately, after careful consideration we've decided to move forward with other candidates.", "expected": "rejected" },
+    { "text": "We regret to inform you that you have not been selected for this role.", "expected": "rejected" },
+    { "text": "The position has been filled. We wish you the best in your search.", "expected": "rejected" },
+    { "text": "We won't be progressing your application further at this time.", "expected": "rejected" },
+    { "text": "Thank you for applying. Unfortunately the role has been filled.", "expected": "rejected" },
+    { "text": "After your interview, we have decided to go in a different direction.", "expected": "rejected" },
+    { "text": "We are unable to offer you the position at this time.", "expected": "rejected" },
+    { "text": "Here's our company newsletter for June.", "expected": null },
+    { "text": "Your package has shipped and will arrive tomorrow.", "expected": null }
+  ],
+  "company": [
+    { "domain": "careers.stripe.com", "from": "Stripe <jobs@stripe.com>", "subject": "Your application for Engineer at Stripe", "body": "", "expected": "Stripe" },
+    { "domain": "greenhouse.io", "from": "Acme Robotics via Greenhouse <no-reply@greenhouse.io>", "subject": "Thank you for applying", "body": "Thanks for applying.", "expected": "Acme Robotics" },
+    { "domain": "hire.lever.co", "from": "Globex Careers <postings@hire.lever.co>", "subject": "Application confirmation", "body": "", "expected": "Globex" },
+    { "domain": "myworkday.com", "from": "Workday Recruiting <noreply@myworkday.com>", "subject": "Thank you for your interest in Initech", "body": "", "expected": "Initech" },
+    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was sent to Umbrella Corp", "body": "", "expected": "Umbrella Corp" },
+    { "domain": "indeed.com", "from": "Indeed Apply <donotreply@indeed.com>", "subject": "Indeed Application: Software Engineer", "body": "You applied to Hooli has been submitted via Indeed.", "expected": "Hooli" },
+    { "domain": "greenhouse.io", "from": "Acme via Greenhouse <x@greenhouse.io>", "subject": "Update", "body": "", "expected": "Acme" },
+    { "domain": "greenhouse.io", "from": "Globex via Greenhouse <y@greenhouse.io>", "subject": "Update", "body": "", "expected": "Globex" },
+    { "domain": "greenhouse.io", "from": "Acme, Inc. via Greenhouse <x@greenhouse.io>", "subject": "Update", "body": "", "expected": "Acme" },
+    { "domain": "greenhouse.io", "from": "Acme Talent Acquisition <y@greenhouse.io>", "subject": "Update", "body": "", "expected": "Acme" }
+  ],
+  "companyFromDomain": [
+    { "domain": "careers.acme.co.uk", "expected": "Acme" },
+    { "domain": "jobs.acme.com.au", "expected": "Acme" },
+    { "domain": "mail.notion.so", "expected": "Notion" }
+  ],
+  "companyFromSenderName_null": [
+    { "from": "Greenhouse <no-reply@greenhouse.io>" },
+    { "from": "LinkedIn Job Alerts <x@linkedin.com>" },
+    { "from": "Indeed Apply <x@indeed.com>" }
+  ],
+  "role": [
+    { "subject": "Your application for Senior Software Engineer at Acme Corp", "expected": "Senior Software Engineer" },
+    { "subject": "Application — Data Analyst at Globex", "expected": "Data Analyst" },
+    { "subject": "Indeed Application: Data Analyst", "expected": "Data Analyst" },
+    { "subject": "Your application was sent to Initech", "expected": "Application" },
+    { "subject": "Thank you for your interest in Initech", "expected": "Application" },
+    { "subject": "Software Engineer", "expected": "Software Engineer" }
+  ]
+}

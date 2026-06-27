@@ -19,6 +19,22 @@ python3 server.py
 With no credentials set, the dashboard shows sample data so you can see how it
 works. (The chip in the top-right reads **“Demo data”**.)
 
+### Run the desktop app from source (macOS / Windows / Linux)
+
+Prefer the native desktop app (one-click Google/Microsoft OAuth, multi-mailbox)?
+Run it straight from source — no installer, no Gatekeeper/SmartScreen warning:
+
+```bash
+# prerequisites: Node.js 18+ and Git  (macOS: brew install node git)
+git clone https://github.com/Jvtino/Pipeline.git
+cd Pipeline
+npm install        # electron + imapflow + mailparser (first run only)
+npm start          # opens the Pipeline desktop window (demo data until you connect)
+```
+
+Connecting a real mailbox and building installers are covered in
+**[DESKTOP.md](DESKTOP.md)**.
+
 ---
 
 ## Go live: connect a real mailbox

@@ -38,9 +38,11 @@ function isoDate(d) {
   return isNaN(dt) ? new Date().toISOString().slice(0, 10) : dt.toISOString().slice(0, 10);
 }
 function normSubject(s) {
-  let x = String(s || "");
+  // Strip the [external] tag FIRST — otherwise a leading "[EXTERNAL] " blocks the
+  // Re/Fwd prefix stripping below and the thread fails to group with its siblings.
+  let x = String(s || "").replace(/\[external\]/ig, "");
   for (let i = 0; i < 3; i++) x = x.replace(/^\s*(re|fwd|fw)\s*:\s*/i, "");
-  return x.replace(/\[external\]/ig, "").replace(/\s+/g, " ").trim().toLowerCase();
+  return x.replace(/\s+/g, " ").trim().toLowerCase();
 }
 function bodyText(parsed) {
   let t = parsed.text || "";

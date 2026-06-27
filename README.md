@@ -160,6 +160,9 @@ it returns `{error}` and the UI falls back to demo data.
   ATS, not the employer. Next step: also parse the company from the subject/body.
 - **Classification** is keyword-based. It’s solid for standard ATS wording; an
   LLM pass in `detectStatus` would handle unusual phrasing.
-- **Auth** uses IMAP app passwords (works with “any email”). For Gmail/Outlook a
-  full **OAuth** flow would be a cleaner production upgrade — and is the only
-  option if a provider has disabled basic auth/app passwords for the account.
+- **Auth.** The web build now supports **OAuth** for Gmail and Outlook/Hotmail/Live
+  (see **[WEB-OAUTH.md](WEB-OAUTH.md)**) in addition to IMAP app passwords for every
+  other provider. OAuth is required for personal Outlook accounts, since Microsoft
+  disabled basic-auth/app-password IMAP in 2024. The desktop app has had OAuth +
+  IMAP from the start. The OAuth web backend is **local-first / single-user**; a
+  hosted multi-user deployment is the next step (notes at the bottom of WEB-OAUTH.md).

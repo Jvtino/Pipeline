@@ -1,0 +1,20 @@
+name: Tests
+
+# Headless unit tests for the pure provider-mapping functions (gmail/msgraph/imap).
+# Fast and dependency-free: the mappers need only Node built-ins, so there's no
+# `npm install` step. Runs on every push and pull request.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run unit tests
+        run: node --test

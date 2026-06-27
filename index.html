@@ -435,6 +435,9 @@
   </div>
 </div>
 
+<!-- The "brain": status classifier + real-employer resolution (shared with the
+     desktop app and the Node tests). Must load BEFORE the main script below. -->
+<script src="classify.js"></script>
 <script>
 /* ============================================================================
    1) DATA LAYER  —  two providers, same shape
@@ -572,10 +575,13 @@ const LiveProvider = {
 };
 
 /* ============================================================================
-   2) CLASSIFIER  —  turn raw email text into a status
+   2) CLASSIFIER & COMPANY RESOLUTION
    ----------------------------------------------------------------------------
-   Pure keyword rules for the prototype. This is the natural place to later
-   drop in an LLM call for higher accuracy across messy real-world emails.
+   The "brain" — status detection + real-employer resolution (incl. shared ATS
+   platforms like Workday/Greenhouse/LinkedIn/Indeed) — lives in classify.js, a
+   shared module loaded before this script and unit-tested in test/classify.test.js.
+   It exposes globals: detectStatus, resolveCompany, companyFromDomain,
+   isAtsDomain, extractRole, guessCompanyDomain, STATUS_RANK, …
    ========================================================================== */
 
 const STATUS = {
@@ -586,66 +592,6 @@ const STATUS = {
 };
 // precedence for a company's "headline" status (most exciting first)
 const HEADLINE_ORDER = ["offer","interview","applied","rejected"];
-
-function detectStatus(text){
-  const t = text.toLowerCase();
-  if (/\b(pleased to offer|extend (?:you )?an offer|thrilled to extend|offer of employment|we are excited to offer|job offer|welcome to the team)\b/.test(t)) return "offer";
-  if (/\b(unfortunately|we regret|regret to inform|not (?:be )?moving forward|will not be (?:moving|proceeding)|decided (?:not to|to (?:move|proceed))|move forward with other|other candidates|not (?:be )?selected|position has been filled|no longer (?:moving|under consideration)|decided not to proceed)\b/.test(t)) return "rejected";
-  if (/\b(phone (?:screen|interview)|technical (?:screen|interview)|video (?:screen|interview)|coding (?:challenge|assessment|test)|take[- ]home|invite(?:d)? you (?:to|for)|we(?:'d| would) like to (?:schedule|meet|speak|chat|connect)|schedule (?:a |an )?(?:call|interview|meeting|screen)|set up (?:a |an )?(?:call|interview|meeting)|please (?:share|provide|confirm|let us know) your availability|would love to (?:chat|meet|speak|connect|talk)|moving (?:you )?forward|advancing your application|next round|hiring manager (?:call|interview|chat|meeting)|on-?site interview)\b/.test(t)) return "interview";
-  if (/\b(thank you for applying|application (?:has been )?received|received your application|thank you for your (?:interest|application)|we have received|successfully submitted|under review)\b/.test(t)) return "applied";
-  return null;
-}
-
-// company display name from a domain (small map + capitalized fallback)
-const NAME_MAP = { "datadoghq":"Datadog", "notion":"Notion", "spotify":"Spotify", "figma":"Figma", "vercel":"Vercel", "airbnb":"Airbnb", "amazon":"Amazon", "google":"Google", "stripe":"Stripe" };
-function companyFromDomain(domain){
-  const root = domain.split(".").slice(-2)[0] || domain;
-  return NAME_MAP[root] || root.charAt(0).toUpperCase()+root.slice(1);
-}
-
-// ATS / recruiting platforms — emails from these domains have the real company
-// name in the subject, not in the sender domain.
-const ATS_DOMAINS = new Set([
-  "greenhouse","lever","workday","myworkdaysite","workdayjobs",
-  "linkedin","jobvite","icims","taleo","smartrecruiters","ashbyhq",
-  "breezy","recruitee","workable","bamboohr","personio",
-  "jazzhr","successfactors","dayforce","rippling","teamtailor",
-  "comeet","dover","gem","jobscore","freshteam","zohorecruit",
-  "indeed","glassdoor","ziprecruiter","wellfound","angellist",
-]);
-function isAtsDomain(domain){
-  const root = (domain || "").split(".").slice(-2)[0] || "";
-  return ATS_DOMAINS.has(root.toLowerCase());
-}
-// Extract the hiring company from the subject line when the sender is an ATS.
-function extractCompanyFromSubject(subject){
-  const s = subject || "";
-  // "…role at Company Name" — by far the most common pattern across all ATS
-  const m1 = s.match(/\bat ([A-Z][A-Za-z0-9 &.,'-]+?)(?:\s*[-–—(]|\s+via\b|\s*$)/);
-  if (m1){ const c = tidy(m1[1]).replace(/\.+$/,""); if (c.length > 1) return c; }
-  // "Thank you for applying to Company" / "application to Company for role"
-  const m2 = s.match(/\bto ([A-Z][A-Za-z0-9 &.,'-]+?)(?:\s+for\b|\s*[-–—(]|\s*$)/);
-  if (m2){ const c = tidy(m2[1]).replace(/\.+$/,""); if (c.length > 1 && !/^(the|a|an|us|our|you|your)$/i.test(c)) return c; }
-  return null;
-}
-// Best-effort domain guess for logos when the real domain is an ATS.
-function guessCompanyDomain(company){
-  return company.toLowerCase().replace(/[^a-z0-9]/g,"") + ".com";
-}
-
-// pull a role title out of an email subject
-function extractRole(subject){
-  const pats = [
-    /application for (?:the )?(.+?) at .+/i,
-    /applying (?:to|for) (?:the )?(.+?) at .+/i,
-    /application[\s—–-]+(.+?) at .+/i,
-    /applying[\s—–-]+(.+?) at .+/i,
-  ];
-  for (const re of pats){ const m = subject.match(re); if (m && m[1]) return tidy(m[1]); }
-  const m2 = subject.match(/(.+?) at .+/i);
-  return m2 ? tidy(m2[1]) : subject;
-}
-function tidy(s){ return s.replace(/\s+/g," ").replace(/[\s,;:–—-]+$/,"").trim(); }
 
 /* ============================================================================
    3) AGGREGATION  —  emails → applications → grouped by company
@@ -677,19 +623,27 @@ function buildManualApp(th){
 function buildApplications(threads){
   return threads.map(th => {
     if (th.manual) return buildManualApp(th);
-    const msgs = [...th.messages].sort((a,b)=> a.date.localeCompare(b.date));
+    const msgs = [...(th.messages || [])].sort((a,b)=> a.date.localeCompare(b.date));
+    if (!msgs.length) return null;   // skip malformed threads with no messages (defensive)
+    const role = extractRole(th.subject);
+    // Classify each message body chronologically; carry the status forward.
     let status = "applied";
+    let sawAny = false;
     const timeline = msgs.map(m => {
-      const s = detectStatus(m.body) ;
-      if (s) status = s;
+      const s = detectStatus(m.body);
+      if (s){ status = s; sawAny = true; }
       return { date:m.date, from:m.from, body:m.body, status:s || status };
     });
-    let company = companyFromDomain(th.domain);
-    let domain  = th.domain;
-    if (isAtsDomain(th.domain)){
-      const extracted = extractCompanyFromSubject(th.subject);
-      if (extracted){ company = extracted; domain = guessCompanyDomain(extracted); }
+    // The subject (minus the role title, so job-title words like "Interview" don't
+    // mislead) is a secondary signal that can upgrade the final status — e.g. a
+    // terminal email whose body is thin but whose subject says "… — not selected".
+    const subjStatus = detectStatus(String(th.subject||"").split(role).join(" "));
+    if (subjStatus && (!sawAny || STATUS_RANK[subjStatus] > STATUS_RANK[status])){
+      status = subjStatus;
+      if (timeline.length) timeline[timeline.length-1].status = status;
     }
+    // Resolve the real employer (handles shared ATS platforms like Workday/Greenhouse/LinkedIn).
+    const { company, domain } = resolveCompany(th);
     let lastDate = msgs[msgs.length-1].date;
     // Manual status override — e.g. a recruiter called instead of emailing, so the
     // outcome can't be inferred from mail. Recorded as a timeline event and treated
@@ -705,14 +659,14 @@ function buildApplications(threads){
       id: th.threadId,
       company,
       domain,
-      role: extractRole(th.subject),
+      role,
       subject: th.subject,
       status,
       firstDate: msgs[0].date,
       lastDate,
       timeline,
     };
-  });
+  }).filter(Boolean);
 }
 
 function groupByCompany(apps){
@@ -1010,12 +964,7 @@ function renderConnectModal(){
   const body = $("#connectBody");
   if (!body) return;
   if (!(window.pipelineAPI && window.pipelineAPI.connect)){
-    body.innerHTML = `<p style="color:var(--text-dim);font-size:13.5px;margin:0 0 6px">
-      You're viewing the web/demo build. The <b>desktop app</b> adds one-click sign-in for any
-      mailbox — Google, Microsoft, or any IMAP provider (iCloud, Yahoo, Fastmail…) — with
-      credentials stored only on your device.</p>
-      <div class="codeline">npm start &nbsp;·&nbsp; see DESKTOP.md</div>`;
-    return;
+    return renderWebConnect(body);   // web build: talk to the server.py OAuth routes
   }
   body.innerHTML = `
     <button class="gbtn" data-connect="google" aria-label="Sign in with Google"><span class="gicon"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg></span><span class="gtext">Sign in with Google</span></button>
@@ -1053,6 +1002,66 @@ async function connectProvider(provider, opts){
   } catch(e){
     if (msg){ msg.className = "cmsg err"; msg.textContent = "Couldn't connect: " + ((e && e.message) || e); }
   }
+}
+
+/* ---- web build: OAuth via the local backend (server.py) ----
+   The web app has no IPC bridge, so it drives the backend's /auth and /api routes
+   directly. Google/Microsoft use a full-page redirect into the OAuth loopback
+   flow; IMAP and disconnect are JSON POSTs. Tokens live only on the local server. */
+const GOOGLE_GICON = `<span class="gicon"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg></span>`;
+async function renderWebConnect(body){
+  body.innerHTML = `<div class="cmsg busy">Loading…</div>`;
+  let info = { configured:{}, accounts:[] };
+  try { info = await (await fetch("api/accounts", { cache:"no-store" })).json(); } catch(e){}
+  const cfg = info.configured || {};
+  const googleBtn = cfg.google
+    ? `<button class="gbtn" data-weboauth="google" aria-label="Sign in with Google">${GOOGLE_GICON}<span class="gtext">Sign in with Google</span></button>`
+    : `<div class="prov" style="opacity:.6"><div class="pi" style="background:#fff;color:#ea4335;font-weight:800">G</div><div class="pt"><b>Google</b><span>Not configured — add a client ID/secret (WEB-OAUTH.md)</span></div></div>`;
+  const msBtn = cfg.microsoft
+    ? `<button class="provbtn" data-weboauth="microsoft"><div class="pi" style="background:#fff;color:#0a66c2;font-weight:800">M</div><div><b>Continue with Microsoft</b><span>Outlook · Hotmail · Live</span></div></button>`
+    : `<div class="prov" style="opacity:.6"><div class="pi" style="background:#fff;color:#0a66c2;font-weight:800">M</div><div class="pt"><b>Microsoft</b><span>Not configured — add a client ID (WEB-OAUTH.md)</span></div></div>`;
+  body.innerHTML = `
+    ${googleBtn}
+    ${msBtn}
+    <div class="or">or any other mailbox</div>
+    <div class="imapform">
+      <input id="web-imap-email" type="email" placeholder="you@icloud.com · yahoo · fastmail · work…" autocomplete="off">
+      <input id="web-imap-pass" type="password" placeholder="app password" autocomplete="off">
+      <input id="web-imap-host" type="text" placeholder="IMAP host (optional — auto-detected)" autocomplete="off">
+      <button class="btn" id="web-imap-connect" style="width:100%;justify-content:center">Connect via IMAP</button>
+    </div>
+    <div class="cmsg" id="connect-msg"></div>
+    <div id="acct-list"></div>`;
+  renderWebAccountList(info.accounts);
+}
+function renderWebAccountList(accts){
+  const el = $("#acct-list"); if (!el) return;
+  el.innerHTML = (accts && accts.length)
+    ? `<div class="or">connected</div>` + accts.map(a =>
+        `<div class="acct-row"><span class="e">${esc(a.email)}</span><span class="badge">${esc(a.provider)}</span><button class="rm" data-webdisconnect="${esc(a.id)}" title="Disconnect">✕</button></div>`).join("")
+    : "";
+}
+async function webImapConnect(){
+  const email = ($("#web-imap-email").value || "").trim();
+  const pass  = $("#web-imap-pass").value || "";
+  const host  = ($("#web-imap-host").value || "").trim();
+  const msg = $("#connect-msg");
+  if (!email || !pass){ if (msg){ msg.className = "cmsg err"; msg.textContent = "Enter your email and app password."; } return; }
+  if (msg){ msg.className = "cmsg busy"; msg.textContent = "Connecting…"; }
+  try {
+    const r = await fetch("api/imap/connect", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ email, pass, host: host || undefined }) });
+    const res = await r.json();
+    if (!res || !res.ok) throw new Error((res && res.error) || "connection failed");
+    if (msg){ msg.className = "cmsg ok"; msg.textContent = "Connected " + (res.email || ""); }
+    await renderWebConnect($("#connectBody"));   // refresh connected list
+    await sync();
+  } catch(e){ if (msg){ msg.className = "cmsg err"; msg.textContent = "Couldn't connect: " + ((e && e.message) || e); } }
+}
+async function webDisconnect(id){
+  try { await fetch("api/disconnect", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ id }) }); } catch(e){}
+  await renderWebConnect($("#connectBody"));
+  await sync();
 }
 
 /* ---- manual status menu ----
@@ -1312,6 +1321,13 @@ $("#addOverlay").addEventListener("click", e => { if (e.target.id === "addOverla
 $("#addOverlay").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.tagName === "INPUT"){ e.preventDefault(); submitAddPosition(); } });
 $("#overlay").addEventListener("click", e => { if (e.target.id==="overlay") $("#overlay").classList.remove("open"); });
 $("#overlay").addEventListener("click", e => {
+  // web build (no IPC bridge): drive the backend OAuth/API routes directly
+  const wo = e.target.closest("[data-weboauth]");
+  if (wo){ window.location.href = "auth/" + wo.dataset.weboauth + "/start"; return; }
+  if (e.target.closest("#web-imap-connect")){ webImapConnect(); return; }
+  const wd = e.target.closest("[data-webdisconnect]");
+  if (wd){ webDisconnect(wd.dataset.webdisconnect); return; }
+  // desktop build (Electron IPC):
   const c = e.target.closest("[data-connect]");
   if (c){ connectProvider(c.dataset.connect); return; }
   if (e.target.closest("#imap-connect")){

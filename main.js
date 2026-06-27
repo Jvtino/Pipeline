@@ -189,11 +189,15 @@ ipcMain.handle("pipeline:fetchThreads", async () => {
   for (const a of accts) {
     try {
       const r = await fetchForAccount(a);
-      for (const t of r.threads || []) threads.push({ ...t, threadId: a.id + ":" + t.threadId });
+      for (const t of r.threads || []) {
+        if (!t.messages || !t.messages.length) continue;   // skip malformed empty threads
+        threads.push({ ...t, threadId: a.id + ":" + t.threadId });
+      }
       connected.push(a.email);
     } catch (e) { errors.push(`${a.email}: ${String((e && e.message) || e)}`); }
   }
-  threads.sort((x, y) => y.messages[y.messages.length - 1].date.localeCompare(x.messages[x.messages.length - 1].date));
+  const lastDate = (t) => (t.messages && t.messages.length) ? t.messages[t.messages.length - 1].date : "";
+  threads.sort((x, y) => lastDate(y).localeCompare(lastDate(x)));
   const account = connected.length <= 1 ? (connected[0] || "mailbox") : `${connected.length} mailboxes`;
   return { account, threads, accounts: connected, errors };
 });

@@ -3,6 +3,9 @@
 .imap_user
 .imap_*
 
+# Local OAuth/IMAP token store written by the web backend (server.py) — never commit
+.pipeline-accounts.json
+
 # Desktop app (Electron)
 node_modules/
 dist/

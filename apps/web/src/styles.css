@@ -1,0 +1,105 @@
+:root {
+  --bg: #07090e;
+  --panel: #0e131c;
+  --panel-2: #131a26;
+  --line: #1e2734;
+  --text: #e8edf5;
+  --muted: #8a97ab;
+  --accent: #4f9cff;
+  --applied: #8a97ab;
+  --interview: #e7b54a;
+  --offer: #43c478;
+  --rejected: #f0556d;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: radial-gradient(1200px 600px at 70% -10%, #101725 0%, var(--bg) 55%);
+  color: var(--text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { max-width: 1180px; margin: 0 auto; padding: 0 20px 60px; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px 4px 18px;
+  position: sticky; top: 0; z-index: 5;
+  background: linear-gradient(var(--bg), rgba(7, 9, 14, 0.7) 70%, transparent);
+}
+.brand { font-weight: 700; font-size: 19px; letter-spacing: 0.2px; }
+.brand .logo { color: var(--accent); }
+.chip {
+  font-size: 12.5px; color: var(--muted);
+  background: var(--panel-2); border: 1px solid var(--line);
+  padding: 5px 11px; border-radius: 999px; text-transform: capitalize;
+}
+
+.stats {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 6px 0 22px;
+}
+.stat {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.stat-value { font-size: 26px; font-weight: 700; }
+.stat-label { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.stat-applied .stat-value { color: var(--applied); }
+.stat-interview .stat-value { color: var(--interview); }
+.stat-offer .stat-value { color: var(--offer); }
+.stat-rejected .stat-value { color: var(--rejected); }
+
+.grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px; transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.card:hover { border-color: #2b3950; transform: translateY(-1px); }
+.card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.card-title h2 { font-size: 16px; margin: 0; }
+.card-title .muted { font-size: 12.5px; }
+
+.avatar {
+  width: 38px; height: 38px; flex: 0 0 38px; border-radius: 10px;
+  display: grid; place-items: center; font-weight: 700;
+  background: linear-gradient(150deg, #1b2738, #131a26);
+  border: 1px solid var(--line); color: var(--text);
+}
+
+.roles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.role {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 12px;
+}
+.role-main { display: flex; flex-direction: column; min-width: 0; }
+.role-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-date { font-size: 11.5px; }
+
+.pill {
+  font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+  white-space: nowrap; border: 1px solid transparent;
+}
+.pill-applied { color: #cdd6e3; background: rgba(138, 151, 171, 0.16); border-color: rgba(138, 151, 171, 0.35); }
+.pill-interview { color: #ffd98a; background: rgba(231, 181, 74, 0.16); border-color: rgba(231, 181, 74, 0.4); }
+.pill-offer { color: #9af0bf; background: rgba(67, 196, 120, 0.16); border-color: rgba(67, 196, 120, 0.4); }
+.pill-rejected { color: #ffb3c0; background: rgba(240, 85, 109, 0.16); border-color: rgba(240, 85, 109, 0.4); }
+
+.muted { color: var(--muted); }
+.center { text-align: center; padding: 60px 0; }
+.notice { border-radius: var(--radius); padding: 16px 18px; margin: 10px 0; border: 1px solid var(--line); background: var(--panel); }
+.notice.error { border-color: rgba(240, 85, 109, 0.4); }
+.notice code, .foot code { background: #0a0f17; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; }
+.foot { text-align: center; font-size: 12.5px; margin-top: 28px; }
+
+@media (max-width: 640px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+}

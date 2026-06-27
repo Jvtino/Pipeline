@@ -27,11 +27,11 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Install (only the TS packages + their deps)
-        run: pnpm install --filter "@pipeline/classify..." --filter "@pipeline/contracts..." --frozen-lockfile
+      - name: Install (TS packages + apps, not the Electron root)
+        run: pnpm install --filter "@pipeline/*..." --frozen-lockfile
 
-      - name: Build (topological)
+      - name: Build (topological: contracts -> classify -> api/web)
         run: pnpm --filter "@pipeline/*" build
 
-      - name: Test (unit + classifier parity gate)
+      - name: Test (unit + classifier parity gate + API reduction)
         run: pnpm --filter "@pipeline/*" test

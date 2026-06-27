@@ -1,0 +1,25 @@
+{
+  "name": "@pipeline/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pipeline hosted API (Fastify). Reduces threads through @pipeline/classify into derived application records and serves the board.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@pipeline/classify": "workspace:*",
+    "@pipeline/contracts": "workspace:*",
+    "fastify": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

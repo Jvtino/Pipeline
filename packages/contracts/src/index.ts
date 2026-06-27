@@ -63,3 +63,46 @@ export function parseThread(value: unknown): Thread {
 export function safeParseThread(value: unknown): z.SafeParseReturnType<unknown, Thread> {
   return threadSchema.safeParse(value);
 }
+
+/* ----------------------------------------------------------------------------
+   DERIVED records — what the hosted product persists and serves (NOT raw mail).
+   One Application per thread: company/role/status + dates + a short snippet.
+   This is the privacy-preserving "store derived, not raw" shape from plan §7.
+   -------------------------------------------------------------------------- */
+
+/** A single tracked application — one reduced thread. The board's atom. */
+export const applicationSchema = z.object({
+  id: z.string(),
+  threadId: z.string(),
+  company: z.string(),
+  companyDomain: z.string(),
+  role: z.string(),
+  status: statusSchema,
+  firstSeen: z.string(), // ISO date of the earliest message
+  lastActivity: z.string(), // ISO date of the latest message
+  snippet: z.string().max(600), // latest message snippet only — never the full body
+  manual: z.boolean().optional(),
+});
+export type Application = z.infer<typeof applicationSchema>;
+
+/** Applications grouped under their employer — the unit the board renders. */
+export const companyGroupSchema = z.object({
+  company: z.string(),
+  domain: z.string(),
+  applications: z.array(applicationSchema),
+});
+export type CompanyGroup = z.infer<typeof companyGroupSchema>;
+
+/** The board read payload returned by GET /api/applications. */
+export const boardSchema = z.object({
+  groups: z.array(companyGroupSchema),
+  counts: z.object({
+    applied: z.number(),
+    interview: z.number(),
+    offer: z.number(),
+    rejected: z.number(),
+    total: z.number(),
+  }),
+  source: z.string(), // e.g. "demo" | a connected mailbox label
+});
+export type Board = z.infer<typeof boardSchema>;

@@ -30,7 +30,7 @@ jobs:
       - name: Install (TS packages + apps, not the Electron root)
         run: pnpm install --filter "@pipeline/*..." --frozen-lockfile
 
-      - name: Build (topological: contracts -> classify -> api/web)
+      - name: Build (topological — contracts, classify, then api/web)
         run: pnpm --filter "@pipeline/*" build
 
       - name: Test (unit + classifier parity gate + API reduction)

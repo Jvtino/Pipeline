@@ -19,17 +19,18 @@ import {
   type HttpTransport,
 } from "@pipeline/providers";
 import { saveMailConnection, type Database } from "@pipeline/db";
+import type { FastifyRequest } from "fastify";
 import type { ProviderConfigs } from "./config";
 
 export interface OAuthDeps {
   db: Database;
   masterKey: Buffer;
-  userId: string;
+  resolveUserId: (req: FastifyRequest) => string | null; // the authenticated user
   configs: ProviderConfigs;
   transport?: HttpTransport;
   publicUrl: string; // where the API is reachable (for the redirect_uri)
   webUrl: string; // where to send the user back after connect
-  pending: Map<string, { provider: ProviderId; verifier: string }>;
+  pending: Map<string, { provider: ProviderId; verifier: string; userId: string }>;
 }
 
 function isProvider(p: string): p is ProviderId {
@@ -43,13 +44,15 @@ export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
   app.get("/auth/:provider/start", async (req, reply) => {
     const { provider } = req.params as { provider: string };
     if (!isProvider(provider)) return reply.code(404).send({ error: "unknown provider" });
+    const userId = d.resolveUserId(req);
+    if (!userId) return reply.code(401).send({ error: "sign in before connecting a mailbox" });
     const conf = d.configs[provider];
     if (!conf?.clientId || (PROVIDERS[provider].needsSecret && !conf.clientSecret)) {
       return reply.code(400).send({ error: `${provider} OAuth is not configured`, hint: "set the client id/secret env vars" });
     }
     const verifier = pkceVerifier();
     const state = randomBytes(16).toString("base64url");
-    d.pending.set(state, { provider, verifier });
+    d.pending.set(state, { provider, verifier, userId });
     return reply.redirect(buildAuthUrl(provider, conf.clientId, redirectUri(provider), pkceChallenge(verifier), state));
   });
 
@@ -72,8 +75,8 @@ export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
         /* labeling is best-effort */
       }
       await saveMailConnection(d.db, d.masterKey, {
-        id: `${d.userId}:${provider}:${email}`,
-        userId: d.userId,
+        id: `${pend.userId}:${provider}:${email}`,
+        userId: pend.userId,
         provider,
         email,
         secret: tokens,

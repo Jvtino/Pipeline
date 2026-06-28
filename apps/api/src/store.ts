@@ -1,25 +1,12 @@
-// Wires the API to the persistence layer. In dev/test this is an in-process
-// Postgres (PGlite) seeded with demo data; in production point it at a managed
-// Postgres via DATABASE_URL/PGLITE_DIR and remove the seed. Real per-user data
-// arrives once OAuth connect + sync land (the next phase).
-import {
-  createDb,
-  upsertUser,
-  upsertApplications,
-  countApplications,
-  type DbHandle,
-} from "@pipeline/db";
+// Persistence wiring. DATABASE_URL → managed Postgres (prod); otherwise in-process
+// PGlite (dev/test). New users are seeded with demo data on first login so their
+// board isn't empty before they connect a real mailbox.
+import { createDb, upsertApplications, countApplications, type Database, type DbHandle } from "@pipeline/db";
 import { generateMasterKey, masterKeyFromEnv } from "@pipeline/crypto";
-import { threadsToApplications } from "./applications";
+import { threadsToApplications } from "@pipeline/classify";
 import { DEMO_THREADS } from "./demo-data";
 
-/** Stand-in identity until real auth lands — every request maps to this user for now. */
-export const DEV_USER = { id: "demo-user", email: "demo@pipeline.local" } as const;
-
-/**
- * The master key that wraps mail tokens at rest. Required in production; in dev we
- * fall back to an ephemeral key (and loudly warn) so the app still boots.
- */
+/** Master key that wraps mail tokens at rest. Required in production; ephemeral (with a warning) in dev. */
 export function resolveMasterKey(): Buffer {
   try {
     return masterKeyFromEnv();
@@ -33,13 +20,13 @@ export function resolveMasterKey(): Buffer {
   }
 }
 
-/** Create the DB, ensure the dev user exists, and seed demo applications once. */
 export async function initStore(): Promise<DbHandle> {
-  // DATABASE_URL → managed Postgres (prod); else PGlite (in-memory, or PGLITE_DIR).
-  const handle = await createDb({ databaseUrl: process.env.DATABASE_URL, dataDir: process.env.PGLITE_DIR });
-  await upsertUser(handle.db, DEV_USER);
-  if ((await countApplications(handle.db, DEV_USER.id)) === 0) {
-    await upsertApplications(handle.db, DEV_USER.id, threadsToApplications(DEMO_THREADS));
+  return createDb({ databaseUrl: process.env.DATABASE_URL, dataDir: process.env.PGLITE_DIR });
+}
+
+/** Seed a brand-new user with demo applications (onboarding) — idempotent. */
+export async function seedDemoForUser(db: Database, userId: string): Promise<void> {
+  if ((await countApplications(db, userId)) === 0) {
+    await upsertApplications(db, userId, threadsToApplications(DEMO_THREADS));
   }
-  return handle;
 }

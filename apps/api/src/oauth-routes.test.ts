@@ -27,7 +27,7 @@ beforeEach(async () => {
   registerOAuthRoutes(app, {
     db: h.db,
     masterKey: mk,
-    userId: "u1",
+    resolveUserId: () => "u1",
     configs: { google: { clientId: "cid", clientSecret: "sec" } }, // microsoft intentionally absent
     transport,
     publicUrl: "http://localhost:3001",

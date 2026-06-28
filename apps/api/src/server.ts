@@ -9,12 +9,21 @@ import { boardSchema } from "@pipeline/contracts";
 import { getBoardForUser, getUser, setUserPlan } from "@pipeline/db";
 import { issueLicense } from "@pipeline/license";
 import type { HttpTransport, ProviderId } from "@pipeline/providers";
-import { initStore, DEV_USER, resolveMasterKey } from "./store";
+import { initStore, seedDemoForUser, resolveMasterKey } from "./store";
 import { loadProviderConfigs } from "./config";
 import { registerOAuthRoutes } from "./oauth-routes";
+import { registerAuthRoutes } from "./auth-routes";
 import { syncAllConnections } from "./sync-service";
 import { effectivePlan, planAtLeast } from "./entitlement";
 import { verifyWebhookSignature, planFromEvent, type BillingEvent } from "./billing";
+import {
+  resolveSessionSecret,
+  verifySession,
+  readCookie,
+  requireUser,
+  SESSION_COOKIE,
+  type RequestWithUser,
+} from "./auth";
 
 export interface ServerOptions {
   transport?: HttpTransport; // injected in tests; defaults to real fetch
@@ -42,30 +51,49 @@ export async function buildServer(opts: ServerOptions = {}) {
     }
   });
 
+  // Resolve the authenticated user from the session cookie on every request.
+  const sessionSecret = resolveSessionSecret();
+  app.addHook("preHandler", async (req) => {
+    const user = verifySession(sessionSecret, readCookie(req, SESSION_COOKIE));
+    if (user) (req as RequestWithUser).user = user;
+  });
+
+  registerAuthRoutes(app, {
+    db: store.db,
+    sessionSecret,
+    devLoginEnabled: process.env.DISABLE_DEV_LOGIN !== "true",
+    onNewUser: seedDemoForUser,
+  });
+
   app.get("/api/health", async () => ({ ok: true, service: "pipeline-api" }));
 
-  app.get("/api/applications", async () => {
-    const board = await getBoardForUser(store.db, DEV_USER.id, "demo");
+  app.get("/api/applications", async (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return reply;
+    const board = await getBoardForUser(store.db, user.id, "demo");
     return boardSchema.parse(board); // validate against the shared contract before returning
   });
 
-  // Trigger an incremental sync of the user's connected mailboxes. No-op (and a
-  // clean summary) when nothing is connected — e.g. the demo build.
-  app.post("/api/sync", async () =>
-    syncAllConnections({ db: store.db, masterKey, userId: DEV_USER.id, configs, transport: opts.transport }),
-  );
+  // Trigger an incremental sync of the signed-in user's connected mailboxes.
+  app.post("/api/sync", async (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return reply;
+    return syncAllConnections({ db: store.db, masterKey, userId: user.id, configs, transport: opts.transport });
+  });
 
   // Pro-gated funnel analytics. Entitlement is checked server-side from the user's
   // plan, optionally upgraded by a signed license token (open-core / desktop path).
   const licensePublicKey = process.env.PIPELINE_LICENSE_PUBLIC_KEY;
   app.get("/api/analytics", async (req, reply) => {
-    const user = await getUser(store.db, DEV_USER.id);
+    const authed = requireUser(req, reply);
+    if (!authed) return reply;
+    const user = await getUser(store.db, authed.id);
     const licenseToken = req.headers["x-pipeline-license"] as string | undefined;
     const plan = effectivePlan(user?.plan ?? "free", { licenseToken, licensePublicKey });
     if (!planAtLeast(plan, "pro")) {
       return reply.code(402).send({ error: "Pro required", upgrade: true });
     }
-    const { counts } = await getBoardForUser(store.db, DEV_USER.id, "demo");
+    const { counts } = await getBoardForUser(store.db, authed.id, "demo");
     return {
       plan,
       funnel: counts,
@@ -97,12 +125,12 @@ export async function buildServer(opts: ServerOptions = {}) {
   registerOAuthRoutes(app, {
     db: store.db,
     masterKey,
-    userId: DEV_USER.id,
+    resolveUserId: (req) => (req as RequestWithUser).user?.id ?? null,
     configs,
     transport: opts.transport,
     publicUrl: process.env.PUBLIC_URL ?? "http://localhost:3001",
     webUrl: process.env.WEB_URL ?? "http://localhost:5173",
-    pending: new Map<string, { provider: ProviderId; verifier: string }>(),
+    pending: new Map<string, { provider: ProviderId; verifier: string; userId: string }>(),
   });
 
   return app;

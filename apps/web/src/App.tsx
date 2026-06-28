@@ -15,12 +15,24 @@ export function App() {
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/applications")
-      .then((r) => {
-        if (!r.ok) throw new Error(`API responded ${r.status}`);
-        return r.json();
-      })
-      .then((b: Board) => {
+    // The board requires a session. For the demo we auto-create one via the dev
+    // login; a production build swaps this for a real sign-in screen (Clerk).
+    async function loadBoard(): Promise<Board> {
+      let res = await fetch("/api/applications");
+      if (res.status === 401) {
+        await fetch("/auth/dev/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: "demo@pipeline.local" }),
+        });
+        res = await fetch("/api/applications");
+      }
+      if (!res.ok) throw new Error(`API responded ${res.status}`);
+      return res.json() as Promise<Board>;
+    }
+
+    loadBoard()
+      .then((b) => {
         if (alive) {
           setBoard(b);
           setLoading(false);

@@ -45,11 +45,20 @@ WEB_PID=$!
 # Stop both servers when this window is closed / interrupted.
 trap 'echo; echo "Stopping…"; kill "$API_PID" "$WEB_PID" 2>/dev/null; pkill -f "tsx src/server.ts" 2>/dev/null; pkill -f "vite" 2>/dev/null; exit 0' INT TERM
 
-# 5) Wait for the web server, then open the browser.
-for _ in $(seq 1 90); do
-  if curl -fsS http://localhost:5173/ >/dev/null 2>&1; then break; fi
+# 5) Wait for BOTH the API and the web server to be ready, then open the browser.
+echo "   Waiting for the servers to be ready…"
+READY=""
+for _ in $(seq 1 120); do
+  if curl -fsS http://localhost:3001/api/health >/dev/null 2>&1 && curl -fsS http://localhost:5173/ >/dev/null 2>&1; then
+    READY=1; break
+  fi
   sleep 1
 done
+if [ -z "$READY" ]; then
+  say "Hmm — a server didn't come up in time. Last lines of the API log:"
+  tail -n 25 /tmp/pipeline-api.log 2>/dev/null
+  echo "   (You can still try the browser; if it errors, reload after a few seconds.)"
+fi
 open "http://localhost:5173"
 
 say "✅ Pipeline is running →  http://localhost:5173"

@@ -18,10 +18,12 @@
     "@electric-sql/pglite": "^0.2.12",
     "@pipeline/contracts": "workspace:*",
     "@pipeline/crypto": "workspace:*",
-    "drizzle-orm": "^0.36.4"
+    "drizzle-orm": "^0.36.4",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
+    "@types/pg": "^8.11.10",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
   }

@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+.git
+.github
+business
+site
+build
+*.log
+.DS_Store
+**/.DS_Store
+.claude
+**/*.dmg
+**/*.exe

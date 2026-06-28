@@ -35,7 +35,8 @@ export function resolveMasterKey(): Buffer {
 
 /** Create the DB, ensure the dev user exists, and seed demo applications once. */
 export async function initStore(): Promise<DbHandle> {
-  const handle = await createDb(process.env.PGLITE_DIR); // in-memory unless PGLITE_DIR is set
+  // DATABASE_URL → managed Postgres (prod); else PGlite (in-memory, or PGLITE_DIR).
+  const handle = await createDb({ databaseUrl: process.env.DATABASE_URL, dataDir: process.env.PGLITE_DIR });
   await upsertUser(handle.db, DEV_USER);
   if ((await countApplications(handle.db, DEV_USER.id)) === 0) {
     await upsertApplications(handle.db, DEV_USER.id, threadsToApplications(DEMO_THREADS));

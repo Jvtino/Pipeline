@@ -1,0 +1,51 @@
+# Local production-like stack: Postgres + API + web. Copy .env.example to .env
+# (set PIPELINE_MASTER_KEY at minimum), then: docker compose up --build
+# Open the web app at http://localhost:8080
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: pipeline
+      POSTGRES_PASSWORD: pipeline
+      POSTGRES_DB: pipeline
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pipeline"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://pipeline:pipeline@db:5432/pipeline
+      PIPELINE_MASTER_KEY: ${PIPELINE_MASTER_KEY:?set PIPELINE_MASTER_KEY in .env}
+      BILLING_WEBHOOK_SECRET: ${BILLING_WEBHOOK_SECRET:-}
+      PIPELINE_LICENSE_PUBLIC_KEY: ${PIPELINE_LICENSE_PUBLIC_KEY:-}
+      PIPELINE_LICENSE_PRIVATE_KEY: ${PIPELINE_LICENSE_PRIVATE_KEY:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MS_CLIENT_ID: ${MS_CLIENT_ID:-}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3001}
+      WEB_URL: ${WEB_URL:-http://localhost:8080}
+      PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

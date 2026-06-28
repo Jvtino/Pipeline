@@ -9,6 +9,10 @@ cd "$(dirname "$0")" || exit 1
 say() { printf "\n\033[1m%s\033[0m\n" "$1"; }
 pnpm_run() { COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack pnpm@10.33.0 "$@"; }
 
+# Load saved OAuth credentials if present, so "Connect Gmail" works. This .env
+# file is written by connect-google.command and is git-ignored (it's your secret).
+if [ -f .env ]; then set -a; . ./.env; set +a; fi
+
 clear
 echo "▦  Pipeline — starting up"
 echo "   (first run takes a couple of minutes; later runs are quick)"

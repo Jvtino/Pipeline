@@ -6,6 +6,11 @@
 # Local OAuth/IMAP token store written by the web backend (server.py) — never commit
 .pipeline-accounts.json
 
+# Local environment / OAuth client credentials (loaded by start.command) — never commit
+.env
+.env.local
+.env.*.local
+
 # Desktop app (Electron)
 node_modules/
 dist/

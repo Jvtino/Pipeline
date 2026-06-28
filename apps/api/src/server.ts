@@ -6,12 +6,13 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { boardSchema } from "@pipeline/contracts";
-import { getBoardForUser } from "@pipeline/db";
+import { getBoardForUser, getUser } from "@pipeline/db";
 import type { HttpTransport, ProviderId } from "@pipeline/providers";
 import { initStore, DEV_USER, resolveMasterKey } from "./store";
 import { loadProviderConfigs } from "./config";
 import { registerOAuthRoutes } from "./oauth-routes";
 import { syncAllConnections } from "./sync-service";
+import { effectivePlan, planAtLeast } from "./entitlement";
 
 export interface ServerOptions {
   transport?: HttpTransport; // injected in tests; defaults to real fetch
@@ -40,6 +41,25 @@ export async function buildServer(opts: ServerOptions = {}) {
   app.post("/api/sync", async () =>
     syncAllConnections({ db: store.db, masterKey, userId: DEV_USER.id, configs, transport: opts.transport }),
   );
+
+  // Pro-gated funnel analytics. Entitlement is checked server-side from the user's
+  // plan, optionally upgraded by a signed license token (open-core / desktop path).
+  const licensePublicKey = process.env.PIPELINE_LICENSE_PUBLIC_KEY;
+  app.get("/api/analytics", async (req, reply) => {
+    const user = await getUser(store.db, DEV_USER.id);
+    const licenseToken = req.headers["x-pipeline-license"] as string | undefined;
+    const plan = effectivePlan(user?.plan ?? "free", { licenseToken, licensePublicKey });
+    if (!planAtLeast(plan, "pro")) {
+      return reply.code(402).send({ error: "Pro required", upgrade: true });
+    }
+    const { counts } = await getBoardForUser(store.db, DEV_USER.id, "demo");
+    return {
+      plan,
+      funnel: counts,
+      interviewRate: counts.total ? counts.interview / counts.total : 0,
+      offerRate: counts.total ? counts.offer / counts.total : 0,
+    };
+  });
 
   registerOAuthRoutes(app, {
     db: store.db,

@@ -16,6 +16,18 @@ export async function upsertUser(db: Database, u: { id: string; email: string; p
     .onConflictDoUpdate({ target: users.id, set: { email: u.email } });
 }
 
+export interface UserRow {
+  id: string;
+  email: string;
+  plan: Plan;
+}
+
+export async function getUser(db: Database, userId: string): Promise<UserRow | null> {
+  const rows = await db.select().from(users).where(eq(users.id, userId));
+  const r = rows[0];
+  return r ? { id: r.id, email: r.email, plan: r.plan } : null;
+}
+
 /** Persist a connected mailbox; the secret is envelope-encrypted before it ever hits the DB. */
 export async function saveMailConnection(
   db: Database,

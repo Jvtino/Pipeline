@@ -1,0 +1,29 @@
+{
+  "name": "@pipeline/sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Incremental sync engine — pulls mail changes via a cursor (Gmail history / Graph delta), reduces them through the classifier, and upserts derived records. Replaces the full-rescan-every-time path.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pipeline/classify": "workspace:*",
+    "@pipeline/contracts": "workspace:*",
+    "@pipeline/db": "workspace:*",
+    "@pipeline/providers": "workspace:*"
+  },
+  "devDependencies": {
+    "@pipeline/crypto": "workspace:*",
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

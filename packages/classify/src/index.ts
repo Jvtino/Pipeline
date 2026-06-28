@@ -17,6 +17,7 @@ import type { Status, Thread, Message, ResolvedCompany } from "@pipeline/contrac
 
 export { STATUS_RANK } from "@pipeline/contracts";
 export type { Status, Thread, Message, ResolvedCompany } from "@pipeline/contracts";
+export { statusForThread, threadToApplication, threadsToApplications } from "./aggregate";
 
 /* ============================================================================
    STATUS CLASSIFIER

@@ -169,6 +169,34 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)
 
+  packages/sync:
+    dependencies:
+      '@pipeline/classify':
+        specifier: workspace:*
+        version: link:../classify
+      '@pipeline/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@pipeline/db':
+        specifier: workspace:*
+        version: link:../db
+      '@pipeline/providers':
+        specifier: workspace:*
+        version: link:../providers
+    devDependencies:
+      '@pipeline/crypto':
+        specifier: workspace:*
+        version: link:../crypto
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.0
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)
+
 packages:
 
   7zip-bin@5.2.0:

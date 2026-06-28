@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { encryptJson, decryptJson } from "@pipeline/crypto";
 import { boardFromApplications, type Application, type Board, type Status } from "@pipeline/contracts";
 import type { Database } from "./client";
-import { users, mailConnections, applications } from "./schema";
+import { users, mailConnections, applications, syncState } from "./schema";
 
 export type Plan = "free" | "pro" | "teams";
 export type Provider = "google" | "microsoft" | "imap";
@@ -104,4 +104,19 @@ export async function getBoardForUser(db: Database, userId: string, source: stri
 /** Count a user's applications (cheap existence/empty check). */
 export async function countApplications(db: Database, userId: string): Promise<number> {
   return (await getApplicationsForUser(db, userId)).length;
+}
+
+/** Persist a connection's incremental-sync cursor (Gmail historyId / Graph deltaLink). */
+export async function saveCursor(db: Database, connectionId: string, cursor: string): Promise<void> {
+  const now = new Date();
+  await db
+    .insert(syncState)
+    .values({ connectionId, cursor, lastSyncedAt: now })
+    .onConflictDoUpdate({ target: syncState.connectionId, set: { cursor, lastSyncedAt: now } });
+}
+
+/** Read a connection's sync cursor (null on first sync → triggers a backfill). */
+export async function getCursor(db: Database, connectionId: string): Promise<string | null> {
+  const rows = await db.select().from(syncState).where(eq(syncState.connectionId, connectionId));
+  return rows[0]?.cursor ?? null;
 }

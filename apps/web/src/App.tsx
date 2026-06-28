@@ -95,6 +95,8 @@ export function App() {
           } catch {
             /* sync runs again on demand */
           }
+        } else if (connect === "unconfigured") {
+          setToast({ type: "err", msg: "That mailbox provider isn’t set up yet — add your OAuth client IDs (see DEPLOY.md)." });
         } else {
           setToast({ type: "err", msg: "Mailbox connection failed or was cancelled." });
         }

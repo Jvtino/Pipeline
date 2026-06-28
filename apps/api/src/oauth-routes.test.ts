@@ -53,9 +53,10 @@ describe("OAuth connect routes", () => {
     expect(loc.searchParams.get("state")).toBeTruthy();
   });
 
-  it("start → 400 when the provider is not configured", async () => {
+  it("start → redirects back to the app when the provider is not configured", async () => {
     const res = await app.inject({ method: "GET", url: "/auth/microsoft/start" });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toContain("connect=unconfigured");
   });
 
   it("callback exchanges the code and persists an ENCRYPTED connection", async () => {

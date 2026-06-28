@@ -47,11 +47,13 @@ export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
   app.get("/auth/:provider/start", async (req, reply) => {
     const { provider } = req.params as { provider: string };
     if (!isProvider(provider)) return reply.code(404).send({ error: "unknown provider" });
+    // These are browser navigations, so on error send the user back to the app
+    // with a reason (a toast) rather than dumping raw JSON in the tab.
     const userId = d.resolveUserId(req);
-    if (!userId) return reply.code(401).send({ error: "sign in before connecting a mailbox" });
+    if (!userId) return reply.redirect(`${d.webUrl}?connect=error`);
     const conf = d.configs[provider];
     if (!conf?.clientId || (PROVIDERS[provider].needsSecret && !conf.clientSecret)) {
-      return reply.code(400).send({ error: `${provider} OAuth is not configured`, hint: "set the client id/secret env vars" });
+      return reply.redirect(`${d.webUrl}?connect=unconfigured`);
     }
     const verifier = pkceVerifier();
     const state = randomBytes(16).toString("base64url");

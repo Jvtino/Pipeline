@@ -155,6 +155,30 @@ body {
 .pro-cta { text-align: center; padding: 28px 12px; }
 .pro-cta p { margin-bottom: 14px; }
 
+/* connect dropdown */
+.connect { position: relative; }
+.connect-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 6px; min-width: 220px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.connect-item {
+  display: block; padding: 9px 10px; border-radius: 7px; color: var(--text);
+  text-decoration: none; font-size: 13.5px;
+}
+.connect-item:hover { background: var(--panel-2); }
+.connect-note { padding: 6px 10px 2px; font-size: 11.5px; }
+
+/* toast */
+.toast {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 40;
+  padding: 10px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 600;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.toast-ok { border-color: rgba(67, 196, 120, 0.5); color: #9af0bf; }
+.toast-err { border-color: rgba(240, 85, 109, 0.5); color: #ffb3c0; }
+
 @media (max-width: 640px) {
   .stats { grid-template-columns: repeat(2, 1fr); }
 }

@@ -53,6 +53,9 @@ export function App() {
   const [selected, setSelected] = useState<Application | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [toast, setToast] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
 
   const isPro = me?.plan === "pro" || me?.plan === "teams";
 
@@ -80,22 +83,58 @@ export function App() {
 
   useEffect(() => {
     let alive = true;
-    refresh()
-      .then(() => alive && setLoading(false))
-      .catch((e: unknown) => {
-        if (alive) {
-          setError(e instanceof Error ? e.message : String(e));
-          setLoading(false);
+    (async () => {
+      // Handle the post-connect redirect (?connect=ok|error) from the OAuth callback.
+      const connect = new URLSearchParams(window.location.search).get("connect");
+      if (connect) {
+        window.history.replaceState({}, "", window.location.pathname);
+        if (connect === "ok") {
+          setToast({ type: "ok", msg: "Mailbox connected — syncing your applications…" });
+          try {
+            await postJson("/api/sync");
+          } catch {
+            /* sync runs again on demand */
+          }
+        } else {
+          setToast({ type: "err", msg: "Mailbox connection failed or was cancelled." });
         }
-      });
+      }
+      await refresh();
+      if (alive) setLoading(false);
+    })().catch((e: unknown) => {
+      if (alive) {
+        setError(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+      }
+    });
     return () => {
       alive = false;
     };
   }, [refresh]);
 
+  // Auto-dismiss toasts.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   async function setPlan(plan: Plan) {
     await postJson("/auth/dev/upgrade", { plan });
     await refresh();
+  }
+
+  async function doSync() {
+    setSyncing(true);
+    try {
+      const res = await postJson<{ connections: number }>("/api/sync");
+      await refresh();
+      setToast({ type: "ok", msg: res.connections ? `Synced ${res.connections} mailbox(es).` : "No mailbox connected yet — use Connect." });
+    } catch {
+      setToast({ type: "err", msg: "Sync failed. Is a mailbox connected?" });
+    } finally {
+      setSyncing(false);
+    }
   }
 
   return (
@@ -109,6 +148,28 @@ export function App() {
         </div>
         <div className="topbar-right">
           {board && <span className="chip">{board.source} data</span>}
+
+          <div className="connect">
+            <button className="btn" onClick={() => setConnectOpen((o) => !o)} aria-expanded={connectOpen}>
+              Connect ▾
+            </button>
+            {connectOpen && (
+              <div className="connect-menu" onMouseLeave={() => setConnectOpen(false)}>
+                <a className="connect-item" href="/auth/google/start">
+                  Connect Gmail
+                </a>
+                <a className="connect-item" href="/auth/microsoft/start">
+                  Connect Outlook
+                </a>
+                <div className="connect-note muted">Requires your OAuth client IDs (see DEPLOY.md).</div>
+              </div>
+            )}
+          </div>
+
+          <button className="btn" onClick={() => void doSync()} disabled={syncing}>
+            {syncing ? "Syncing…" : "Sync"}
+          </button>
+
           {me && <span className={`badge badge-${me.plan}`}>{me.plan.toUpperCase()}</span>}
           {isPro ? (
             <>
@@ -126,6 +187,8 @@ export function App() {
           )}
         </div>
       </header>
+
+      {toast && <div className={`toast toast-${toast.type}`} role="status">{toast.msg}</div>}
 
       <main>
         {loading && <p className="muted center">Loading your board…</p>}

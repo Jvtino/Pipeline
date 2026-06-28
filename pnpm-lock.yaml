@@ -42,6 +42,9 @@ importers:
       '@pipeline/providers':
         specifier: workspace:*
         version: link:../../packages/providers
+      '@pipeline/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       fastify:
         specifier: ^5.1.0
         version: 5.8.5

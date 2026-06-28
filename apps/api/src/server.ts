@@ -11,6 +11,7 @@ import type { HttpTransport, ProviderId } from "@pipeline/providers";
 import { initStore, DEV_USER, resolveMasterKey } from "./store";
 import { loadProviderConfigs } from "./config";
 import { registerOAuthRoutes } from "./oauth-routes";
+import { syncAllConnections } from "./sync-service";
 
 export interface ServerOptions {
   transport?: HttpTransport; // injected in tests; defaults to real fetch
@@ -21,6 +22,8 @@ export async function buildServer(opts: ServerOptions = {}) {
   app.register(cors, { origin: true });
 
   const store = await initStore();
+  const masterKey = resolveMasterKey();
+  const configs = loadProviderConfigs(process.env);
   app.addHook("onClose", async () => {
     await store.close();
   });
@@ -32,11 +35,17 @@ export async function buildServer(opts: ServerOptions = {}) {
     return boardSchema.parse(board); // validate against the shared contract before returning
   });
 
+  // Trigger an incremental sync of the user's connected mailboxes. No-op (and a
+  // clean summary) when nothing is connected — e.g. the demo build.
+  app.post("/api/sync", async () =>
+    syncAllConnections({ db: store.db, masterKey, userId: DEV_USER.id, configs, transport: opts.transport }),
+  );
+
   registerOAuthRoutes(app, {
     db: store.db,
-    masterKey: resolveMasterKey(),
+    masterKey,
     userId: DEV_USER.id,
-    configs: loadProviderConfigs(process.env),
+    configs,
     transport: opts.transport,
     publicUrl: process.env.PUBLIC_URL ?? "http://localhost:3001",
     webUrl: process.env.WEB_URL ?? "http://localhost:5173",

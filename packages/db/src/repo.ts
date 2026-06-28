@@ -43,6 +43,33 @@ export async function getMailConnectionSecret<T = unknown>(
   return row ? decryptJson<T>(row.encryptedSecret, masterKey) : null;
 }
 
+export interface MailConnectionRow {
+  id: string;
+  provider: Provider;
+  email: string;
+}
+
+/** List a user's connected mailboxes (metadata only — no secrets). */
+export async function getMailConnections(db: Database, userId: string): Promise<MailConnectionRow[]> {
+  return db
+    .select({ id: mailConnections.id, provider: mailConnections.provider, email: mailConnections.email })
+    .from(mailConnections)
+    .where(eq(mailConnections.userId, userId));
+}
+
+/** Re-encrypt + store a rotated secret (after a token refresh). */
+export async function updateMailConnectionSecret(
+  db: Database,
+  masterKey: Buffer,
+  connectionId: string,
+  secret: unknown,
+): Promise<void> {
+  await db
+    .update(mailConnections)
+    .set({ encryptedSecret: encryptJson(secret, masterKey) })
+    .where(eq(mailConnections.id, connectionId));
+}
+
 /** Idempotently upsert derived applications for a user (current status overwrites). */
 export async function upsertApplications(db: Database, userId: string, apps: Application[]): Promise<void> {
   for (const a of apps) {

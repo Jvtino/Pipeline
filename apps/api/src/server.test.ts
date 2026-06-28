@@ -28,4 +28,15 @@ describe("api server (DB-backed)", () => {
       await app.close();
     }
   });
+
+  it("POST /api/sync is a clean no-op when no mailbox is connected (demo build)", async () => {
+    const app = await buildServer();
+    try {
+      const res = await app.inject({ method: "POST", url: "/api/sync" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ connections: 0, results: [] });
+    } finally {
+      await app.close();
+    }
+  });
 });

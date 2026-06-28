@@ -67,6 +67,7 @@ To connect real mailboxes: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, `MS_CLIENT
 
 - Google OAuth verification for the restricted `gmail.readonly` scope + likely
   annual **CASA Tier 2**; Microsoft publisher verification.
+  → practical readiness checklist: [`GOOGLE-VERIFICATION.md`](./GOOGLE-VERIFICATION.md).
 - Replace the single stand-in user with real per-request auth (Clerk seam exists).
 - Finalize Privacy/Terms with a real contact (legal review).
 - Move OAuth `state` + sync queue to Redis; add a background sync scheduler and

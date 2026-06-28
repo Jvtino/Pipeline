@@ -28,6 +28,11 @@ export async function getUser(db: Database, userId: string): Promise<UserRow | n
   return r ? { id: r.id, email: r.email, plan: r.plan } : null;
 }
 
+/** Set a user's plan (called by the billing webhook on payment / cancellation). */
+export async function setUserPlan(db: Database, userId: string, plan: Plan): Promise<void> {
+  await db.update(users).set({ plan }).where(eq(users.id, userId));
+}
+
 /** Persist a connected mailbox; the secret is envelope-encrypted before it ever hits the DB. */
 export async function saveMailConnection(
   db: Database,

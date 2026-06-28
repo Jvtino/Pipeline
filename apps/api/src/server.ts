@@ -6,13 +6,15 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { boardSchema } from "@pipeline/contracts";
-import { getBoardForUser, getUser } from "@pipeline/db";
+import { getBoardForUser, getUser, setUserPlan } from "@pipeline/db";
+import { issueLicense } from "@pipeline/license";
 import type { HttpTransport, ProviderId } from "@pipeline/providers";
 import { initStore, DEV_USER, resolveMasterKey } from "./store";
 import { loadProviderConfigs } from "./config";
 import { registerOAuthRoutes } from "./oauth-routes";
 import { syncAllConnections } from "./sync-service";
 import { effectivePlan, planAtLeast } from "./entitlement";
+import { verifyWebhookSignature, planFromEvent, type BillingEvent } from "./billing";
 
 export interface ServerOptions {
   transport?: HttpTransport; // injected in tests; defaults to real fetch
@@ -27,6 +29,17 @@ export async function buildServer(opts: ServerOptions = {}) {
   const configs = loadProviderConfigs(process.env);
   app.addHook("onClose", async () => {
     await store.close();
+  });
+
+  // Capture the raw JSON body (needed to verify webhook HMAC signatures) while
+  // still parsing it normally for every other route.
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+    (_req as { rawBody?: string }).rawBody = body as string;
+    try {
+      done(null, (body as string).length ? JSON.parse(body as string) : {});
+    } catch (err) {
+      done(err as Error, undefined);
+    }
   });
 
   app.get("/api/health", async () => ({ ok: true, service: "pipeline-api" }));
@@ -59,6 +72,26 @@ export async function buildServer(opts: ServerOptions = {}) {
       interviewRate: counts.total ? counts.interview / counts.total : 0,
       offerRate: counts.total ? counts.offer / counts.total : 0,
     };
+  });
+
+  // Merchant-of-Record billing webhook: verify HMAC, then upgrade/downgrade the
+  // user's plan and (if a signing key is configured) hand back a license token.
+  const billingSecret = process.env.BILLING_WEBHOOK_SECRET;
+  const licensePrivateKey = process.env.PIPELINE_LICENSE_PRIVATE_KEY;
+  app.post("/webhooks/billing", async (req, reply) => {
+    if (!billingSecret) return reply.code(503).send({ error: "billing not configured" });
+    const raw = (req as { rawBody?: string }).rawBody ?? "";
+    const signature = (req.headers["x-signature"] as string) ?? "";
+    if (!verifyWebhookSignature(raw, billingSecret, signature)) {
+      return reply.code(401).send({ error: "bad signature" });
+    }
+    const change = planFromEvent(req.body as BillingEvent);
+    if (change) await setUserPlan(store.db, change.userId, change.plan);
+    let license: string | undefined;
+    if (change && change.plan !== "free" && licensePrivateKey) {
+      license = issueLicense(licensePrivateKey, { sub: change.userId, plan: change.plan, iat: Date.now() });
+    }
+    return { ok: true, change, license };
   });
 
   registerOAuthRoutes(app, {

@@ -1,44 +1,36 @@
-# Setting up Pipeline on a new computer
+# Setting up Pipeline on a new Mac
 
-Everything you need is in this repo **except `config.json`** (your OAuth
-credentials), which is deliberately kept out of GitHub. Follow these steps.
+You no longer manage any files by hand. **GitHub is the source of truth.** A single
+double-click icon on your Desktop downloads the latest code from GitHub, keeps
+itself updated, and runs the app.
 
-## 1. Install the tools
-- **Node.js** (includes npm): https://nodejs.org  → download the "LTS" version, install.
-- **Git**: on macOS, run `git --version` in Terminal; if missing it offers to install.
+## The one-time setup (about 3 minutes)
 
-## 2. Get the code
-```bash
-git clone https://github.com/Jvtino/Pipeline.git
-cd Pipeline
-npm install
-```
-> If the repo is **private**, the clone will ask you to sign in to GitHub, or you
-> can download it as a ZIP from the repo's green **Code** button.
+1. **Get the launcher onto your Desktop.** On the new Mac, open
+   https://github.com/Jvtino/Pipeline → open the **`launchers`** folder →
+   click **`Pipeline.command`** → click the **⋯ / Download raw file** button.
+   Drag the downloaded `Pipeline.command` onto your **Desktop**.
 
-## 3. Restore your credentials (the one file that isn't in GitHub)
-Recreate `config.json` in the project folder. Copy the template and fill it in:
-```bash
-cp config.example.json config.json
-```
-Then paste your saved values into it:
-```json
-{
-  "microsoft": { "clientId": "YOUR-AZURE-CLIENT-ID" },
-  "google":    { "clientId": "YOUR-GOOGLE-CLIENT-ID.apps.googleusercontent.com",
-                 "clientSecret": "YOUR-GOOGLE-CLIENT-SECRET" }
-}
-```
-> 💡 Before leaving your old laptop, copy its `config.json` (AirDrop it to
-> yourself, or save its contents in your notes / password manager). It lives at
-> the project root next to `package.json`.
+   *(That's the only file you ever copy by hand. From then on it updates itself.)*
 
-## 4. Run or build
-```bash
-npm start            # run the app in development
-npm run dist:mac     # build a macOS .dmg in dist/
-```
-For a Windows build, see `.github/workflows/build.yml` (GitHub builds it for you).
+2. **Allow it to run the first time.** Because it came from the internet, macOS
+   blocks it on the first launch. **Right-click** the icon → **Open** → **Open**.
+   After that, a normal double-click works.
 
-## Full provider/OAuth details
-See `DESKTOP.md`.
+3. **Let it do the rest.** The first run installs the tools it needs and may ask
+   you to install **Node.js** (from https://nodejs.org — click the green **LTS**
+   button) and **git** (a macOS box pops up — click **Install**). Double-click the
+   icon again after installing. When it finishes, the app opens in your browser.
+
+## Your private credentials (not on GitHub, by design)
+
+Your Google/Microsoft sign-in secrets are **never** uploaded to GitHub. To connect
+your mailbox on the new Mac, double-click **`connect-google.command`** (in the
+downloaded `Pipeline` folder in your Home folder) and follow the prompts — same as
+before. See `GOOGLE-VERIFICATION.md` / `WEB-OAUTH.md` for details.
+
+## Everyday use
+
+Just double-click **`Pipeline`** on the Desktop. It always pulls the newest version
+from GitHub first, so you're never out of date. Leave the window open while you use
+the app; close it to stop.

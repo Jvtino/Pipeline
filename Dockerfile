@@ -4,7 +4,8 @@
 # applied on startup. (Single stage for simplicity; can be slimmed to multi-stage
 # + compiled output later.)
 FROM node:20-slim
-RUN corepack enable
+# Pin pnpm (the corepack default, pnpm 11+, needs node:sqlite which is Node 22+).
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 WORKDIR /app
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 

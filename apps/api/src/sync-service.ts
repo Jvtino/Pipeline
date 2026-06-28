@@ -7,6 +7,7 @@ import {
   getMailConnections,
   getMailConnectionSecret,
   updateMailConnectionSecret,
+  listUserIdsWithConnections,
   type Database,
 } from "@pipeline/db";
 import type { ProviderConfigs } from "./config";
@@ -65,4 +66,14 @@ export async function syncAllConnections(deps: SyncDeps): Promise<SyncSummary> {
     }
   }
   return { connections: conns.length, results };
+}
+
+/** Sync every user that has a connected mailbox (used by the background scheduler). */
+export async function syncAllUsers(deps: Omit<SyncDeps, "userId">): Promise<{ users: number; summaries: SyncSummary[] }> {
+  const userIds = await listUserIdsWithConnections(deps.db);
+  const summaries: SyncSummary[] = [];
+  for (const userId of userIds) {
+    summaries.push(await syncAllConnections({ ...deps, userId }));
+  }
+  return { users: userIds.length, summaries };
 }

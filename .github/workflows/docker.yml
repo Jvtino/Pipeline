@@ -1,0 +1,20 @@
+name: Docker images
+
+# Gate: verify the API and web container images actually build. Keeps the
+# Dockerfiles honest (they aren't exercised by the unit-test jobs).
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -f Dockerfile -t pipeline-api:ci .
+
+      - name: Build web image
+        run: docker build -f apps/web/Dockerfile -t pipeline-web:ci .

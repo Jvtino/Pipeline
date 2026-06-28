@@ -75,6 +75,12 @@ export async function getMailConnections(db: Database, userId: string): Promise<
     .where(eq(mailConnections.userId, userId));
 }
 
+/** All user ids that have at least one connected mailbox (for the sync scheduler). */
+export async function listUserIdsWithConnections(db: Database): Promise<string[]> {
+  const rows = await db.select({ userId: mailConnections.userId }).from(mailConnections);
+  return [...new Set(rows.map((r) => r.userId))];
+}
+
 /** Re-encrypt + store a rotated secret (after a token refresh). */
 export async function updateMailConnectionSecret(
   db: Database,

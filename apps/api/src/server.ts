@@ -8,12 +8,14 @@ import cors from "@fastify/cors";
 import { boardSchema } from "@pipeline/contracts";
 import { getBoardForUser, setUserPlan } from "@pipeline/db";
 import { issueLicense } from "@pipeline/license";
-import type { HttpTransport, ProviderId } from "@pipeline/providers";
+import type { HttpTransport } from "@pipeline/providers";
 import { initStore, seedDemoForUser, resolveMasterKey } from "./store";
 import { loadProviderConfigs } from "./config";
 import { registerOAuthRoutes } from "./oauth-routes";
 import { registerAuthRoutes } from "./auth-routes";
 import { registerProRoutes } from "./pro-routes";
+import { memoryPendingStore, redisPendingStore } from "./pending-store";
+import { startSyncScheduler } from "./scheduler";
 import { syncAllConnections } from "./sync-service";
 import { verifyWebhookSignature, planFromEvent, type BillingEvent } from "./billing";
 import {
@@ -105,6 +107,8 @@ export async function buildServer(opts: ServerOptions = {}) {
     return { ok: true, change, license };
   });
 
+  // OAuth state store: Redis (multi-replica) when configured, else in-memory.
+  const pending = process.env.REDIS_URL ? redisPendingStore(process.env.REDIS_URL) : memoryPendingStore();
   registerOAuthRoutes(app, {
     db: store.db,
     masterKey,
@@ -113,8 +117,15 @@ export async function buildServer(opts: ServerOptions = {}) {
     transport: opts.transport,
     publicUrl: process.env.PUBLIC_URL ?? "http://localhost:3001",
     webUrl: process.env.WEB_URL ?? "http://localhost:5173",
-    pending: new Map<string, { provider: ProviderId; verifier: string; userId: string }>(),
+    pending,
   });
+
+  // Background sync scheduler — opt-in via SYNC_INTERVAL_MS (off in tests/dev by default).
+  const intervalMs = Number(process.env.SYNC_INTERVAL_MS ?? 0);
+  if (intervalMs > 0) {
+    const stop = startSyncScheduler({ db: store.db, masterKey, configs, transport: opts.transport }, intervalMs, (m) => app.log.info(m));
+    app.addHook("onClose", async () => stop());
+  }
 
   return app;
 }

@@ -4,6 +4,7 @@ import { createDb, upsertUser, getMailConnectionSecret, mailConnections, type Db
 import { generateMasterKey } from "@pipeline/crypto";
 import type { HttpTransport, OAuthTokens } from "@pipeline/providers";
 import { registerOAuthRoutes } from "./oauth-routes";
+import { memoryPendingStore } from "./pending-store";
 
 const tokens: OAuthTokens = { access_token: "AT", refresh_token: "RT-secret", expires_in: 3600 };
 const transport: HttpTransport = {
@@ -32,7 +33,7 @@ beforeEach(async () => {
     transport,
     publicUrl: "http://localhost:3001",
     webUrl: "http://localhost:5173",
-    pending: new Map(),
+    pending: memoryPendingStore(),
   });
   await app.ready();
 });

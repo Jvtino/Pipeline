@@ -3,7 +3,7 @@ import { createDb, upsertUser, saveMailConnection, getCursor, getBoardForUser, t
 import { generateMasterKey } from "@pipeline/crypto";
 import type { Thread } from "@pipeline/contracts";
 import type { MailSource } from "@pipeline/sync";
-import { syncAllConnections, type SourceFactory } from "./sync-service";
+import { syncAllConnections, syncAllUsers, type SourceFactory } from "./sync-service";
 
 const mk = Buffer.from(generateMasterKey(), "base64");
 
@@ -68,5 +68,25 @@ describe("syncAllConnections", () => {
     });
     const summary = await syncAllConnections({ db: h.db, masterKey: mk, userId: "u1", configs: {} });
     expect(summary.results[0]!.error).toMatch(/not configured/);
+  });
+});
+
+describe("syncAllUsers (scheduler fan-out)", () => {
+  it("syncs every user that has a connected mailbox", async () => {
+    await upsertUser(h.db, { id: "u2", email: "u2@x.com" });
+    for (const u of ["u1", "u2"]) {
+      await saveMailConnection(h.db, mk, {
+        id: `${u}:c`,
+        userId: u,
+        provider: "google",
+        email: `${u}@gmail.com`,
+        secret: { access_token: "AT", expires_in: 3600, obtained_at: Date.now() },
+      });
+    }
+    const makeSource: SourceFactory = () => ({ async fetch() { return { threads: [acmeThread("thank you for applying")], cursor: "h1" }; } });
+    const r = await syncAllUsers({ db: h.db, masterKey: mk, configs: { google: { clientId: "c", clientSecret: "s" } }, makeSource });
+    expect(r.users).toBe(2);
+    expect((await getBoardForUser(h.db, "u1", "live")).counts.total).toBe(1);
+    expect((await getBoardForUser(h.db, "u2", "live")).counts.total).toBe(1);
   });
 });

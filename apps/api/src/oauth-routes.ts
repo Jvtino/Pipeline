@@ -21,6 +21,9 @@ import {
 import { saveMailConnection, type Database } from "@pipeline/db";
 import type { FastifyRequest } from "fastify";
 import type { ProviderConfigs } from "./config";
+import type { PendingStore } from "./pending-store";
+
+const PENDING_TTL_MS = 10 * 60 * 1000; // an OAuth round-trip should finish well within 10 min
 
 export interface OAuthDeps {
   db: Database;
@@ -30,7 +33,7 @@ export interface OAuthDeps {
   transport?: HttpTransport;
   publicUrl: string; // where the API is reachable (for the redirect_uri)
   webUrl: string; // where to send the user back after connect
-  pending: Map<string, { provider: ProviderId; verifier: string; userId: string }>;
+  pending: PendingStore;
 }
 
 function isProvider(p: string): p is ProviderId {
@@ -52,15 +55,14 @@ export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
     }
     const verifier = pkceVerifier();
     const state = randomBytes(16).toString("base64url");
-    d.pending.set(state, { provider, verifier, userId });
+    await d.pending.set(state, { provider, verifier, userId }, PENDING_TTL_MS);
     return reply.redirect(buildAuthUrl(provider, conf.clientId, redirectUri(provider), pkceChallenge(verifier), state));
   });
 
   app.get("/auth/:provider/callback", async (req, reply) => {
     const { provider } = req.params as { provider: string };
     const q = req.query as Record<string, string | undefined>;
-    const pend = q.state ? d.pending.get(q.state) : undefined;
-    if (q.state) d.pending.delete(q.state);
+    const pend = q.state ? await d.pending.take(q.state) : null;
 
     if (!isProvider(provider) || !q.code || !pend || pend.provider !== provider) {
       return reply.redirect(`${d.webUrl}?connect=error`);

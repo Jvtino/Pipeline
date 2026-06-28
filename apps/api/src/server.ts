@@ -6,15 +6,15 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { boardSchema } from "@pipeline/contracts";
-import { getBoardForUser, getUser, setUserPlan } from "@pipeline/db";
+import { getBoardForUser, setUserPlan } from "@pipeline/db";
 import { issueLicense } from "@pipeline/license";
 import type { HttpTransport, ProviderId } from "@pipeline/providers";
 import { initStore, seedDemoForUser, resolveMasterKey } from "./store";
 import { loadProviderConfigs } from "./config";
 import { registerOAuthRoutes } from "./oauth-routes";
 import { registerAuthRoutes } from "./auth-routes";
+import { registerProRoutes } from "./pro-routes";
 import { syncAllConnections } from "./sync-service";
-import { effectivePlan, planAtLeast } from "./entitlement";
 import { verifyWebhookSignature, planFromEvent, type BillingEvent } from "./billing";
 import {
   resolveSessionSecret,
@@ -81,26 +81,9 @@ export async function buildServer(opts: ServerOptions = {}) {
     return syncAllConnections({ db: store.db, masterKey, userId: user.id, configs, transport: opts.transport });
   });
 
-  // Pro-gated funnel analytics. Entitlement is checked server-side from the user's
-  // plan, optionally upgraded by a signed license token (open-core / desktop path).
+  // Pro-tier routes (analytics, reminders, export, notes/contacts) — all gated.
   const licensePublicKey = process.env.PIPELINE_LICENSE_PUBLIC_KEY;
-  app.get("/api/analytics", async (req, reply) => {
-    const authed = requireUser(req, reply);
-    if (!authed) return reply;
-    const user = await getUser(store.db, authed.id);
-    const licenseToken = req.headers["x-pipeline-license"] as string | undefined;
-    const plan = effectivePlan(user?.plan ?? "free", { licenseToken, licensePublicKey });
-    if (!planAtLeast(plan, "pro")) {
-      return reply.code(402).send({ error: "Pro required", upgrade: true });
-    }
-    const { counts } = await getBoardForUser(store.db, authed.id, "demo");
-    return {
-      plan,
-      funnel: counts,
-      interviewRate: counts.total ? counts.interview / counts.total : 0,
-      offerRate: counts.total ? counts.offer / counts.total : 0,
-    };
-  });
+  registerProRoutes(app, { db: store.db, licensePublicKey });
 
   // Merchant-of-Record billing webhook: verify HMAC, then upgrade/downgrade the
   // user's plan and (if a signing key is configured) hand back a license token.

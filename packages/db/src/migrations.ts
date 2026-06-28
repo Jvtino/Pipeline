@@ -55,4 +55,24 @@ CREATE TABLE IF NOT EXISTS application_events (
   occurred_at     text NOT NULL,
   source          text NOT NULL DEFAULT 'sync'
 );
+
+CREATE TABLE IF NOT EXISTS notes (
+  id              text PRIMARY KEY,
+  user_id         text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  application_id  text NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  body            text NOT NULL,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_notes_app ON notes (application_id);
+
+CREATE TABLE IF NOT EXISTS contacts (
+  id              text PRIMARY KEY,
+  user_id         text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  application_id  text NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  name            text NOT NULL,
+  email           text,
+  role            text,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_contacts_app ON contacts (application_id);
 `;

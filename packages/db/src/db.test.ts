@@ -11,6 +11,11 @@ import {
   upsertApplications,
   getApplicationsForUser,
   getBoardForUser,
+  applicationBelongsTo,
+  addNote,
+  listNotes,
+  addContact,
+  listContacts,
 } from "./repo";
 
 const masterKey = () => Buffer.from(generateMasterKey(), "base64");
@@ -82,5 +87,25 @@ describe("@pipeline/db", () => {
     const apps = await getApplicationsForUser(h.db, "u1");
     expect(apps.length).toBe(1);
     expect(apps[0]!.status).toBe("offer");
+  });
+
+  it("notes + contacts are scoped to (user, application)", async () => {
+    await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
+    await upsertApplications(h.db, "u1", [appFixture("t1", "Acme", "applied")]);
+    const appId = "u1:t1";
+    expect(await applicationBelongsTo(h.db, "u1", appId)).toBe(true);
+    expect(await applicationBelongsTo(h.db, "u2", appId)).toBe(false);
+
+    await addNote(h.db, { userId: "u1", applicationId: appId, body: "first note" });
+    const notes = await listNotes(h.db, "u1", appId);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.body).toBe("first note");
+    // a different user sees none
+    expect(await listNotes(h.db, "u2", appId)).toHaveLength(0);
+
+    const contact = await addContact(h.db, { userId: "u1", applicationId: appId, name: "Jane", email: "jane@acme.com", role: "Recruiter" });
+    expect(contact.name).toBe("Jane");
+    expect(await listContacts(h.db, "u1", appId)).toHaveLength(1);
+    expect(await listContacts(h.db, "u2", appId)).toHaveLength(0);
   });
 });

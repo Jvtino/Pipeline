@@ -79,4 +79,40 @@ export const applicationEvents = pgTable("application_events", {
   source: text("source").notNull().default("sync"),
 });
 
-export const schema = { users, mailConnections, syncState, applications, applicationEvents };
+/** Free-form notes per application (Pro). */
+export const notes = pgTable(
+  "notes",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    applicationId: text("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byApp: index("idx_notes_app").on(t.applicationId) }),
+);
+
+/** Recruiter / hiring-manager contacts per application (Pro). */
+export const contacts = pgTable(
+  "contacts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    applicationId: text("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    email: text("email"),
+    role: text("role"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byApp: index("idx_contacts_app").on(t.applicationId) }),
+);
+
+export const schema = { users, mailConnections, syncState, applications, applicationEvents, notes, contacts };

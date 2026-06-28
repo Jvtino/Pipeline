@@ -1,10 +1,11 @@
 // Repository — the only place app code touches the tables. Encrypts mail secrets
 // on write, decrypts on read, and enforces per-user scoping on every query.
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { encryptJson, decryptJson } from "@pipeline/crypto";
 import { boardFromApplications, type Application, type Board, type Status } from "@pipeline/contracts";
 import type { Database } from "./client";
-import { users, mailConnections, applications, syncState } from "./schema";
+import { users, mailConnections, applications, syncState, notes, contacts } from "./schema";
 
 export type Plan = "free" | "pro" | "teams";
 export type Provider = "google" | "microsoft" | "imap";
@@ -143,6 +144,82 @@ export async function getApplicationsForUser(db: Database, userId: string): Prom
 /** The board read for a user, grouped identically to the live-mail path. */
 export async function getBoardForUser(db: Database, userId: string, source: string): Promise<Board> {
   return boardFromApplications(await getApplicationsForUser(db, userId), source);
+}
+
+/** Confirm an application exists and belongs to the user (ownership gate for notes/contacts). */
+export async function applicationBelongsTo(db: Database, userId: string, applicationId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: applications.id })
+    .from(applications)
+    .where(and(eq(applications.id, applicationId), eq(applications.userId, userId)));
+  return rows.length > 0;
+}
+
+// ── Notes (Pro) ──────────────────────────────────────────────────────────────
+export interface NoteRow {
+  id: string;
+  applicationId: string;
+  body: string;
+  createdAt: Date;
+}
+
+export async function addNote(db: Database, p: { userId: string; applicationId: string; body: string }): Promise<NoteRow> {
+  const id = randomUUID();
+  const rows = await db
+    .insert(notes)
+    .values({ id, userId: p.userId, applicationId: p.applicationId, body: p.body })
+    .returning({ id: notes.id, applicationId: notes.applicationId, body: notes.body, createdAt: notes.createdAt });
+  return rows[0]!;
+}
+
+export async function listNotes(db: Database, userId: string, applicationId: string): Promise<NoteRow[]> {
+  return db
+    .select({ id: notes.id, applicationId: notes.applicationId, body: notes.body, createdAt: notes.createdAt })
+    .from(notes)
+    .where(and(eq(notes.userId, userId), eq(notes.applicationId, applicationId)));
+}
+
+// ── Contacts (Pro) ───────────────────────────────────────────────────────────
+export interface ContactRow {
+  id: string;
+  applicationId: string;
+  name: string;
+  email: string | null;
+  role: string | null;
+  createdAt: Date;
+}
+
+export async function addContact(
+  db: Database,
+  p: { userId: string; applicationId: string; name: string; email?: string | null; role?: string | null },
+): Promise<ContactRow> {
+  const id = randomUUID();
+  const rows = await db
+    .insert(contacts)
+    .values({ id, userId: p.userId, applicationId: p.applicationId, name: p.name, email: p.email ?? null, role: p.role ?? null })
+    .returning({
+      id: contacts.id,
+      applicationId: contacts.applicationId,
+      name: contacts.name,
+      email: contacts.email,
+      role: contacts.role,
+      createdAt: contacts.createdAt,
+    });
+  return rows[0]!;
+}
+
+export async function listContacts(db: Database, userId: string, applicationId: string): Promise<ContactRow[]> {
+  return db
+    .select({
+      id: contacts.id,
+      applicationId: contacts.applicationId,
+      name: contacts.name,
+      email: contacts.email,
+      role: contacts.role,
+      createdAt: contacts.createdAt,
+    })
+    .from(contacts)
+    .where(and(eq(contacts.userId, userId), eq(contacts.applicationId, applicationId)));
 }
 
 /** Count a user's applications (cheap existence/empty check). */

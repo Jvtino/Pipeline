@@ -57,6 +57,22 @@ describe("api server (authenticated)", () => {
     }
   });
 
+  it("dev upgrade flips the plan and unlocks Pro routes", async () => {
+    const app = await buildServer();
+    try {
+      const cookie = await login(app, "upgrader@x.com");
+      expect((await app.inject({ method: "GET", url: "/auth/me", headers: { cookie } })).json().user.plan).toBe("free");
+      expect((await app.inject({ method: "GET", url: "/api/reminders", headers: { cookie } })).statusCode).toBe(402);
+
+      const up = await app.inject({ method: "POST", url: "/auth/dev/upgrade", headers: { cookie, "content-type": "application/json" }, payload: { plan: "pro" } });
+      expect(up.statusCode).toBe(200);
+      expect((await app.inject({ method: "GET", url: "/auth/me", headers: { cookie } })).json().user.plan).toBe("pro");
+      expect((await app.inject({ method: "GET", url: "/api/reminders", headers: { cookie } })).statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("isolates two users — each sees only their own board", async () => {
     const app = await buildServer();
     try {

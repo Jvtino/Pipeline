@@ -1,43 +1,87 @@
-import { useEffect, useState } from "react";
-import type { Board, CompanyGroup, Status } from "@pipeline/contracts";
+import { useCallback, useEffect, useState } from "react";
+import type { Board, CompanyGroup, Application, Status } from "@pipeline/contracts";
 
-const STATUS_LABEL: Record<Status, string> = {
-  applied: "Active",
-  interview: "Interview",
-  offer: "Offer",
-  rejected: "Rejected",
-};
+type Plan = "free" | "pro" | "teams";
+interface Me {
+  email: string;
+  plan: Plan;
+}
+interface Nudge {
+  threadId: string;
+  company: string;
+  role: string;
+  daysSince: number;
+  suggestion: string;
+}
+interface Note {
+  id: string;
+  body: string;
+  createdAt: string;
+}
+interface Contact {
+  id: string;
+  name: string;
+  email: string | null;
+  role: string | null;
+}
+
+const STATUS_LABEL: Record<Status, string> = { applied: "Active", interview: "Interview", offer: "Offer", rejected: "Rejected" };
+const enc = (threadId: string) => encodeURIComponent(threadId);
+
+async function ensureSession(): Promise<void> {
+  const me = await fetch("/auth/me");
+  if (me.status === 401) {
+    await fetch("/auth/dev/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "demo@pipeline.local" }) });
+  }
+}
+async function getJson<T>(url: string): Promise<T> {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url} → ${r.status}`);
+  return r.json() as Promise<T>;
+}
+async function postJson<T>(url: string, body?: unknown): Promise<T> {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) throw new Error(`${url} → ${r.status}`);
+  return r.json() as Promise<T>;
+}
 
 export function App() {
+  const [me, setMe] = useState<Me | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
+  const [reminders, setReminders] = useState<Nudge[]>([]);
+  const [analytics, setAnalytics] = useState<{ interviewRate: number; offerRate: number } | null>(null);
+  const [selected, setSelected] = useState<Application | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const isPro = me?.plan === "pro" || me?.plan === "teams";
+
+  const refresh = useCallback(async () => {
+    await ensureSession();
+    const meRes = await getJson<{ user: Me }>("/auth/me");
+    setMe(meRes.user);
+    setBoard(await getJson<Board>("/api/applications"));
+    if (meRes.user.plan !== "free") {
+      try {
+        setReminders((await getJson<{ nudges: Nudge[] }>("/api/reminders")).nudges);
+      } catch {
+        setReminders([]);
+      }
+      try {
+        setAnalytics(await getJson<{ interviewRate: number; offerRate: number }>("/api/analytics"));
+      } catch {
+        setAnalytics(null);
+      }
+    } else {
+      setReminders([]);
+      setAnalytics(null);
+    }
+  }, []);
+
   useEffect(() => {
     let alive = true;
-    // The board requires a session. For the demo we auto-create one via the dev
-    // login; a production build swaps this for a real sign-in screen (Clerk).
-    async function loadBoard(): Promise<Board> {
-      let res = await fetch("/api/applications");
-      if (res.status === 401) {
-        await fetch("/auth/dev/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "demo@pipeline.local" }),
-        });
-        res = await fetch("/api/applications");
-      }
-      if (!res.ok) throw new Error(`API responded ${res.status}`);
-      return res.json() as Promise<Board>;
-    }
-
-    loadBoard()
-      .then((b) => {
-        if (alive) {
-          setBoard(b);
-          setLoading(false);
-        }
-      })
+    refresh()
+      .then(() => alive && setLoading(false))
       .catch((e: unknown) => {
         if (alive) {
           setError(e instanceof Error ? e.message : String(e));
@@ -47,7 +91,12 @@ export function App() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [refresh]);
+
+  async function setPlan(plan: Plan) {
+    await postJson("/auth/dev/upgrade", { plan });
+    await refresh();
+  }
 
   return (
     <div className="app">
@@ -58,22 +107,51 @@ export function App() {
           </span>{" "}
           Pipeline
         </div>
-        <span className="chip">{board ? `${board.source} data` : "…"}</span>
+        <div className="topbar-right">
+          {board && <span className="chip">{board.source} data</span>}
+          {me && <span className={`badge badge-${me.plan}`}>{me.plan.toUpperCase()}</span>}
+          {isPro ? (
+            <>
+              <a className="btn" href="/api/export.csv">
+                Export CSV
+              </a>
+              <button className="btn btn-ghost" onClick={() => void setPlan("free")}>
+                Downgrade
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-primary" onClick={() => void setPlan("pro")}>
+              Upgrade to Pro (demo)
+            </button>
+          )}
+        </div>
       </header>
 
       <main>
         {loading && <p className="muted center">Loading your board…</p>}
-
         {error && (
           <div className="notice error" role="alert">
             <strong>Couldn’t reach the API.</strong> {error}
             <div className="muted">
-              Start it with <code>pnpm --filter @pipeline/api dev</code> (expects it on port 3001).
+              Start it with <code>pnpm --filter @pipeline/api dev</code> (port 3001).
             </div>
           </div>
         )}
 
-        {board && board.groups.length === 0 && <p className="muted center">No applications yet.</p>}
+        {isPro && reminders.length > 0 && (
+          <section className="reminders">
+            <div className="reminders-head">
+              ⏰ <strong>{reminders.length}</strong> follow-up{reminders.length > 1 ? "s" : ""} due
+            </div>
+            <ul>
+              {reminders.slice(0, 4).map((n) => (
+                <li key={n.threadId}>
+                  <strong>{n.company}</strong> — {n.role} · {n.daysSince}d quiet
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {board && board.groups.length > 0 && (
           <>
@@ -83,20 +161,26 @@ export function App() {
               <Stat label="Interview" value={board.counts.interview} tone="interview" />
               <Stat label="Offer" value={board.counts.offer} tone="offer" />
               <Stat label="Rejected" value={board.counts.rejected} tone="rejected" />
+              {analytics && (
+                <div className="stat stat-rate">
+                  <div className="stat-value">{Math.round(analytics.interviewRate * 100)}%</div>
+                  <div className="stat-label">Interview rate</div>
+                </div>
+              )}
             </section>
 
             <section className="grid">
               {board.groups.map((g) => (
-                <CompanyCard key={g.company} group={g} />
+                <CompanyCard key={g.company} group={g} onSelect={setSelected} />
               ))}
             </section>
           </>
         )}
       </main>
 
-      <footer className="foot muted">
-        Derived records only — company, role, status, dates &amp; a short snippet. Never your raw email.
-      </footer>
+      {selected && <ApplicationPanel app={selected} isPro={isPro} onClose={() => setSelected(null)} onUpgrade={() => void setPlan("pro")} />}
+
+      <footer className="foot muted">Derived records only — company, role, status, dates &amp; a short snippet. Never your raw email.</footer>
     </div>
   );
 }
@@ -115,15 +199,14 @@ function StatusPill({ status }: { status: Status }) {
 }
 
 function Avatar({ name }: { name: string }) {
-  const letter = name.trim().charAt(0).toUpperCase() || "?";
   return (
     <div className="avatar" aria-hidden>
-      {letter}
+      {name.trim().charAt(0).toUpperCase() || "?"}
     </div>
   );
 }
 
-function CompanyCard({ group }: { group: CompanyGroup }) {
+function CompanyCard({ group, onSelect }: { group: CompanyGroup; onSelect: (a: Application) => void }) {
   return (
     <article className="card">
       <header className="card-head">
@@ -137,15 +220,116 @@ function CompanyCard({ group }: { group: CompanyGroup }) {
       </header>
       <ul className="roles">
         {group.applications.map((a) => (
-          <li key={a.id} className="role">
-            <div className="role-main">
-              <span className="role-name">{a.role}</span>
-              <span className="muted role-date">{a.lastActivity}</span>
-            </div>
-            <StatusPill status={a.status} />
+          <li key={a.id}>
+            <button className="role role-btn" onClick={() => onSelect(a)} title="Open notes & contacts">
+              <div className="role-main">
+                <span className="role-name">{a.role}</span>
+                <span className="muted role-date">{a.lastActivity}</span>
+              </div>
+              <StatusPill status={a.status} />
+            </button>
           </li>
         ))}
       </ul>
     </article>
+  );
+}
+
+function ApplicationPanel({ app, isPro, onClose, onUpgrade }: { app: Application; isPro: boolean; onClose: () => void; onUpgrade: () => void }) {
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [noteBody, setNoteBody] = useState("");
+  const [cName, setCName] = useState("");
+  const [cEmail, setCEmail] = useState("");
+
+  const load = useCallback(async () => {
+    if (!isPro) return;
+    setNotes((await getJson<{ notes: Note[] }>(`/api/applications/${enc(app.threadId)}/notes`)).notes);
+    setContacts((await getJson<{ contacts: Contact[] }>(`/api/applications/${enc(app.threadId)}/contacts`)).contacts);
+  }, [app.threadId, isPro]);
+
+  useEffect(() => {
+    load().catch(() => {});
+  }, [load]);
+
+  async function addNote() {
+    if (!noteBody.trim()) return;
+    await postJson(`/api/applications/${enc(app.threadId)}/notes`, { body: noteBody.trim() });
+    setNoteBody("");
+    await load();
+  }
+  async function addContact() {
+    if (!cName.trim()) return;
+    await postJson(`/api/applications/${enc(app.threadId)}/contacts`, { name: cName.trim(), email: cEmail.trim() || null });
+    setCName("");
+    setCEmail("");
+    await load();
+  }
+
+  return (
+    <div className="drawer-backdrop" onClick={onClose}>
+      <aside className="drawer" onClick={(e) => e.stopPropagation()}>
+        <header className="drawer-head">
+          <div>
+            <h3>{app.company}</h3>
+            <span className="muted">
+              {app.role} · <StatusPill status={app.status} />
+            </span>
+          </div>
+          <button className="btn btn-ghost" onClick={onClose}>
+            ✕
+          </button>
+        </header>
+
+        {!isPro ? (
+          <div className="pro-cta">
+            <p>📓 Notes &amp; contacts are a Pro feature.</p>
+            <button className="btn btn-primary" onClick={onUpgrade}>
+              Upgrade to Pro (demo)
+            </button>
+          </div>
+        ) : (
+          <>
+            <section className="drawer-sec">
+              <h4>Notes</h4>
+              {notes.length === 0 && <p className="muted">No notes yet.</p>}
+              <ul className="plain">
+                {notes.map((n) => (
+                  <li key={n.id} className="note">
+                    {n.body}
+                  </li>
+                ))}
+              </ul>
+              <div className="row-form">
+                <input value={noteBody} onChange={(e) => setNoteBody(e.target.value)} placeholder="Add a note…" />
+                <button className="btn" onClick={() => void addNote()}>
+                  Add
+                </button>
+              </div>
+            </section>
+
+            <section className="drawer-sec">
+              <h4>Contacts</h4>
+              {contacts.length === 0 && <p className="muted">No contacts yet.</p>}
+              <ul className="plain">
+                {contacts.map((c) => (
+                  <li key={c.id} className="contact">
+                    <strong>{c.name}</strong>
+                    {c.email ? <span className="muted"> · {c.email}</span> : null}
+                  </li>
+                ))}
+              </ul>
+              <div className="row-form">
+                <input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Name" />
+                <input value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="Email (optional)" />
+                <button className="btn" onClick={() => void addContact()}>
+                  Add
+                </button>
+              </div>
+            </section>
+          </>
+        )}
+      </aside>
+    </div>
   );
 }

@@ -1,0 +1,22 @@
+{
+  "name": "@pipeline/crypto",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Envelope encryption for secrets at rest (AES-256-GCM, per-record data key wrapped by a master key). Replaces the base64/plaintext token storage flagged in the plan.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

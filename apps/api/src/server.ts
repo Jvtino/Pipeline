@@ -1,24 +1,28 @@
-// Pipeline hosted API (Fastify). Phase 2 slice: serves the derived board from
-// demo data so the web app runs end to end. Real OAuth connect, per-user
-// persistence (Postgres), encrypted tokens, and incremental sync come next
-// (plan §8/§10). The contract is validated on the way out — the API never
-// ships a shape the rest of the system can't trust.
+// Pipeline hosted API (Fastify). Now reads the board from PERSISTED, per-user
+// derived records (Postgres via @pipeline/db), not a recompute on every call.
+// Demo data is seeded for a stand-in dev user. Real OAuth connect, per-user
+// auth, encrypted-token storage (the @pipeline/crypto + @pipeline/db plumbing is
+// already in place), and incremental sync are the next steps (plan §8/§10).
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { boardSchema } from "@pipeline/contracts";
-import { buildBoard } from "./applications";
-import { DEMO_THREADS } from "./demo-data";
+import { getBoardForUser } from "@pipeline/db";
+import { initStore, DEV_USER } from "./store";
 
-export function buildServer() {
+export async function buildServer() {
   const app = Fastify({ logger: true });
-
   app.register(cors, { origin: true });
+
+  const store = await initStore();
+  app.addHook("onClose", async () => {
+    await store.close();
+  });
 
   app.get("/api/health", async () => ({ ok: true, service: "pipeline-api" }));
 
   app.get("/api/applications", async () => {
-    // Validate our own output against the shared contract before returning it.
-    return boardSchema.parse(buildBoard(DEMO_THREADS, "demo"));
+    const board = await getBoardForUser(store.db, DEV_USER.id, "demo");
+    return boardSchema.parse(board); // validate against the shared contract before returning
   });
 
   return app;
@@ -28,12 +32,15 @@ export function buildServer() {
 const isDirectRun = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
 if (isDirectRun) {
   const port = Number(process.env.PORT ?? 3001);
-  const app = buildServer();
-  app
-    .listen({ port, host: "0.0.0.0" })
-    .then(() => app.log.info(`Pipeline API ready on http://localhost:${port}/api/applications`))
+  buildServer()
+    .then((app) =>
+      app.listen({ port, host: "0.0.0.0" }).then(() => {
+        app.log.info(`Pipeline API ready on http://localhost:${port}/api/applications`);
+      }),
+    )
     .catch((err) => {
-      app.log.error(err);
+      // eslint-disable-next-line no-console
+      console.error(err);
       process.exit(1);
     });
 }

@@ -106,3 +106,32 @@ export const boardSchema = z.object({
   source: z.string(), // e.g. "demo" | a connected mailbox label
 });
 export type Board = z.infer<typeof boardSchema>;
+
+/**
+ * Group derived Application records into the board payload (by employer, with
+ * counts), newest-active company first. Pure + shared, so the API (reducing live
+ * mail) and the DB layer (reading stored records) build the board identically.
+ */
+export function boardFromApplications(apps: Application[], source: string): Board {
+  const byCompany = new Map<string, CompanyGroup>();
+  for (const a of apps) {
+    const key = a.company.toLowerCase();
+    let group = byCompany.get(key);
+    if (!group) {
+      group = { company: a.company, domain: a.companyDomain, applications: [] };
+      byCompany.set(key, group);
+    }
+    group.applications.push(a);
+  }
+
+  const latest = (g: CompanyGroup): string =>
+    g.applications.reduce((max, a) => (a.lastActivity > max ? a.lastActivity : max), "");
+  const groups = [...byCompany.values()].sort((x, y) => latest(y).localeCompare(latest(x)));
+
+  const counts = { applied: 0, interview: 0, offer: 0, rejected: 0, total: 0 };
+  for (const a of apps) {
+    counts[a.status] += 1;
+    counts.total += 1;
+  }
+  return { groups, counts, source };
+}

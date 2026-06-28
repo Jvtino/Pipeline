@@ -3,7 +3,7 @@
 // (index.html) — one Application per thread, current status = the latest status
 // in the thread, grouped by the real employer. Pure + unit-tested.
 import { resolveCompany, detectStatus, extractRole } from "@pipeline/classify";
-import type { Thread, Application, Board, CompanyGroup, Status } from "@pipeline/contracts";
+import { boardFromApplications, type Thread, type Application, type Board, type Status } from "@pipeline/contracts";
 
 const byDateAsc = (a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date);
 
@@ -37,32 +37,12 @@ export function threadToApplication(thread: Thread): Application {
   };
 }
 
-function latestActivity(g: CompanyGroup): string {
-  return g.applications.reduce((max, a) => (a.lastActivity > max ? a.lastActivity : max), "");
+/** Reduce a set of threads to derived Application records (drops empty threads). */
+export function threadsToApplications(threads: Thread[]): Application[] {
+  return threads.filter((t) => t.messages.length > 0).map(threadToApplication);
 }
 
-/** Build the full board payload: applications grouped by employer, plus counts. */
+/** Build the full board payload from raw threads (classify → derive → group). */
 export function buildBoard(threads: Thread[], source: string): Board {
-  const apps = threads.filter((t) => t.messages.length > 0).map(threadToApplication);
-
-  const byCompany = new Map<string, CompanyGroup>();
-  for (const a of apps) {
-    const key = a.company.toLowerCase();
-    let group = byCompany.get(key);
-    if (!group) {
-      group = { company: a.company, domain: a.companyDomain, applications: [] };
-      byCompany.set(key, group);
-    }
-    group.applications.push(a);
-  }
-
-  const groups = [...byCompany.values()].sort((x, y) => latestActivity(y).localeCompare(latestActivity(x)));
-
-  const counts = { applied: 0, interview: 0, offer: 0, rejected: 0, total: 0 };
-  for (const a of apps) {
-    counts[a.status] += 1;
-    counts.total += 1;
-  }
-
-  return { groups, counts, source };
+  return boardFromApplications(threadsToApplications(threads), source);
 }

@@ -9,7 +9,11 @@ The hosted product from `docs/Pipeline-Transformation-Plan.md`, in progress. Two
 
 ## Run it locally
 
-From the repo root (needs [pnpm](https://pnpm.io)):
+**Easiest (macOS, no terminal):** double-click **`start.command`** in the repo
+root. It installs everything, starts the API + web, and opens your browser at
+http://localhost:5173. (Needs [Node.js](https://nodejs.org) installed first.)
+
+**Manual** — from the repo root (needs [pnpm](https://pnpm.io)):
 
 ```bash
 pnpm install --filter "@pipeline/*..."     # first time

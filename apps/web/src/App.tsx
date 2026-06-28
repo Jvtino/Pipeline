@@ -28,6 +28,15 @@ interface Contact {
 const STATUS_LABEL: Record<Status, string> = { applied: "Active", interview: "Interview", offer: "Offer", rejected: "Rejected" };
 const enc = (threadId: string) => encodeURIComponent(threadId);
 
+type Toast = { type: "ok" | "err"; msg: string };
+// Toast shown when the OAuth callback redirects back with ?connect=<status>.
+// `ok` additionally kicks off a sync (handled separately); any unknown status falls back to `error`.
+const CONNECT_TOASTS: { error: Toast; [status: string]: Toast } = {
+  ok: { type: "ok", msg: "Mailbox connected — syncing your applications…" },
+  unconfigured: { type: "err", msg: "That mailbox provider isn’t set up yet — add your OAuth client IDs (see DEPLOY.md)." },
+  error: { type: "err", msg: "Mailbox connection failed or was cancelled." },
+};
+
 async function ensureSession(): Promise<void> {
   const me = await fetch("/auth/me");
   if (me.status === 401) {
@@ -55,7 +64,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
-  const [toast, setToast] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
 
   const isPro = me?.plan === "pro" || me?.plan === "teams";
 
@@ -84,21 +93,17 @@ export function App() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      // Handle the post-connect redirect (?connect=ok|error) from the OAuth callback.
+      // Handle the post-connect redirect (?connect=ok|unconfigured|error) from the OAuth callback.
       const connect = new URLSearchParams(window.location.search).get("connect");
       if (connect) {
         window.history.replaceState({}, "", window.location.pathname);
+        setToast(CONNECT_TOASTS[connect] ?? CONNECT_TOASTS.error);
         if (connect === "ok") {
-          setToast({ type: "ok", msg: "Mailbox connected — syncing your applications…" });
           try {
             await postJson("/api/sync");
           } catch {
             /* sync runs again on demand */
           }
-        } else if (connect === "unconfigured") {
-          setToast({ type: "err", msg: "That mailbox provider isn’t set up yet — add your OAuth client IDs (see DEPLOY.md)." });
-        } else {
-          setToast({ type: "err", msg: "Mailbox connection failed or was cancelled." });
         }
       }
       await refresh();

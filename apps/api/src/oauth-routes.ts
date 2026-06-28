@@ -40,20 +40,25 @@ function isProvider(p: string): p is ProviderId {
   return p === "google" || p === "microsoft";
 }
 
+// The outcome the web app shows as a toast after a connect round-trip. Kept in
+// one place so the start/callback handlers stay consistent (and typo-proof).
+type ConnectStatus = "ok" | "error" | "unconfigured";
+
 export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
   const transport = d.transport ?? fetchTransport;
   const redirectUri = (p: ProviderId) => `${d.publicUrl}/auth/${p}/callback`;
+  const connectBack = (status: ConnectStatus) => `${d.webUrl}?connect=${status}`;
 
   app.get("/auth/:provider/start", async (req, reply) => {
+    // These are browser navigations, so on any failure send the user back to the
+    // app with a reason (a toast) rather than dumping raw JSON in the tab.
     const { provider } = req.params as { provider: string };
-    if (!isProvider(provider)) return reply.code(404).send({ error: "unknown provider" });
-    // These are browser navigations, so on error send the user back to the app
-    // with a reason (a toast) rather than dumping raw JSON in the tab.
+    if (!isProvider(provider)) return reply.redirect(connectBack("error"));
     const userId = d.resolveUserId(req);
-    if (!userId) return reply.redirect(`${d.webUrl}?connect=error`);
+    if (!userId) return reply.redirect(connectBack("error"));
     const conf = d.configs[provider];
     if (!conf?.clientId || (PROVIDERS[provider].needsSecret && !conf.clientSecret)) {
-      return reply.redirect(`${d.webUrl}?connect=unconfigured`);
+      return reply.redirect(connectBack("unconfigured"));
     }
     const verifier = pkceVerifier();
     const state = randomBytes(16).toString("base64url");
@@ -67,7 +72,7 @@ export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
     const pend = q.state ? await d.pending.take(q.state) : null;
 
     if (!isProvider(provider) || !q.code || !pend || pend.provider !== provider) {
-      return reply.redirect(`${d.webUrl}?connect=error`);
+      return reply.redirect(connectBack("error"));
     }
     try {
       const conf = d.configs[provider]!;
@@ -85,10 +90,10 @@ export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
         email,
         secret: tokens,
       });
-      return reply.redirect(`${d.webUrl}?connect=ok`);
+      return reply.redirect(connectBack("ok"));
     } catch (err) {
       app.log.error(err);
-      return reply.redirect(`${d.webUrl}?connect=error`);
+      return reply.redirect(connectBack("error"));
     }
   });
 }

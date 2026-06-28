@@ -59,6 +59,12 @@ describe("OAuth connect routes", () => {
     expect(res.headers.location).toContain("connect=unconfigured");
   });
 
+  it("start → redirects back to the app for an unknown provider", async () => {
+    const res = await app.inject({ method: "GET", url: "/auth/nope/start" });
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toContain("connect=error");
+  });
+
   it("callback exchanges the code and persists an ENCRYPTED connection", async () => {
     const start = await app.inject({ method: "GET", url: "/auth/google/start" });
     const state = new URL(start.headers.location as string).searchParams.get("state")!;

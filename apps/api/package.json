@@ -16,6 +16,7 @@
     "@pipeline/contracts": "workspace:*",
     "@pipeline/crypto": "workspace:*",
     "@pipeline/db": "workspace:*",
+    "@pipeline/providers": "workspace:*",
     "fastify": "^5.1.0"
   },
   "devDependencies": {

@@ -7,9 +7,16 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { boardSchema } from "@pipeline/contracts";
 import { getBoardForUser } from "@pipeline/db";
-import { initStore, DEV_USER } from "./store";
+import type { HttpTransport, ProviderId } from "@pipeline/providers";
+import { initStore, DEV_USER, resolveMasterKey } from "./store";
+import { loadProviderConfigs } from "./config";
+import { registerOAuthRoutes } from "./oauth-routes";
 
-export async function buildServer() {
+export interface ServerOptions {
+  transport?: HttpTransport; // injected in tests; defaults to real fetch
+}
+
+export async function buildServer(opts: ServerOptions = {}) {
   const app = Fastify({ logger: true });
   app.register(cors, { origin: true });
 
@@ -23,6 +30,17 @@ export async function buildServer() {
   app.get("/api/applications", async () => {
     const board = await getBoardForUser(store.db, DEV_USER.id, "demo");
     return boardSchema.parse(board); // validate against the shared contract before returning
+  });
+
+  registerOAuthRoutes(app, {
+    db: store.db,
+    masterKey: resolveMasterKey(),
+    userId: DEV_USER.id,
+    configs: loadProviderConfigs(process.env),
+    transport: opts.transport,
+    publicUrl: process.env.PUBLIC_URL ?? "http://localhost:3001",
+    webUrl: process.env.WEB_URL ?? "http://localhost:5173",
+    pending: new Map<string, { provider: ProviderId; verifier: string }>(),
   });
 
   return app;

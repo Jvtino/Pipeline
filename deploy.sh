@@ -16,6 +16,13 @@ PROJECT="${1:-}"           # optional Firebase/GCP project id
 
 cd "$(dirname "$0")"
 
+# Point BOTH halves at the same project. Without this the API (Cloud Run) would
+# follow gcloud's active project, which may differ from the Firebase one.
+if [ -n "$PROJECT" ]; then
+  echo "▶ Targeting project: $PROJECT"
+  gcloud config set project "$PROJECT" >/dev/null
+fi
+
 echo "▶ 1/5  Pulling the latest code…"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 git pull origin "$BRANCH"

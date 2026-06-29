@@ -11,6 +11,9 @@
 .env.local
 .env.*.local
 
+# Local persisted database (PGlite data dir created by start.command) — never commit
+.pipeline-data/
+
 # Desktop app (Electron)
 node_modules/
 dist/

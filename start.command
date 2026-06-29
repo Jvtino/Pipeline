@@ -9,8 +9,24 @@ cd "$(dirname "$0")" || exit 1
 say() { printf "\n\033[1m%s\033[0m\n" "$1"; }
 pnpm_run() { COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack pnpm@10.33.0 "$@"; }
 
-# Load saved OAuth credentials if present, so "Connect Gmail" works. This .env
-# file is written by connect-google.command and is git-ignored (it's your secret).
+# Persist your data + secrets across restarts, so you don't lose your board or
+# reconnect Gmail every launch. All of this stays on your Mac and is git-ignored.
+mkdir -p .pipeline-data
+export PGLITE_DIR="$PWD/.pipeline-data"   # the local database lives here (was in-memory)
+
+touch .env
+ensure_secret() {
+  # Generate a stable 32-byte key ONCE and save it to .env, so encrypted mail
+  # tokens and your login survive restarts. No-op if it already exists.
+  if ! grep -q "^$1=" .env 2>/dev/null; then
+    local v; v="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64"))' 2>/dev/null)"
+    [ -n "$v" ] && printf '%s=%s\n' "$1" "$v" >> .env
+  fi
+}
+ensure_secret PIPELINE_MASTER_KEY   # encrypts your mail token at rest
+ensure_secret SESSION_SECRET        # keeps you logged in
+
+# Load .env (your OAuth credentials + the secrets above) so the app can read them.
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
 
 clear

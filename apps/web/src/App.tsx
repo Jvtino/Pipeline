@@ -53,6 +53,24 @@ function timeAgo(iso: string): string {
   return `${Math.floor(days / 365)}y ago`;
 }
 
+// Pinned companies persist locally (no server round-trip) keyed by lowercased name.
+const PINNED_KEY = "pipeline:pinnedCompanies";
+function loadPinned(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PINNED_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+function savePinned(s: Set<string>): void {
+  try {
+    localStorage.setItem(PINNED_KEY, JSON.stringify([...s]));
+  } catch {
+    /* storage disabled or over quota — pinning just won't persist */
+  }
+}
+
 type Toast = { type: "ok" | "err"; msg: string };
 // Toast shown when the OAuth callback redirects back with ?connect=<status>.
 // `ok` additionally kicks off a sync (handled separately); any unknown status falls back to `error`.
@@ -141,12 +159,36 @@ export function App() {
   const [needsLogin, setNeedsLogin] = useState(false);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortMode>("recent");
+  const [pinned, setPinned] = useState<Set<string>>(loadPinned);
+  const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
 
   const isPro = me?.plan === "pro" || me?.plan === "teams";
 
+  // Click a stat tile to filter by that status; click the active one again to clear.
+  const toggleStatus = useCallback((s: Status) => setStatusFilter((cur) => (cur === s ? "all" : s)), []);
+
+  const togglePin = useCallback((company: string) => {
+    setPinned((prev) => {
+      const next = new Set(prev);
+      const key = company.toLowerCase();
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      savePinned(next);
+      return next;
+    });
+  }, []);
+
   // Free: search/sort off, board ordered newest-first by the API. Pro: live search + sort.
+  // Either way, pinned companies float to the top, preserving the order chosen above.
   const orderedGroups = useMemo(() => {
     let gs = board?.groups ?? [];
+    // Clickable stat tiles: keep only roles in the chosen status, drop emptied
+    // companies (mirrors the desktop's appMatches status gate).
+    if (statusFilter !== "all") {
+      gs = gs
+        .map((g) => ({ ...g, applications: g.applications.filter((a) => a.status === statusFilter) }))
+        .filter((g) => g.applications.length > 0);
+    }
     if (isPro && query.trim()) {
       const q = query.trim().toLowerCase();
       gs = gs.filter(
@@ -158,8 +200,12 @@ export function App() {
         sort === "az" ? a.company.localeCompare(b.company) : b.applications.length - a.applications.length,
       );
     }
+    if (pinned.size) {
+      const isPin = (g: CompanyGroup) => pinned.has(g.company.toLowerCase());
+      gs = [...gs].sort((a, b) => Number(isPin(b)) - Number(isPin(a))); // stable: keeps prior order within each partition
+    }
     return gs;
-  }, [board, isPro, query, sort]);
+  }, [board, isPro, query, sort, pinned, statusFilter]);
 
   const visibleGroups = isPro ? orderedGroups : orderedGroups.slice(0, FREE_COMPANY_LIMIT);
   const lockedGroups = isPro ? [] : orderedGroups.slice(FREE_COMPANY_LIMIT);
@@ -362,11 +408,11 @@ export function App() {
         {board && board.groups.length > 0 && (
           <>
             <section className="stats">
-              <Stat label="Total" value={board.counts.total} tone="total" />
-              <Stat label="Active" value={board.counts.applied} tone="applied" />
-              <Stat label="Interview" value={board.counts.interview} tone="interview" />
-              <Stat label="Offer" value={board.counts.offer} tone="offer" />
-              <Stat label="Rejected" value={board.counts.rejected} tone="rejected" />
+              <Stat label="Total" value={board.counts.total} tone="total" active={statusFilter === "all"} onClick={() => setStatusFilter("all")} />
+              <Stat label="Active" value={board.counts.applied} tone="applied" active={statusFilter === "applied"} onClick={() => toggleStatus("applied")} />
+              <Stat label="Interview" value={board.counts.interview} tone="interview" active={statusFilter === "interview"} onClick={() => toggleStatus("interview")} />
+              <Stat label="Offer" value={board.counts.offer} tone="offer" active={statusFilter === "offer"} onClick={() => toggleStatus("offer")} />
+              <Stat label="Rejected" value={board.counts.rejected} tone="rejected" active={statusFilter === "rejected"} onClick={() => toggleStatus("rejected")} />
               {analytics && (
                 <div className="stat stat-rate">
                   <div className="stat-value">{Math.round(analytics.interviewRate * 100)}%</div>
@@ -394,15 +440,26 @@ export function App() {
 
             <section className="grid">
               {visibleGroups.map((g) => (
-                <CompanyCard key={g.company} group={g} limit={isPro ? undefined : FREE_ROLE_LIMIT} onSelect={setSelected} />
+                <CompanyCard
+                  key={g.company}
+                  group={g}
+                  limit={isPro ? undefined : FREE_ROLE_LIMIT}
+                  onSelect={setSelected}
+                  pinned={pinned.has(g.company.toLowerCase())}
+                  onTogglePin={togglePin}
+                />
               ))}
             </section>
+
+            {orderedGroups.length === 0 && (
+              <p className="muted center">No companies match this view.</p>
+            )}
 
             {lockedGroups.length > 0 && (
               <div className="locked">
                 <section className="grid locked-grid" aria-hidden>
                   {lockedGroups.slice(0, 6).map((g) => (
-                    <CompanyCard key={g.company} group={g} limit={FREE_ROLE_LIMIT} onSelect={() => {}} />
+                    <CompanyCard key={g.company} group={g} limit={FREE_ROLE_LIMIT} onSelect={() => {}} pinned={false} onTogglePin={() => {}} />
                   ))}
                 </section>
                 <div className="locked-overlay">
@@ -432,12 +489,24 @@ export function App() {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone: Status | "total" }) {
+function Stat({
+  label,
+  value,
+  tone,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  tone: Status | "total";
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <div className={`stat stat-${tone}`}>
+    <button type="button" className={`stat stat-${tone}${active ? " stat-active" : ""}`} onClick={onClick} aria-pressed={active}>
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
-    </div>
+    </button>
   );
 }
 
@@ -457,6 +526,28 @@ function Avatar({ name }: { name: string }) {
 function senderName(from: string): string {
   const m = /^\s*"?([^"<]+?)"?\s*</.exec(from);
   return (m && m[1] ? m[1] : from).trim();
+}
+
+// Automated / no-reply senders we don't surface as contacts.
+const AUTOMATED_RE = /(no-?reply|do-?not-?reply|donotreply|notifications?|mailer-daemon|postmaster|bounce|automated)/i;
+
+/** Split a "Name <email>" header into a display name and a lowercased address. */
+function parseSender(from: string): { name: string; email: string } {
+  const angle = /<([^>]+)>/.exec(from)?.[1];
+  const bare = /\S+@\S+\.\S+/.exec(from)?.[0];
+  const email = (angle ?? bare ?? "").trim().toLowerCase();
+  return { name: senderName(from), email };
+}
+
+/** Real-person/company contacts auto-detected from a thread's emails (dedup by address). */
+function autoContactsFor(app: Application): { name: string; email: string }[] {
+  const seen = new Map<string, { name: string; email: string }>();
+  for (const ev of app.timeline ?? []) {
+    const { name, email } = parseSender(ev.from);
+    if (!email || AUTOMATED_RE.test(email)) continue;
+    if (!seen.has(email)) seen.set(email, { name, email });
+  }
+  return [...seen.values()];
 }
 
 function Timeline({ app, onOpenDetails }: { app: Application; onOpenDetails: () => void }) {
@@ -488,13 +579,25 @@ function Timeline({ app, onOpenDetails }: { app: Application; onOpenDetails: () 
   );
 }
 
-function CompanyCard({ group, onSelect, limit }: { group: CompanyGroup; onSelect: (a: Application) => void; limit?: number }) {
+function CompanyCard({
+  group,
+  onSelect,
+  limit,
+  pinned,
+  onTogglePin,
+}: {
+  group: CompanyGroup;
+  onSelect: (a: Application) => void;
+  limit?: number;
+  pinned: boolean;
+  onTogglePin: (company: string) => void;
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
   const all = group.applications;
   const shown = limit ? all.slice(0, limit) : all;
   const hidden = all.length - shown.length;
   return (
-    <article className="card">
+    <article className={`card${pinned ? " pinned" : ""}`}>
       <header className="card-head">
         <Avatar name={group.company} />
         <div className="card-title">
@@ -509,6 +612,14 @@ function CompanyCard({ group, onSelect, limit }: { group: CompanyGroup; onSelect
           ))}
           {all.length > 8 && <span className="dots-more">+{all.length - 8}</span>}
         </div>
+        <button
+          className={`card-pin${pinned ? " is-pinned" : ""}`}
+          onClick={() => onTogglePin(group.company)}
+          aria-pressed={pinned}
+          title={pinned ? "Unpin" : "Pin to top"}
+        >
+          📌
+        </button>
       </header>
       <ul className={limit ? "roles" : "roles roles--scroll"}>
         {shown.map((a) => (
@@ -541,6 +652,11 @@ function ApplicationPanel({ app, isPro, onClose, onUpgrade }: { app: Application
   const [noteBody, setNoteBody] = useState("");
   const [cName, setCName] = useState("");
   const [cEmail, setCEmail] = useState("");
+
+  // Auto-derived from the thread's emails — no manual entry, no server round-trip.
+  const activity = app.timeline ?? [];
+  const autoContacts = useMemo(() => autoContactsFor(app), [app]);
+  const extraAutoContacts = autoContacts.filter((c) => !contacts.some((m) => (m.email ?? "").toLowerCase() === c.email));
 
   const load = useCallback(async () => {
     if (!isPro) return;
@@ -592,14 +708,30 @@ function ApplicationPanel({ app, isPro, onClose, onUpgrade }: { app: Application
           <>
             <section className="drawer-sec">
               <h4>Notes</h4>
-              {notes.length === 0 && <p className="muted">No notes yet.</p>}
-              <ul className="plain">
-                {notes.map((n) => (
-                  <li key={n.id} className="note">
-                    {n.body}
-                  </li>
-                ))}
-              </ul>
+              {activity.length === 0 && notes.length === 0 && <p className="muted">No notes yet.</p>}
+              {activity.length > 0 && (
+                <ul className="plain">
+                  {[...activity].reverse().map((ev, i) => (
+                    <li key={`act-${i}`} className="note note-auto">
+                      <div className="note-head">
+                        <span className="auto-tag">inbox</span>
+                        <StatusPill status={ev.status} />
+                        <span className="muted note-date">{ev.date}</span>
+                      </div>
+                      {ev.snippet && <div className="note-body">{ev.snippet}</div>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {notes.length > 0 && (
+                <ul className="plain">
+                  {notes.map((n) => (
+                    <li key={n.id} className="note">
+                      {n.body}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <div className="row-form">
                 <input value={noteBody} onChange={(e) => setNoteBody(e.target.value)} placeholder="Add a note…" />
                 <button className="btn" onClick={() => void addNote()}>
@@ -610,15 +742,24 @@ function ApplicationPanel({ app, isPro, onClose, onUpgrade }: { app: Application
 
             <section className="drawer-sec">
               <h4>Contacts</h4>
-              {contacts.length === 0 && <p className="muted">No contacts yet.</p>}
-              <ul className="plain">
-                {contacts.map((c) => (
-                  <li key={c.id} className="contact">
-                    <strong>{c.name}</strong>
-                    {c.email ? <span className="muted"> · {c.email}</span> : null}
-                  </li>
-                ))}
-              </ul>
+              {extraAutoContacts.length === 0 && contacts.length === 0 && <p className="muted">No contacts yet.</p>}
+              {(extraAutoContacts.length > 0 || contacts.length > 0) && (
+                <ul className="plain">
+                  {extraAutoContacts.map((c) => (
+                    <li key={`auto-${c.email}`} className="contact contact-auto">
+                      <span className="auto-tag">inbox</span>
+                      <strong>{c.name}</strong>
+                      <span className="muted"> · {c.email}</span>
+                    </li>
+                  ))}
+                  {contacts.map((c) => (
+                    <li key={c.id} className="contact">
+                      <strong>{c.name}</strong>
+                      {c.email ? <span className="muted"> · {c.email}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <div className="row-form">
                 <input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Name" />
                 <input value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="Email (optional)" />

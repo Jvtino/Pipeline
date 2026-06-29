@@ -48,6 +48,12 @@ body {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 14px 16px;
 }
+button.stat {
+  width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--text);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+button.stat:hover { border-color: #2b3950; }
+.stat-active { border-color: var(--accent); background: var(--panel-2); }
 .stat-value { font-size: 26px; font-weight: 700; }
 .stat-label { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 .stat-applied .stat-value { color: var(--applied); }
@@ -71,6 +77,14 @@ body {
 .card-title .muted { font-size: 12.5px; }
 .card-dots { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .dots-more { font-size: 10.5px; color: var(--muted); }
+.card.pinned { border-color: #2b3950; box-shadow: inset 3px 0 0 var(--accent); }
+.card-pin {
+  flex: 0 0 auto; cursor: pointer; font-size: 13px; line-height: 1;
+  background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 4px 6px;
+  filter: grayscale(1); opacity: 0.45; transition: opacity 0.12s ease;
+}
+.card-pin:hover { opacity: 0.9; background: var(--panel-2); }
+.card-pin.is-pinned { filter: none; opacity: 1; }
 
 .avatar {
   width: 38px; height: 38px; flex: 0 0 38px; border-radius: 10px;
@@ -197,6 +211,15 @@ body {
 .drawer-sec h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
 .plain { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .note, .contact { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13.5px; }
+.note-auto, .contact-auto { border-color: rgba(79, 156, 255, 0.28); }
+.note-head { display: flex; align-items: center; gap: 8px; }
+.note-date { font-size: 11.5px; }
+.note-body { margin-top: 6px; color: #c2ccda; font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.auto-tag {
+  display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--accent); background: rgba(79, 156, 255, 0.12); border: 1px solid rgba(79, 156, 255, 0.3);
+  border-radius: 5px; padding: 1px 5px; vertical-align: middle;
+}
 .row-form { display: flex; gap: 8px; flex-wrap: wrap; }
 .row-form input {
   flex: 1; min-width: 120px; font: inherit; font-size: 13.5px; color: var(--text);

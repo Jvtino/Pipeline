@@ -91,29 +91,59 @@ export function gmailSource(token: string, transport: HttpTransport = fetchTrans
   };
 }
 
+// Outlook fetch — a faithful port of the desktop msgraph.js. A keyword $search
+// (relevance-ranked, server-side) over /me/messages + the junk folder, NOT a raw
+// inbox delta: the delta pulled the whole mailbox and a regex gate over-matched
+// every "position/offer/application" substring, tripling the count vs the desktop.
+// Re-searching each sync (no incremental cursor) matches the desktop exactly.
+const GRAPH_SEARCH_KQL = "application OR applying OR interview OR candidacy OR candidate OR recruiting OR position OR offer";
 const GRAPH_SELECT = "$select=subject,from,receivedDateTime,bodyPreview,conversationId";
-const GRAPH_DELTA_START = `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?${GRAPH_SELECT}`;
+const GRAPH_MAX = 1000;
 
-async function graphCollect(startUrl: string, token: string, t: HttpTransport): Promise<{ messages: any[]; deltaLink: string }> {
-  const messages: any[] = [];
-  let next: string | "" = startUrl;
-  let deltaLink = "";
-  while (next) {
-    const data = await t.getJson(next, token);
-    for (const m of (data.value as any[]) ?? []) messages.push(m);
-    deltaLink = (data["@odata.deltaLink"] as string) ?? deltaLink;
-    next = (data["@odata.nextLink"] as string) ?? "";
-    if (messages.length >= 1000) break;
+async function graphSearchMessages(token: string, t: HttpTransport): Promise<any[]> {
+  const search = encodeURIComponent(`"${GRAPH_SEARCH_KQL}"`);
+  const mkUrl = (top: number) =>
+    `https://graph.microsoft.com/v1.0/me/messages?$search=${search}&${GRAPH_SELECT}&$top=${top}`;
+  const all: any[] = [];
+  const seen = new Set<string>();
+  let url: string | null = mkUrl(100);
+  let firstPage = true;
+  while (url && all.length < GRAPH_MAX) {
+    let data: Record<string, unknown>;
+    try {
+      data = await t.getJson(url, token);
+    } catch (e) {
+      if (firstPage) { firstPage = false; url = mkUrl(25); continue; } // some tenants cap $top on $search
+      throw e;
+    }
+    firstPage = false;
+    for (const m of (data.value as any[]) ?? []) {
+      if (m.id && seen.has(m.id)) continue;
+      if (m.id) seen.add(m.id);
+      all.push(m);
+    }
+    url = (data["@odata.nextLink"] as string) ?? null;
   }
-  return { messages, deltaLink };
+  // Personal mailboxes often hide application mail in Junk; search it too.
+  try {
+    const junkUrl = `https://graph.microsoft.com/v1.0/me/mailFolders/junkemail/messages?$search=${search}&${GRAPH_SELECT}&$top=50`;
+    const junk = await t.getJson(junkUrl, token);
+    for (const m of (junk.value as any[]) ?? []) {
+      if (m.id && seen.has(m.id)) continue;
+      if (m.id) seen.add(m.id);
+      all.push(m);
+    }
+  } catch {
+    /* non-fatal — junk folder unavailable */
+  }
+  return all;
 }
 
 export function graphSource(token: string, transport: HttpTransport = fetchTransport): MailSource {
   return {
-    async fetch({ cursor }): Promise<FetchResult> {
-      const start = cursor || GRAPH_DELTA_START;
-      const { messages, deltaLink } = await graphCollect(start, token, transport);
-      return { threads: mapGraphMessagesToThreads(messages), cursor: deltaLink || cursor || "" };
+    async fetch(): Promise<FetchResult> {
+      const messages = await graphSearchMessages(token, transport);
+      return { threads: mapGraphMessagesToThreads(messages), cursor: "search" };
     },
   };
 }

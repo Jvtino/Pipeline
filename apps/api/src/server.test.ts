@@ -8,7 +8,7 @@ export async function login(app: FastifyInstance, email = "demo@pipeline.local")
   const res = await app.inject({ method: "POST", url: "/auth/dev/login", payload: { email } });
   const setCookie = res.headers["set-cookie"];
   const raw = Array.isArray(setCookie) ? setCookie[0]! : (setCookie as string);
-  return raw.split(";")[0]!; // "pipeline_session=..."
+  return raw.split(";")[0]!; // "__session=..."
 }
 
 describe("api server (authenticated)", () => {

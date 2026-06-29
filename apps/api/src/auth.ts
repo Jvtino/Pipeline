@@ -6,7 +6,10 @@
 import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-export const SESSION_COOKIE = "pipeline_session";
+// MUST be "__session": Firebase Hosting strips every cookie except this exact
+// name from requests it forwards to Cloud Run, so any other name breaks sessions
+// behind Hosting. The name is otherwise arbitrary and works fine locally too.
+export const SESSION_COOKIE = "__session";
 const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 export interface AuthUser {

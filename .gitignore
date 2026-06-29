@@ -11,6 +11,9 @@
 .env.local
 .env.*.local
 
+# Cloud Run env file written during deploy (holds secrets) — never commit
+env.yaml
+
 # Local persisted database (PGlite data dir created by start.command) — never commit
 .pipeline-data/
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Board, CompanyGroup, Application, Status } from "@pipeline/contracts";
 
 type Plan = "free" | "pro" | "teams";
@@ -27,6 +27,31 @@ interface Contact {
 
 const STATUS_LABEL: Record<Status, string> = { applied: "Active", interview: "Interview", offer: "Offer", rejected: "Rejected" };
 const enc = (threadId: string) => encodeURIComponent(threadId);
+
+const FREE_COMPANY_LIMIT = 20; // free plan shows the 20 most recent companies; rest are blurred
+const FREE_ROLE_LIMIT = 4; // and only the 4 most recent roles per company
+
+type SortMode = "recent" | "az" | "count";
+
+/** Deterministic hue from a company name, for the colored avatar (desktop look). */
+function hueFromName(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
+}
+
+/** "3d ago" / "2mo ago" from an ISO date (yyyy-mm-dd). */
+function timeAgo(iso: string): string {
+  if (!iso) return "";
+  const then = new Date(`${iso}T00:00:00Z`).getTime();
+  if (Number.isNaN(then)) return iso;
+  const days = Math.floor((Date.now() - then) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "1d ago";
+  if (days < 30) return `${days}d ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
 
 type Toast = { type: "ok" | "err"; msg: string };
 // Toast shown when the OAuth callback redirects back with ?connect=<status>.
@@ -114,8 +139,30 @@ export function App() {
   const [connectOpen, setConnectOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortMode>("recent");
 
   const isPro = me?.plan === "pro" || me?.plan === "teams";
+
+  // Free: search/sort off, board ordered newest-first by the API. Pro: live search + sort.
+  const orderedGroups = useMemo(() => {
+    let gs = board?.groups ?? [];
+    if (isPro && query.trim()) {
+      const q = query.trim().toLowerCase();
+      gs = gs.filter(
+        (g) => g.company.toLowerCase().includes(q) || g.applications.some((a) => a.role.toLowerCase().includes(q)),
+      );
+    }
+    if (isPro && sort !== "recent") {
+      gs = [...gs].sort((a, b) =>
+        sort === "az" ? a.company.localeCompare(b.company) : b.applications.length - a.applications.length,
+      );
+    }
+    return gs;
+  }, [board, isPro, query, sort]);
+
+  const visibleGroups = isPro ? orderedGroups : orderedGroups.slice(0, FREE_COMPANY_LIMIT);
+  const lockedGroups = isPro ? [] : orderedGroups.slice(FREE_COMPANY_LIMIT);
 
   const refresh = useCallback(async () => {
     if (!(await ensureSession())) {
@@ -328,11 +375,52 @@ export function App() {
               )}
             </section>
 
+            {isPro && (
+              <div className="toolbar">
+                <input
+                  className="search"
+                  placeholder="Search company or role…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  aria-label="Search"
+                />
+                <select className="sort" value={sort} onChange={(e) => setSort(e.target.value as SortMode)} aria-label="Sort">
+                  <option value="recent">Most recent</option>
+                  <option value="az">A–Z</option>
+                  <option value="count">Most roles</option>
+                </select>
+              </div>
+            )}
+
             <section className="grid">
-              {board.groups.map((g) => (
-                <CompanyCard key={g.company} group={g} onSelect={setSelected} />
+              {visibleGroups.map((g) => (
+                <CompanyCard key={g.company} group={g} limit={isPro ? undefined : FREE_ROLE_LIMIT} onSelect={setSelected} />
               ))}
             </section>
+
+            {lockedGroups.length > 0 && (
+              <div className="locked">
+                <section className="grid locked-grid" aria-hidden>
+                  {lockedGroups.slice(0, 6).map((g) => (
+                    <CompanyCard key={g.company} group={g} limit={FREE_ROLE_LIMIT} onSelect={() => {}} />
+                  ))}
+                </section>
+                <div className="locked-overlay">
+                  <div className="locked-cta">
+                    <div className="locked-lock" aria-hidden>🔒</div>
+                    <h3>
+                      {lockedGroups.length} more {lockedGroups.length === 1 ? "company" : "companies"}
+                    </h3>
+                    <p className="muted">
+                      Free shows your 20 most recent companies. Upgrade to Pro to see your whole pipeline — plus search &amp; sort.
+                    </p>
+                    <button className="btn btn-primary" onClick={() => void setPlan("pro")}>
+                      Upgrade to Pro
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </main>
@@ -358,18 +446,18 @@ function StatusPill({ status }: { status: Status }) {
 }
 
 function Avatar({ name }: { name: string }) {
+  const hue = hueFromName(name);
   return (
-    <div className="avatar" aria-hidden>
+    <div className="avatar" style={{ background: `hsl(${hue} 45% 20%)`, color: `hsl(${hue} 80% 74%)` }} aria-hidden>
       {name.trim().charAt(0).toUpperCase() || "?"}
     </div>
   );
 }
 
-const ROLES_VISIBLE = 4; // show only the most recent few per company (rest counted in the header)
-
-function CompanyCard({ group, onSelect }: { group: CompanyGroup; onSelect: (a: Application) => void }) {
-  const shown = group.applications.slice(0, ROLES_VISIBLE);
-  const hidden = group.applications.length - shown.length;
+function CompanyCard({ group, onSelect, limit }: { group: CompanyGroup; onSelect: (a: Application) => void; limit?: number }) {
+  const all = group.applications;
+  const shown = limit ? all.slice(0, limit) : all;
+  const hidden = all.length - shown.length;
   return (
     <article className="card">
       <header className="card-head">
@@ -377,17 +465,24 @@ function CompanyCard({ group, onSelect }: { group: CompanyGroup; onSelect: (a: A
         <div className="card-title">
           <h2>{group.company}</h2>
           <span className="muted">
-            {group.applications.length} role{group.applications.length > 1 ? "s" : ""}
+            {all.length} role{all.length > 1 ? "s" : ""}
           </span>
         </div>
+        <div className="card-dots" aria-hidden>
+          {all.slice(0, 8).map((a) => (
+            <span key={a.id} className={`mini-dot s-${a.status}`} title={STATUS_LABEL[a.status]} />
+          ))}
+          {all.length > 8 && <span className="dots-more">+{all.length - 8}</span>}
+        </div>
       </header>
-      <ul className="roles">
+      <ul className={limit ? "roles" : "roles roles--scroll"}>
         {shown.map((a) => (
           <li key={a.id}>
             <button className="role role-btn" onClick={() => onSelect(a)} title="Open notes & contacts">
+              <span className={`mini-dot s-${a.status}`} aria-hidden />
               <div className="role-main">
                 <span className="role-name">{a.role}</span>
-                <span className="muted role-date">{a.lastActivity}</span>
+                <span className="muted role-date">{timeAgo(a.lastActivity)}</span>
               </div>
               <StatusPill status={a.status} />
             </button>

@@ -72,11 +72,24 @@ fi
 #    file is written by connect-google.command and is git-ignored (your secret).
 if [ -f "$APP_DIR/.env" ]; then set -a; . "$APP_DIR/.env"; set +a; fi
 
-# 5) Install the desktop app's dependencies (includes Electron) on first run or
-#    when they change, then launch the native window.
-if [ ! -d "$APP_DIR/node_modules/electron" ]; then
+# 5) Make sure a WORKING Electron binary is present, then launch the native
+#    window. The desktop app ships via npm (package-lock.json): `npm install`
+#    runs Electron's postinstall, which downloads the correct binary for THIS
+#    Mac's chip (Intel vs Apple Silicon). We don't trust a bare node_modules
+#    folder — pnpm (used by the web app) can leave Electron half-installed — so
+#    we check that the actual binary file exists and only reinstall if it's missing.
+electron_ok() {
+  node -e "const fs=require('fs');let p;try{p=require('electron')}catch(e){process.exit(1)};process.exit(fs.existsSync(p)?0:1)" 2>/dev/null
+}
+
+if ! electron_ok; then
   say "Setting up the desktop app (first run downloads Electron — a few minutes)…"
   npm install || die "Setup failed — see the messages above, then try again."
+  if ! electron_ok; then
+    die "Electron didn't install correctly.
+   Try this once in Terminal, then double-click again:
+     cd \"$APP_DIR\" && rm -rf node_modules/electron && npm install"
+  fi
 fi
 
 say "Opening the Pipeline desktop app…"

@@ -1,6 +1,6 @@
 // Repository — the only place app code touches the tables. Encrypts mail secrets
 // on write, decrypts on read, and enforces per-user scoping on every query.
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { encryptJson, decryptJson } from "@pipeline/crypto";
 import { boardFromApplications, type Application, type Board, type Status } from "@pipeline/contracts";
@@ -129,6 +129,20 @@ export async function upsertApplications(db: Database, userId: string, apps: App
         },
       });
   }
+}
+
+/** Remove a user's AUTO-SYNCED applications (keeps manually-added ones) so a full
+ *  re-sync can rebuild the board cleanly — e.g. after the noise filter improves. */
+export async function clearSyncedApplications(db: Database, userId: string): Promise<void> {
+  await db.delete(applications).where(and(eq(applications.userId, userId), eq(applications.manual, false)));
+}
+
+/** Reset sync cursors for all of a user's connections, so the next sync is a
+ *  full backfill instead of an incremental delta. */
+export async function resetSyncForUser(db: Database, userId: string): Promise<void> {
+  const conns = await db.select({ id: mailConnections.id }).from(mailConnections).where(eq(mailConnections.userId, userId));
+  const ids = conns.map((c) => c.id);
+  if (ids.length) await db.delete(syncState).where(inArray(syncState.connectionId, ids));
 }
 
 export async function getApplicationsForUser(db: Database, userId: string): Promise<Application[]> {

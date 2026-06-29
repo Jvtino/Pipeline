@@ -6,7 +6,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { boardSchema } from "@pipeline/contracts";
-import { getBoardForUser, setUserPlan } from "@pipeline/db";
+import { getBoardForUser, setUserPlan, getMailConnections, clearSyncedApplications, resetSyncForUser } from "@pipeline/db";
 import { issueLicense } from "@pipeline/license";
 import type { HttpTransport } from "@pipeline/providers";
 import { initStore, seedDemoForUser, resolveMasterKey } from "./store";
@@ -77,14 +77,23 @@ export async function buildServer(opts: ServerOptions = {}) {
   app.get("/api/applications", async (req, reply) => {
     const user = requireUser(req, reply);
     if (!user) return reply;
-    const board = await getBoardForUser(store.db, user.id, "demo");
+    // Label the board by where the data came from: "synced" once a mailbox is
+    // connected, "demo" for the seeded board a brand-new user sees.
+    const connected = (await getMailConnections(store.db, user.id)).length > 0;
+    const board = await getBoardForUser(store.db, user.id, connected ? "synced" : "demo");
     return boardSchema.parse(board); // validate against the shared contract before returning
   });
 
-  // Trigger an incremental sync of the signed-in user's connected mailboxes.
+  // Sync the signed-in user's connected mailboxes. `{ rebuild: true }` first wipes
+  // the auto-synced records and resets cursors, so the board is re-derived from
+  // scratch (e.g. to apply an improved noise filter); manual entries are kept.
   app.post("/api/sync", async (req, reply) => {
     const user = requireUser(req, reply);
     if (!user) return reply;
+    if ((req.body as { rebuild?: boolean } | null)?.rebuild === true) {
+      await clearSyncedApplications(store.db, user.id);
+      await resetSyncForUser(store.db, user.id);
+    }
     return syncAllConnections({ db: store.db, masterKey, userId: user.id, configs, transport: opts.transport });
   });
 

@@ -3,10 +3,22 @@
 // lives next to the classifier because "turn a thread into a record" is the
 // classifier's job applied across a whole thread. Shared by the API and the
 // sync engine so the live-mail and incremental paths derive identically.
-import { resolveCompany, detectStatus, extractRole } from "./index";
+import { resolveCompany, detectStatus, extractRole, isAtsDomain, hasApplicationSignal } from "./index";
 import type { Thread, Application, Status } from "@pipeline/contracts";
 
 const byDateAsc = (a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date);
+
+/**
+ * Is this thread plausibly a job application at all? True if it arrived through
+ * an ATS / job board, or its text carries a real application/recruiting signal.
+ * Everything else (account-security alerts, product marketing, newsletters) is
+ * dropped before it can become a fake "applied" record.
+ */
+export function isLikelyApplication(thread: Pick<Thread, "domain" | "subject" | "messages">): boolean {
+  if (isAtsDomain(thread.domain)) return true;
+  const text = thread.subject + " " + thread.messages.map((m) => m.body).join(" ");
+  return hasApplicationSignal(text);
+}
 
 /** Current status of a thread = the latest non-null classification across its messages. */
 export function statusForThread(thread: Thread): Status {
@@ -38,7 +50,8 @@ export function threadToApplication(thread: Thread): Application {
   };
 }
 
-/** Reduce a set of threads to derived Application records (drops empty threads). */
+/** Reduce threads to derived Application records, dropping empty threads and
+ * mail that isn't a job application (newsletters, account alerts, marketing). */
 export function threadsToApplications(threads: Thread[]): Application[] {
-  return threads.filter((t) => t.messages.length > 0).map(threadToApplication);
+  return threads.filter((t) => t.messages.length > 0 && isLikelyApplication(t)).map(threadToApplication);
 }

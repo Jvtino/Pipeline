@@ -170,6 +170,9 @@ body {
 }
 .connect-item:hover { background: var(--panel-2); }
 .connect-note { padding: 6px 10px 2px; font-size: 11.5px; }
+button.connect-item { width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: 13.5px; cursor: pointer; }
+button.connect-item:disabled { opacity: 0.5; cursor: default; }
+.connect-action { margin-top: 4px; border-top: 1px solid var(--line); color: var(--accent); }
 
 /* toast */
 .toast {

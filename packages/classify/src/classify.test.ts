@@ -8,6 +8,8 @@ import {
   extractRole,
   companyFromDomain,
   companyFromSenderName,
+  isLikelyApplication,
+  threadsToApplications,
 } from "./index";
 import type { Thread } from "./index";
 
@@ -71,4 +73,36 @@ describe("@pipeline/classify — extractRole", () => {
       expect(extractRole(c.subject)).toBe(c.expected);
     });
   }
+});
+
+describe("@pipeline/classify — job-application gate (filters inbox noise)", () => {
+  const mk = (domain: string, subject: string, body = ""): Thread => ({
+    threadId: "t", domain, subject, messages: [{ date: "2026-06-01", from: "x <a@b.com>", body }],
+  });
+
+  it("keeps mail with a real application signal", () => {
+    expect(isLikelyApplication(mk("acme.com", "Thank you for applying to Acme"))).toBe(true);
+    expect(isLikelyApplication(mk("acme.com", "Interview invitation", "we'd like to schedule a call"))).toBe(true);
+  });
+
+  it("keeps anything from an ATS / job board even without a phrase", () => {
+    expect(isLikelyApplication(mk("greenhouse.io", "Your update"))).toBe(true);
+    expect(isLikelyApplication(mk("indeed.com", "New roles"))).toBe(true);
+  });
+
+  it("drops account-notification and marketing mail", () => {
+    expect(isLikelyApplication(mk("accountprotection.microsoft.com", "New app(s) connected to your account"))).toBe(false);
+    expect(isLikelyApplication(mk("microsoft.com", "Learn how to deploy virtual machines for any application"))).toBe(false);
+    expect(isLikelyApplication(mk("google.com", "Get quickstart guides for popular products"))).toBe(false);
+  });
+
+  it("threadsToApplications filters noise out of the reduced set", () => {
+    const threads = [
+      mk("greenhouse.io", "Acme — application received", "thank you for applying"),
+      mk("accountprotection.microsoft.com", "New sign-in to your account"),
+      mk("azure.microsoft.com", "Deploy your application in minutes"),
+    ];
+    const apps = threadsToApplications(threads);
+    expect(apps.length).toBe(1);
+  });
 });

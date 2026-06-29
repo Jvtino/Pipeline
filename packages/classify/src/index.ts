@@ -17,7 +17,7 @@ import type { Status, Thread, Message, ResolvedCompany } from "@pipeline/contrac
 
 export { STATUS_RANK } from "@pipeline/contracts";
 export type { Status, Thread, Message, ResolvedCompany } from "@pipeline/contracts";
-export { statusForThread, threadToApplication, threadsToApplications } from "./aggregate";
+export { statusForThread, threadToApplication, threadsToApplications, isLikelyApplication } from "./aggregate";
 
 /* ============================================================================
    STATUS CLASSIFIER
@@ -66,6 +66,17 @@ export function detectStatus(text: string | null | undefined): Status | null {
     }
   }
   return best; // null when nothing matched (caller keeps the prior status)
+}
+
+/**
+ * True when the text carries a STRONG application/recruiting phrase (not just a
+ * weak single-word cue). Used to keep marketing and account-notification mail
+ * OUT of the board — the Outlook/Graph source pulls the whole inbox, so without
+ * this gate every newsletter and "new sign-in" alert becomes an "application".
+ */
+export function hasApplicationSignal(text: string | null | undefined): boolean {
+  const t = " " + String(text || "").toLowerCase().replace(/\s+/g, " ") + " ";
+  return APPLIED_RE.test(t) || INTERVIEW_RE.test(t) || OFFER_RE.test(t) || REJECT_RE.test(t) || NEG_OFFER_RE.test(t);
 }
 
 /* ============================================================================

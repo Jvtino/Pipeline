@@ -197,6 +197,21 @@ export function App() {
     }
   }
 
+  async function doRebuild() {
+    if (!window.confirm("Re-sync your mailboxes from scratch and drop mis-classified items (marketing, account alerts)? Your notes and contacts are kept.")) return;
+    setConnectOpen(false);
+    setSyncing(true);
+    try {
+      const res = await postJson<{ connections: number }>("/api/sync", { rebuild: true });
+      await refresh();
+      setToast({ type: "ok", msg: res.connections ? "Rebuilt your board from a fresh sync." : "No mailbox connected yet — use Connect." });
+    } catch {
+      setToast({ type: "err", msg: "Rebuild failed — try again in a moment." });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function login(email: string, passphrase: string) {
     const r = await fetch("/auth/dev/login", {
       method: "POST",
@@ -240,6 +255,9 @@ export function App() {
                   Connect Outlook
                 </a>
                 <div className="connect-note muted">Requires your OAuth client IDs (see DEPLOY.md).</div>
+                <button type="button" className="connect-item connect-action" onClick={() => void doRebuild()} disabled={syncing}>
+                  Rebuild board
+                </button>
               </div>
             )}
           </div>

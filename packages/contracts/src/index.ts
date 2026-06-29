@@ -70,6 +70,15 @@ export function safeParseThread(value: unknown): z.SafeParseReturnType<unknown, 
    This is the privacy-preserving "store derived, not raw" shape from plan §7.
    -------------------------------------------------------------------------- */
 
+/** One event in an application's history — a single message, classified. */
+export const timelineEventSchema = z.object({
+  date: z.string(), // ISO date (YYYY-MM-DD)
+  from: z.string(),
+  status: statusSchema, // the status in force after this message
+  snippet: z.string().max(600),
+});
+export type TimelineEvent = z.infer<typeof timelineEventSchema>;
+
 /** A single tracked application — one reduced thread. The board's atom. */
 export const applicationSchema = z.object({
   id: z.string(),
@@ -81,6 +90,7 @@ export const applicationSchema = z.object({
   firstSeen: z.string(), // ISO date of the earliest message
   lastActivity: z.string(), // ISO date of the latest message
   snippet: z.string().max(600), // latest message snippet only — never the full body
+  timeline: z.array(timelineEventSchema).optional(), // per-message history (click-to-expand)
   manual: z.boolean().optional(),
 });
 export type Application = z.infer<typeof applicationSchema>;

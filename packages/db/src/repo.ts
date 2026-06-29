@@ -109,6 +109,7 @@ export async function upsertApplications(db: Database, userId: string, apps: App
       firstSeen: a.firstSeen,
       lastActivity: a.lastActivity,
       snippet: a.snippet,
+      timeline: a.timeline ? JSON.stringify(a.timeline) : null,
       manual: a.manual ?? false,
     };
     await db
@@ -124,6 +125,7 @@ export async function upsertApplications(db: Database, userId: string, apps: App
           firstSeen: a.firstSeen,
           lastActivity: a.lastActivity,
           snippet: a.snippet,
+          timeline: a.timeline ? JSON.stringify(a.timeline) : null,
           manual: a.manual ?? false,
           updatedAt: new Date(),
         },
@@ -157,6 +159,7 @@ export async function getApplicationsForUser(db: Database, userId: string): Prom
     firstSeen: r.firstSeen,
     lastActivity: r.lastActivity,
     snippet: r.snippet,
+    timeline: r.timeline ? (JSON.parse(r.timeline) as Application["timeline"]) : undefined,
     manual: r.manual,
   }));
 }

@@ -30,22 +30,30 @@ export function statusForThread(thread: Thread): Status {
   return status;
 }
 
-/** Reduce one thread to a derived Application record (no raw body persisted). */
+/** Reduce one thread to a derived Application record + its per-message timeline. */
 export function threadToApplication(thread: Thread): Application {
   const { company, domain } = resolveCompany(thread);
   const msgs = [...thread.messages].sort(byDateAsc);
-  const first = msgs[0];
-  const last = msgs[msgs.length - 1];
+  // Walk oldest→newest, carrying the last decisive status forward; each event
+  // records the status in force after its message (mirrors statusForThread).
+  let carried: Status = "applied";
+  const timeline = msgs.map((m) => {
+    const s = detectStatus(thread.subject + " " + m.body);
+    if (s) carried = s;
+    return { date: m.date, from: m.from, status: carried, snippet: (m.body ?? "").slice(0, 600) };
+  });
+  const last = timeline[timeline.length - 1];
   return {
     id: thread.threadId,
     threadId: thread.threadId,
     company,
     companyDomain: domain,
     role: extractRole(thread.subject),
-    status: statusForThread(thread),
-    firstSeen: first?.date ?? "",
+    status: last?.status ?? "applied",
+    firstSeen: timeline[0]?.date ?? "",
     lastActivity: last?.date ?? "",
-    snippet: (last?.body ?? "").slice(0, 600),
+    snippet: last?.snippet ?? "",
+    timeline,
   };
 }
 

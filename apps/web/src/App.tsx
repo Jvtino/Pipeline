@@ -454,7 +454,42 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
+function senderName(from: string): string {
+  const m = /^\s*"?([^"<]+?)"?\s*</.exec(from);
+  return (m && m[1] ? m[1] : from).trim();
+}
+
+function Timeline({ app, onOpenDetails }: { app: Application; onOpenDetails: () => void }) {
+  const events =
+    app.timeline && app.timeline.length > 0
+      ? app.timeline
+      : [{ date: app.lastActivity, from: "", status: app.status, snippet: app.snippet }];
+  return (
+    <div className="timeline">
+      <ol className="tl">
+        {[...events].reverse().map((e, i) => (
+          <li key={i} className="tl-ev">
+            <span className={`tl-node s-${e.status}`} aria-hidden />
+            <div className="tl-evbody">
+              <div className="tl-head">
+                <StatusPill status={e.status} />
+                <span className="muted tl-date">{e.date}</span>
+              </div>
+              {e.from && <div className="muted tl-from">{senderName(e.from)}</div>}
+              {e.snippet && <p className="tl-snippet">{e.snippet}</p>}
+            </div>
+          </li>
+        ))}
+      </ol>
+      <button className="tl-details" onClick={onOpenDetails}>
+        Notes &amp; contacts →
+      </button>
+    </div>
+  );
+}
+
 function CompanyCard({ group, onSelect, limit }: { group: CompanyGroup; onSelect: (a: Application) => void; limit?: number }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   const all = group.applications;
   const shown = limit ? all.slice(0, limit) : all;
   const hidden = all.length - shown.length;
@@ -478,7 +513,12 @@ function CompanyCard({ group, onSelect, limit }: { group: CompanyGroup; onSelect
       <ul className={limit ? "roles" : "roles roles--scroll"}>
         {shown.map((a) => (
           <li key={a.id}>
-            <button className="role role-btn" onClick={() => onSelect(a)} title="Open notes & contacts">
+            <button
+              className={`role role-btn${openId === a.id ? " role-open" : ""}`}
+              onClick={() => setOpenId(openId === a.id ? null : a.id)}
+              aria-expanded={openId === a.id}
+              title="Show history"
+            >
               <span className={`mini-dot s-${a.status}`} aria-hidden />
               <div className="role-main">
                 <span className="role-name">{a.role}</span>
@@ -486,6 +526,7 @@ function CompanyCard({ group, onSelect, limit }: { group: CompanyGroup; onSelect
               </div>
               <StatusPill status={a.status} />
             </button>
+            {openId === a.id && <Timeline app={a} onOpenDetails={() => onSelect(a)} />}
           </li>
         ))}
       </ul>

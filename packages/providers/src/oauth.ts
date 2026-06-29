@@ -29,7 +29,7 @@ interface ProviderDef {
   extraAuth: Record<string, string>;
 }
 
-const MS_TENANT = "consumers"; // personal Microsoft accounts (outlook/live/hotmail)
+const MS_TENANT = "common"; // any Microsoft account — personal (outlook/live/hotmail) or work/school
 
 export const PROVIDERS: Record<ProviderId, ProviderDef> = {
   google: {
@@ -45,7 +45,7 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     scope: "openid email offline_access https://graph.microsoft.com/Mail.Read",
     authUrl: `https://login.microsoftonline.com/${MS_TENANT}/oauth2/v2.0/authorize`,
     tokenUrl: `https://login.microsoftonline.com/${MS_TENANT}/oauth2/v2.0/token`,
-    needsSecret: false, // public client (PKCE), no secret
+    needsSecret: true, // confidential "Web" client + secret — reliable server-side redemption for local AND hosted
     extraAuth: { response_mode: "query", prompt: "select_account" },
   },
 };

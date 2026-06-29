@@ -3,20 +3,20 @@
 // lives next to the classifier because "turn a thread into a record" is the
 // classifier's job applied across a whole thread. Shared by the API and the
 // sync engine so the live-mail and incremental paths derive identically.
-import { resolveCompany, detectStatus, extractRole, matchesApplicationSearch } from "./index";
+import { resolveCompany, detectStatus, extractRole, isJobApplication } from "./index";
 import type { Thread, Application, Status } from "@pipeline/contracts";
 
 const byDateAsc = (a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date);
 
 /**
- * Is this thread a job application — by the SAME test the desktop app uses? The
- * desktop keeps a thread iff its mail search matched (an application keyword or
- * phrase in the subject/body). Mirroring that here keeps the hosted board in sync
- * with the desktop and drops the inbox noise a raw Outlook delta would pull in.
+ * Keep a thread only if it shows REAL application activity (see isJobApplication):
+ * a detected status or an explicit "you applied / application submitted"
+ * confirmation. This drops job-board alerts and marketing that merely mention
+ * application keywords — cleaner than the desktop's keyword-only search.
  */
 export function isLikelyApplication(thread: Pick<Thread, "domain" | "subject" | "messages">): boolean {
   const text = thread.subject + " " + thread.messages.map((m) => m.body).join(" ");
-  return matchesApplicationSearch(text);
+  return isJobApplication(text);
 }
 
 /** Current status of a thread = the latest non-null classification across its messages. */

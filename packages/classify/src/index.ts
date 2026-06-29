@@ -69,20 +69,21 @@ export function detectStatus(text: string | null | undefined): Status | null {
 }
 
 /**
- * Does this text match the DESKTOP app's mail-search criteria? The desktop decides
- * "is this a job application?" purely by whether its Gmail/Graph/IMAP search matched
- * (gmail.js GMAIL_Q, msgraph.js SEARCH_KQL) — an application keyword, or one of the
- * application phrases. The hosted version mirrors that exact net so the two agree
- * (parity), instead of inventing its own gate. Replaces an over-broad ATS-auto-pass
- * that let every job-board alert ("jobs for you", "your safety is our priority") in.
+ * Is this text a REAL job application — not just a job-board alert or marketing?
+ * This is SMARTER than the desktop's keyword search (which matched any mention of
+ * "position/offer/recruiting/..."). It requires application ACTIVITY:
+ *   - a detected status (applied / interview / offer / rejected), OR
+ *   - an explicit "you applied / application submitted / received" confirmation.
+ * Alerts like "5 new jobs for you", "your dream job awaits", "show recruiters
+ * you're interested" mention keywords but carry none of these signals, so they're
+ * dropped — beating the keyword-search noise floor in BOTH apps (shared brain).
  */
-const SEARCH_KEYWORDS_RE =
-  /\b(application|applications|applying|applied|interview|interviews|interviewing|candidacy|candidate|candidates|recruiting|recruiter|recruitment|position|positions|offer|offers|offered)\b/i;
-const SEARCH_PHRASES_RE = /thank you for applying|your application|received your application/i;
+const APPLIED_CONFIRM_RE =
+  /\b(you(?:'ve| have)? applied|applied (?:to|for)|application (?:was |has been |is )?(?:sent|submitted|received|complete|completed|under review)|(?:submitted|completed|finished) (?:your )?application|thank(?:s| you) for applying|received your application)\b/i;
 
-export function matchesApplicationSearch(text: string | null | undefined): boolean {
+export function isJobApplication(text: string | null | undefined): boolean {
   const t = String(text || "");
-  return SEARCH_KEYWORDS_RE.test(t) || SEARCH_PHRASES_RE.test(t);
+  return detectStatus(t) !== null || APPLIED_CONFIRM_RE.test(t);
 }
 
 /* ============================================================================

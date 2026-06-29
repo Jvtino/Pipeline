@@ -75,30 +75,31 @@ describe("@pipeline/classify — extractRole", () => {
   }
 });
 
-describe("@pipeline/classify — application gate (mirrors the desktop mail search)", () => {
+describe("@pipeline/classify — application gate (requires real application activity)", () => {
   const mk = (domain: string, subject: string, body = ""): Thread => ({
     threadId: "t", domain, subject, messages: [{ date: "2026-06-01", from: "x <a@b.com>", body }],
   });
 
-  it("keeps mail matching an application keyword or phrase", () => {
-    expect(isLikelyApplication(mk("acme.com", "Thank you for applying to Acme"))).toBe(true); // applying
-    expect(isLikelyApplication(mk("acme.com", "Interview invitation"))).toBe(true); // interview
-    expect(isLikelyApplication(mk("indeed.com", "Senior Analyst position"))).toBe(true); // position
-    expect(isLikelyApplication(mk("x.com", "Update", "we received your application"))).toBe(true); // body phrase
+  it("keeps mail with an application status or 'you applied' confirmation", () => {
+    expect(isLikelyApplication(mk("acme.com", "Thank you for applying to Acme"))).toBe(true); // applied
+    expect(isLikelyApplication(mk("acme.com", "Interview invitation", "we'd like to schedule a call"))).toBe(true); // interview
+    expect(isLikelyApplication(mk("x.com", "Offer", "we are pleased to offer you the role"))).toBe(true); // offer
+    expect(isLikelyApplication(mk("indeed.com", "Analyst @ Acme", "You applied to Analyst at Acme"))).toBe(true); // confirm
+    expect(isLikelyApplication(mk("x.com", "Update", "your application was submitted"))).toBe(true); // confirm
   });
 
-  it("drops mail with no application keyword (account alerts, generic marketing)", () => {
-    // No ATS auto-pass: a job-board alert with no keyword is dropped, like the desktop.
-    expect(isLikelyApplication(mk("accountprotection.microsoft.com", "New sign-in to your account"))).toBe(false);
-    expect(isLikelyApplication(mk("indeed.com", "Your safety is our priority"))).toBe(false);
-    expect(isLikelyApplication(mk("google.com", "Get quickstart guides for popular products"))).toBe(false);
+  it("drops job-board ALERTS / marketing that only mention keywords (the noise floor)", () => {
+    expect(isLikelyApplication(mk("indeed.com", "Senior Analyst position", "5 new jobs matching your search"))).toBe(false);
+    expect(isLikelyApplication(mk("greenhouse-jobs.io", "Your June Dream Job is waiting"))).toBe(false);
+    expect(isLikelyApplication(mk("indeed.com", "Show recruiters you're really interested"))).toBe(false);
+    expect(isLikelyApplication(mk("microsoft.com", "Learn how to build market-ready apps"))).toBe(false);
   });
 
-  it("threadsToApplications keeps only matching threads", () => {
+  it("threadsToApplications keeps only threads with real activity", () => {
     const apps = threadsToApplications([
-      mk("greenhouse.io", "Acme — application received", "thank you for applying"), // keep
-      mk("accountprotection.microsoft.com", "New sign-in to your account"), // drop
-      mk("indeed.com", "Your safety is our priority"), // drop
+      mk("greenhouse.io", "Acme", "thank you for applying"), // keep
+      mk("indeed.com", "Senior Analyst position", "jobs picked for you"), // drop (alert)
+      mk("indeed.com", "Your dream job awaits"), // drop (alert)
     ]);
     expect(apps.length).toBe(1);
   });

@@ -225,10 +225,20 @@ function extractRole(subject) {
 }
 
 
+// Smarter than the keyword mail-search: keep a thread only if it shows REAL
+// application activity — a detected status, or an explicit "you applied /
+// application submitted" confirmation. Drops job-board alerts/marketing that
+// merely mention keywords. Mirrors @pipeline/classify isJobApplication.
+const APPLIED_CONFIRM_RE = /\b(you(?:'ve| have)? applied|applied (?:to|for)|application (?:was |has been |is )?(?:sent|submitted|received|complete|completed|under review)|(?:submitted|completed|finished) (?:your )?application|thank(?:s| you) for applying|received your application)\b/i;
+function isJobApplication(text) {
+  const t = String(text || "");
+  return detectStatus(t) !== null || APPLIED_CONFIRM_RE.test(t);
+}
+
 // ---- exports (Node) / globals (browser) ----
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    STATUS_RANK, detectStatus,
+    STATUS_RANK, detectStatus, isJobApplication,
     rootName, companyFromDomain, isAtsDomain, cleanCompanyName,
     companyFromSenderName, extractCompanyFromSubject, companyFromBody,
     resolveCompany, guessCompanyDomain, extractRole, tidy,

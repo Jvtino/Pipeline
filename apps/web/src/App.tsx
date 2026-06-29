@@ -365,7 +365,11 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
+const ROLES_VISIBLE = 4; // show only the most recent few per company (rest counted in the header)
+
 function CompanyCard({ group, onSelect }: { group: CompanyGroup; onSelect: (a: Application) => void }) {
+  const shown = group.applications.slice(0, ROLES_VISIBLE);
+  const hidden = group.applications.length - shown.length;
   return (
     <article className="card">
       <header className="card-head">
@@ -378,7 +382,7 @@ function CompanyCard({ group, onSelect }: { group: CompanyGroup; onSelect: (a: A
         </div>
       </header>
       <ul className="roles">
-        {group.applications.map((a) => (
+        {shown.map((a) => (
           <li key={a.id}>
             <button className="role role-btn" onClick={() => onSelect(a)} title="Open notes & contacts">
               <div className="role-main">
@@ -390,6 +394,7 @@ function CompanyCard({ group, onSelect }: { group: CompanyGroup; onSelect: (a: A
           </li>
         ))}
       </ul>
+      {hidden > 0 && <div className="roles-more muted">+{hidden} more</div>}
     </article>
   );
 }

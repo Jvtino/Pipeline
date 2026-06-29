@@ -85,6 +85,7 @@ body {
 .role-main { display: flex; flex-direction: column; min-width: 0; }
 .role-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .role-date { font-size: 11.5px; }
+.roles-more { font-size: 12px; padding: 8px 2px 2px; }
 
 .pill {
   font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;

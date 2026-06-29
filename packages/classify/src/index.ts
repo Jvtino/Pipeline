@@ -69,14 +69,20 @@ export function detectStatus(text: string | null | undefined): Status | null {
 }
 
 /**
- * True when the text carries a STRONG application/recruiting phrase (not just a
- * weak single-word cue). Used to keep marketing and account-notification mail
- * OUT of the board — the Outlook/Graph source pulls the whole inbox, so without
- * this gate every newsletter and "new sign-in" alert becomes an "application".
+ * Does this text match the DESKTOP app's mail-search criteria? The desktop decides
+ * "is this a job application?" purely by whether its Gmail/Graph/IMAP search matched
+ * (gmail.js GMAIL_Q, msgraph.js SEARCH_KQL) — an application keyword, or one of the
+ * application phrases. The hosted version mirrors that exact net so the two agree
+ * (parity), instead of inventing its own gate. Replaces an over-broad ATS-auto-pass
+ * that let every job-board alert ("jobs for you", "your safety is our priority") in.
  */
-export function hasApplicationSignal(text: string | null | undefined): boolean {
-  const t = " " + String(text || "").toLowerCase().replace(/\s+/g, " ") + " ";
-  return APPLIED_RE.test(t) || INTERVIEW_RE.test(t) || OFFER_RE.test(t) || REJECT_RE.test(t) || NEG_OFFER_RE.test(t);
+const SEARCH_KEYWORDS_RE =
+  /\b(application|applications|applying|applied|interview|interviews|interviewing|candidacy|candidate|candidates|recruiting|recruiter|recruitment|position|positions|offer|offers|offered)\b/i;
+const SEARCH_PHRASES_RE = /thank you for applying|your application|received your application/i;
+
+export function matchesApplicationSearch(text: string | null | undefined): boolean {
+  const t = String(text || "");
+  return SEARCH_KEYWORDS_RE.test(t) || SEARCH_PHRASES_RE.test(t);
 }
 
 /* ============================================================================

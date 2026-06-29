@@ -124,6 +124,12 @@ export function boardFromApplications(apps: Application[], source: string): Boar
     group.applications.push(a);
   }
 
+  // Within each company, newest activity first (so a card's top rows are the most
+  // recent — and a UI that shows only the first few shows the latest).
+  for (const g of byCompany.values()) {
+    g.applications.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
+  }
+
   const latest = (g: CompanyGroup): string =>
     g.applications.reduce((max, a) => (a.lastActivity > max ? a.lastActivity : max), "");
   const groups = [...byCompany.values()].sort((x, y) => latest(y).localeCompare(latest(x)));

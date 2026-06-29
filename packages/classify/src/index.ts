@@ -17,7 +17,7 @@ import type { Status, Thread, Message, ResolvedCompany } from "@pipeline/contrac
 
 export { STATUS_RANK } from "@pipeline/contracts";
 export type { Status, Thread, Message, ResolvedCompany } from "@pipeline/contracts";
-export { statusForThread, threadToApplication, threadsToApplications } from "./aggregate";
+export { statusForThread, threadToApplication, threadsToApplications, isLikelyApplication } from "./aggregate";
 
 /* ============================================================================
    STATUS CLASSIFIER
@@ -66,6 +66,24 @@ export function detectStatus(text: string | null | undefined): Status | null {
     }
   }
   return best; // null when nothing matched (caller keeps the prior status)
+}
+
+/**
+ * Is this text a REAL job application — not just a job-board alert or marketing?
+ * This is SMARTER than the desktop's keyword search (which matched any mention of
+ * "position/offer/recruiting/..."). It requires application ACTIVITY:
+ *   - a detected status (applied / interview / offer / rejected), OR
+ *   - an explicit "you applied / application submitted / received" confirmation.
+ * Alerts like "5 new jobs for you", "your dream job awaits", "show recruiters
+ * you're interested" mention keywords but carry none of these signals, so they're
+ * dropped — beating the keyword-search noise floor in BOTH apps (shared brain).
+ */
+const APPLIED_CONFIRM_RE =
+  /\b(you(?:'ve| have)? applied|applied (?:to|for)|application (?:was |has been |is )?(?:sent|submitted|received|complete|completed|under review)|(?:submitted|completed|finished) (?:your )?application|thank(?:s| you) for applying|received your application)\b/i;
+
+export function isJobApplication(text: string | null | undefined): boolean {
+  const t = String(text || "");
+  return detectStatus(t) !== null || APPLIED_CONFIRM_RE.test(t);
 }
 
 /* ============================================================================

@@ -1,0 +1,12 @@
+{
+  "hosting": {
+    "public": "apps/web/dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      { "source": "/api/**", "run": { "serviceId": "pipeline-api", "region": "us-central1" } },
+      { "source": "/auth/**", "run": { "serviceId": "pipeline-api", "region": "us-central1" } },
+      { "source": "/webhooks/**", "run": { "serviceId": "pipeline-api", "region": "us-central1" } },
+      { "source": "**", "destination": "/index.html" }
+    ]
+  }
+}

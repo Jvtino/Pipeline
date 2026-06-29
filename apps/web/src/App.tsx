@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Board, CompanyGroup, Application, Status } from "@pipeline/contracts";
 
 type Plan = "free" | "pro" | "teams";
@@ -28,6 +28,49 @@ interface Contact {
 const STATUS_LABEL: Record<Status, string> = { applied: "Active", interview: "Interview", offer: "Offer", rejected: "Rejected" };
 const enc = (threadId: string) => encodeURIComponent(threadId);
 
+const FREE_COMPANY_LIMIT = 20; // free plan shows the 20 most recent companies; rest are blurred
+const FREE_ROLE_LIMIT = 4; // and only the 4 most recent roles per company
+
+type SortMode = "recent" | "az" | "count";
+
+/** Deterministic hue from a company name, for the colored avatar (desktop look). */
+function hueFromName(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
+}
+
+/** "3d ago" / "2mo ago" from an ISO date (yyyy-mm-dd). */
+function timeAgo(iso: string): string {
+  if (!iso) return "";
+  const then = new Date(`${iso}T00:00:00Z`).getTime();
+  if (Number.isNaN(then)) return iso;
+  const days = Math.floor((Date.now() - then) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "1d ago";
+  if (days < 30) return `${days}d ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
+// Pinned companies persist locally (no server round-trip) keyed by lowercased name.
+const PINNED_KEY = "pipeline:pinnedCompanies";
+function loadPinned(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PINNED_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+function savePinned(s: Set<string>): void {
+  try {
+    localStorage.setItem(PINNED_KEY, JSON.stringify([...s]));
+  } catch {
+    /* storage disabled or over quota — pinning just won't persist */
+  }
+}
+
 type Toast = { type: "ok" | "err"; msg: string };
 // Toast shown when the OAuth callback redirects back with ?connect=<status>.
 // `ok` additionally kicks off a sync (handled separately); any unknown status falls back to `error`.
@@ -37,11 +80,14 @@ const CONNECT_TOASTS: { error: Toast; [status: string]: Toast } = {
   error: { type: "err", msg: "Mailbox connection failed or was cancelled." },
 };
 
-async function ensureSession(): Promise<void> {
+// Returns true if there's an authenticated session. Tries a frictionless demo
+// login, which succeeds only when no hosted gate (passphrase) is configured —
+// on a gated/hosted instance it fails and the app shows the sign-in screen.
+async function ensureSession(): Promise<boolean> {
   const me = await fetch("/auth/me");
-  if (me.status === 401) {
-    await fetch("/auth/dev/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "demo@pipeline.local" }) });
-  }
+  if (me.ok) return true;
+  const r = await fetch("/auth/dev/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "demo@pipeline.local" }) });
+  return r.ok;
 }
 async function getJson<T>(url: string): Promise<T> {
   const r = await fetch(url);
@@ -52,6 +98,51 @@ async function postJson<T>(url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   if (!r.ok) throw new Error(`${url} → ${r.status}`);
   return r.json() as Promise<T>;
+}
+
+// Sign-in screen, shown only when the API is gated (a hosted instance with a
+// passphrase set). On a local/ungated instance the silent demo login succeeds
+// and this never renders.
+function LoginScreen({ onLogin }: { onLogin: (email: string, passphrase: string) => Promise<void> }) {
+  const [email, setEmail] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      await onLogin(email.trim(), passphrase);
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Sign-in failed.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="login">
+      <form className="login-card" onSubmit={submit}>
+        <div className="brand">
+          <span className="logo" aria-hidden>▦</span> <strong>Pipeline</strong>
+        </div>
+        <p className="muted">Sign in to your board.</p>
+        <label>
+          Email
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required />
+        </label>
+        <label>
+          Passphrase
+          <input type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} autoComplete="current-password" required />
+        </label>
+        {err && <div className="login-err" role="alert">{err}</div>}
+        <button className="btn btn-primary" type="submit" disabled={busy}>
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+    </div>
+  );
 }
 
 export function App() {
@@ -65,11 +156,66 @@ export function App() {
   const [syncing, setSyncing] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortMode>("recent");
+  const [pinned, setPinned] = useState<Set<string>>(loadPinned);
+  const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
 
   const isPro = me?.plan === "pro" || me?.plan === "teams";
 
+  // Click a stat tile to filter by that status; click the active one again to clear.
+  const toggleStatus = useCallback((s: Status) => setStatusFilter((cur) => (cur === s ? "all" : s)), []);
+
+  const togglePin = useCallback((company: string) => {
+    setPinned((prev) => {
+      const next = new Set(prev);
+      const key = company.toLowerCase();
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      savePinned(next);
+      return next;
+    });
+  }, []);
+
+  // Free: search/sort off, board ordered newest-first by the API. Pro: live search + sort.
+  // Either way, pinned companies float to the top, preserving the order chosen above.
+  const orderedGroups = useMemo(() => {
+    let gs = board?.groups ?? [];
+    // Clickable stat tiles: keep only roles in the chosen status, drop emptied
+    // companies (mirrors the desktop's appMatches status gate).
+    if (statusFilter !== "all") {
+      gs = gs
+        .map((g) => ({ ...g, applications: g.applications.filter((a) => a.status === statusFilter) }))
+        .filter((g) => g.applications.length > 0);
+    }
+    if (isPro && query.trim()) {
+      const q = query.trim().toLowerCase();
+      gs = gs.filter(
+        (g) => g.company.toLowerCase().includes(q) || g.applications.some((a) => a.role.toLowerCase().includes(q)),
+      );
+    }
+    if (isPro && sort !== "recent") {
+      gs = [...gs].sort((a, b) =>
+        sort === "az" ? a.company.localeCompare(b.company) : b.applications.length - a.applications.length,
+      );
+    }
+    if (pinned.size) {
+      const isPin = (g: CompanyGroup) => pinned.has(g.company.toLowerCase());
+      gs = [...gs].sort((a, b) => Number(isPin(b)) - Number(isPin(a))); // stable: keeps prior order within each partition
+    }
+    return gs;
+  }, [board, isPro, query, sort, pinned, statusFilter]);
+
+  const visibleGroups = isPro ? orderedGroups : orderedGroups.slice(0, FREE_COMPANY_LIMIT);
+  const lockedGroups = isPro ? [] : orderedGroups.slice(FREE_COMPANY_LIMIT);
+
   const refresh = useCallback(async () => {
-    await ensureSession();
+    if (!(await ensureSession())) {
+      setNeedsLogin(true);
+      return;
+    }
+    setNeedsLogin(false);
     const meRes = await getJson<{ user: Me }>("/auth/me");
     setMe(meRes.user);
     setBoard(await getJson<Board>("/api/applications"));
@@ -144,6 +290,39 @@ export function App() {
     }
   }
 
+  async function doRebuild() {
+    if (!window.confirm("Re-sync your mailboxes from scratch and drop mis-classified items (marketing, account alerts)? Your notes and contacts are kept.")) return;
+    setConnectOpen(false);
+    setSyncing(true);
+    try {
+      const res = await postJson<{ connections: number }>("/api/sync", { rebuild: true });
+      await refresh();
+      setToast({ type: "ok", msg: res.connections ? "Rebuilt your board from a fresh sync." : "No mailbox connected yet — use Connect." });
+    } catch {
+      setToast({ type: "err", msg: "Rebuild failed — try again in a moment." });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function login(email: string, passphrase: string) {
+    const r = await fetch("/auth/dev/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, passphrase }),
+    });
+    if (!r.ok) {
+      throw new Error(
+        r.status === 401 ? "Wrong passphrase." : r.status === 403 ? "That email isn’t allowed on this instance." : "Sign-in failed.",
+      );
+    }
+    setLoading(true);
+    await refresh();
+    setLoading(false);
+  }
+
+  if (needsLogin) return <LoginScreen onLogin={login} />;
+
   return (
     <div className="app">
       <header className="topbar">
@@ -169,6 +348,9 @@ export function App() {
                   Connect Outlook
                 </a>
                 <div className="connect-note muted">Requires your OAuth client IDs (see DEPLOY.md).</div>
+                <button type="button" className="connect-item connect-action" onClick={() => void doRebuild()} disabled={syncing}>
+                  Rebuild board
+                </button>
               </div>
             )}
           </div>
@@ -226,11 +408,11 @@ export function App() {
         {board && board.groups.length > 0 && (
           <>
             <section className="stats">
-              <Stat label="Total" value={board.counts.total} tone="total" />
-              <Stat label="Active" value={board.counts.applied} tone="applied" />
-              <Stat label="Interview" value={board.counts.interview} tone="interview" />
-              <Stat label="Offer" value={board.counts.offer} tone="offer" />
-              <Stat label="Rejected" value={board.counts.rejected} tone="rejected" />
+              <Stat label="Total" value={board.counts.total} tone="total" active={statusFilter === "all"} onClick={() => setStatusFilter("all")} />
+              <Stat label="Active" value={board.counts.applied} tone="applied" active={statusFilter === "applied"} onClick={() => toggleStatus("applied")} />
+              <Stat label="Interview" value={board.counts.interview} tone="interview" active={statusFilter === "interview"} onClick={() => toggleStatus("interview")} />
+              <Stat label="Offer" value={board.counts.offer} tone="offer" active={statusFilter === "offer"} onClick={() => toggleStatus("offer")} />
+              <Stat label="Rejected" value={board.counts.rejected} tone="rejected" active={statusFilter === "rejected"} onClick={() => toggleStatus("rejected")} />
               {analytics && (
                 <div className="stat stat-rate">
                   <div className="stat-value">{Math.round(analytics.interviewRate * 100)}%</div>
@@ -239,11 +421,63 @@ export function App() {
               )}
             </section>
 
+            {isPro && (
+              <div className="toolbar">
+                <input
+                  className="search"
+                  placeholder="Search company or role…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  aria-label="Search"
+                />
+                <select className="sort" value={sort} onChange={(e) => setSort(e.target.value as SortMode)} aria-label="Sort">
+                  <option value="recent">Most recent</option>
+                  <option value="az">A–Z</option>
+                  <option value="count">Most roles</option>
+                </select>
+              </div>
+            )}
+
             <section className="grid">
-              {board.groups.map((g) => (
-                <CompanyCard key={g.company} group={g} onSelect={setSelected} />
+              {visibleGroups.map((g) => (
+                <CompanyCard
+                  key={g.company}
+                  group={g}
+                  limit={isPro ? undefined : FREE_ROLE_LIMIT}
+                  onSelect={setSelected}
+                  pinned={pinned.has(g.company.toLowerCase())}
+                  onTogglePin={togglePin}
+                />
               ))}
             </section>
+
+            {orderedGroups.length === 0 && (
+              <p className="muted center">No companies match this view.</p>
+            )}
+
+            {lockedGroups.length > 0 && (
+              <div className="locked">
+                <section className="grid locked-grid" aria-hidden>
+                  {lockedGroups.slice(0, 6).map((g) => (
+                    <CompanyCard key={g.company} group={g} limit={FREE_ROLE_LIMIT} onSelect={() => {}} pinned={false} onTogglePin={() => {}} />
+                  ))}
+                </section>
+                <div className="locked-overlay">
+                  <div className="locked-cta">
+                    <div className="locked-lock" aria-hidden>🔒</div>
+                    <h3>
+                      {lockedGroups.length} more {lockedGroups.length === 1 ? "company" : "companies"}
+                    </h3>
+                    <p className="muted">
+                      Free shows your 20 most recent companies. Upgrade to Pro to see your whole pipeline — plus search &amp; sort.
+                    </p>
+                    <button className="btn btn-primary" onClick={() => void setPlan("pro")}>
+                      Upgrade to Pro
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </main>
@@ -255,12 +489,24 @@ export function App() {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone: Status | "total" }) {
+function Stat({
+  label,
+  value,
+  tone,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  tone: Status | "total";
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <div className={`stat stat-${tone}`}>
+    <button type="button" className={`stat stat-${tone}${active ? " stat-active" : ""}`} onClick={onClick} aria-pressed={active}>
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
-    </div>
+    </button>
   );
 }
 
@@ -269,38 +515,133 @@ function StatusPill({ status }: { status: Status }) {
 }
 
 function Avatar({ name }: { name: string }) {
+  const hue = hueFromName(name);
   return (
-    <div className="avatar" aria-hidden>
+    <div className="avatar" style={{ background: `hsl(${hue} 45% 20%)`, color: `hsl(${hue} 80% 74%)` }} aria-hidden>
       {name.trim().charAt(0).toUpperCase() || "?"}
     </div>
   );
 }
 
-function CompanyCard({ group, onSelect }: { group: CompanyGroup; onSelect: (a: Application) => void }) {
+function senderName(from: string): string {
+  const m = /^\s*"?([^"<]+?)"?\s*</.exec(from);
+  return (m && m[1] ? m[1] : from).trim();
+}
+
+// Automated / no-reply senders we don't surface as contacts.
+const AUTOMATED_RE = /(no-?reply|do-?not-?reply|donotreply|notifications?|mailer-daemon|postmaster|bounce|automated)/i;
+
+/** Split a "Name <email>" header into a display name and a lowercased address. */
+function parseSender(from: string): { name: string; email: string } {
+  const angle = /<([^>]+)>/.exec(from)?.[1];
+  const bare = /\S+@\S+\.\S+/.exec(from)?.[0];
+  const email = (angle ?? bare ?? "").trim().toLowerCase();
+  return { name: senderName(from), email };
+}
+
+/** Real-person/company contacts auto-detected from a thread's emails (dedup by address). */
+function autoContactsFor(app: Application): { name: string; email: string }[] {
+  const seen = new Map<string, { name: string; email: string }>();
+  for (const ev of app.timeline ?? []) {
+    const { name, email } = parseSender(ev.from);
+    if (!email || AUTOMATED_RE.test(email)) continue;
+    if (!seen.has(email)) seen.set(email, { name, email });
+  }
+  return [...seen.values()];
+}
+
+function Timeline({ app, onOpenDetails }: { app: Application; onOpenDetails: () => void }) {
+  const events =
+    app.timeline && app.timeline.length > 0
+      ? app.timeline
+      : [{ date: app.lastActivity, from: "", status: app.status, snippet: app.snippet }];
   return (
-    <article className="card">
+    <div className="timeline">
+      <ol className="tl">
+        {[...events].reverse().map((e, i) => (
+          <li key={i} className="tl-ev">
+            <span className={`tl-node s-${e.status}`} aria-hidden />
+            <div className="tl-evbody">
+              <div className="tl-head">
+                <StatusPill status={e.status} />
+                <span className="muted tl-date">{e.date}</span>
+              </div>
+              {e.from && <div className="muted tl-from">{senderName(e.from)}</div>}
+              {e.snippet && <p className="tl-snippet">{e.snippet}</p>}
+            </div>
+          </li>
+        ))}
+      </ol>
+      <button className="tl-details" onClick={onOpenDetails}>
+        Notes &amp; contacts →
+      </button>
+    </div>
+  );
+}
+
+function CompanyCard({
+  group,
+  onSelect,
+  limit,
+  pinned,
+  onTogglePin,
+}: {
+  group: CompanyGroup;
+  onSelect: (a: Application) => void;
+  limit?: number;
+  pinned: boolean;
+  onTogglePin: (company: string) => void;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const all = group.applications;
+  const shown = limit ? all.slice(0, limit) : all;
+  const hidden = all.length - shown.length;
+  return (
+    <article className={`card${pinned ? " pinned" : ""}`}>
       <header className="card-head">
         <Avatar name={group.company} />
         <div className="card-title">
           <h2>{group.company}</h2>
           <span className="muted">
-            {group.applications.length} role{group.applications.length > 1 ? "s" : ""}
+            {all.length} role{all.length > 1 ? "s" : ""}
           </span>
         </div>
+        <div className="card-dots" aria-hidden>
+          {all.slice(0, 8).map((a) => (
+            <span key={a.id} className={`mini-dot s-${a.status}`} title={STATUS_LABEL[a.status]} />
+          ))}
+          {all.length > 8 && <span className="dots-more">+{all.length - 8}</span>}
+        </div>
+        <button
+          className={`card-pin${pinned ? " is-pinned" : ""}`}
+          onClick={() => onTogglePin(group.company)}
+          aria-pressed={pinned}
+          title={pinned ? "Unpin" : "Pin to top"}
+        >
+          📌
+        </button>
       </header>
-      <ul className="roles">
-        {group.applications.map((a) => (
+      <ul className={limit ? "roles" : "roles roles--scroll"}>
+        {shown.map((a) => (
           <li key={a.id}>
-            <button className="role role-btn" onClick={() => onSelect(a)} title="Open notes & contacts">
+            <button
+              className={`role role-btn${openId === a.id ? " role-open" : ""}`}
+              onClick={() => setOpenId(openId === a.id ? null : a.id)}
+              aria-expanded={openId === a.id}
+              title="Show history"
+            >
+              <span className={`mini-dot s-${a.status}`} aria-hidden />
               <div className="role-main">
                 <span className="role-name">{a.role}</span>
-                <span className="muted role-date">{a.lastActivity}</span>
+                <span className="muted role-date">{timeAgo(a.lastActivity)}</span>
               </div>
               <StatusPill status={a.status} />
             </button>
+            {openId === a.id && <Timeline app={a} onOpenDetails={() => onSelect(a)} />}
           </li>
         ))}
       </ul>
+      {hidden > 0 && <div className="roles-more muted">+{hidden} more</div>}
     </article>
   );
 }
@@ -311,6 +652,11 @@ function ApplicationPanel({ app, isPro, onClose, onUpgrade }: { app: Application
   const [noteBody, setNoteBody] = useState("");
   const [cName, setCName] = useState("");
   const [cEmail, setCEmail] = useState("");
+
+  // Auto-derived from the thread's emails — no manual entry, no server round-trip.
+  const activity = app.timeline ?? [];
+  const autoContacts = useMemo(() => autoContactsFor(app), [app]);
+  const extraAutoContacts = autoContacts.filter((c) => !contacts.some((m) => (m.email ?? "").toLowerCase() === c.email));
 
   const load = useCallback(async () => {
     if (!isPro) return;
@@ -362,14 +708,30 @@ function ApplicationPanel({ app, isPro, onClose, onUpgrade }: { app: Application
           <>
             <section className="drawer-sec">
               <h4>Notes</h4>
-              {notes.length === 0 && <p className="muted">No notes yet.</p>}
-              <ul className="plain">
-                {notes.map((n) => (
-                  <li key={n.id} className="note">
-                    {n.body}
-                  </li>
-                ))}
-              </ul>
+              {activity.length === 0 && notes.length === 0 && <p className="muted">No notes yet.</p>}
+              {activity.length > 0 && (
+                <ul className="plain">
+                  {[...activity].reverse().map((ev, i) => (
+                    <li key={`act-${i}`} className="note note-auto">
+                      <div className="note-head">
+                        <span className="auto-tag">inbox</span>
+                        <StatusPill status={ev.status} />
+                        <span className="muted note-date">{ev.date}</span>
+                      </div>
+                      {ev.snippet && <div className="note-body">{ev.snippet}</div>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {notes.length > 0 && (
+                <ul className="plain">
+                  {notes.map((n) => (
+                    <li key={n.id} className="note">
+                      {n.body}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <div className="row-form">
                 <input value={noteBody} onChange={(e) => setNoteBody(e.target.value)} placeholder="Add a note…" />
                 <button className="btn" onClick={() => void addNote()}>
@@ -380,15 +742,24 @@ function ApplicationPanel({ app, isPro, onClose, onUpgrade }: { app: Application
 
             <section className="drawer-sec">
               <h4>Contacts</h4>
-              {contacts.length === 0 && <p className="muted">No contacts yet.</p>}
-              <ul className="plain">
-                {contacts.map((c) => (
-                  <li key={c.id} className="contact">
-                    <strong>{c.name}</strong>
-                    {c.email ? <span className="muted"> · {c.email}</span> : null}
-                  </li>
-                ))}
-              </ul>
+              {extraAutoContacts.length === 0 && contacts.length === 0 && <p className="muted">No contacts yet.</p>}
+              {(extraAutoContacts.length > 0 || contacts.length > 0) && (
+                <ul className="plain">
+                  {extraAutoContacts.map((c) => (
+                    <li key={`auto-${c.email}`} className="contact contact-auto">
+                      <span className="auto-tag">inbox</span>
+                      <strong>{c.name}</strong>
+                      <span className="muted"> · {c.email}</span>
+                    </li>
+                  ))}
+                  {contacts.map((c) => (
+                    <li key={c.id} className="contact">
+                      <strong>{c.name}</strong>
+                      {c.email ? <span className="muted"> · {c.email}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <div className="row-form">
                 <input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Name" />
                 <input value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="Email (optional)" />

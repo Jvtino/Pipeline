@@ -70,6 +70,15 @@ export function safeParseThread(value: unknown): z.SafeParseReturnType<unknown, 
    This is the privacy-preserving "store derived, not raw" shape from plan §7.
    -------------------------------------------------------------------------- */
 
+/** One event in an application's history — a single message, classified. */
+export const timelineEventSchema = z.object({
+  date: z.string(), // ISO date (YYYY-MM-DD)
+  from: z.string(),
+  status: statusSchema, // the status in force after this message
+  snippet: z.string().max(600),
+});
+export type TimelineEvent = z.infer<typeof timelineEventSchema>;
+
 /** A single tracked application — one reduced thread. The board's atom. */
 export const applicationSchema = z.object({
   id: z.string(),
@@ -81,6 +90,7 @@ export const applicationSchema = z.object({
   firstSeen: z.string(), // ISO date of the earliest message
   lastActivity: z.string(), // ISO date of the latest message
   snippet: z.string().max(600), // latest message snippet only — never the full body
+  timeline: z.array(timelineEventSchema).optional(), // per-message history (click-to-expand)
   manual: z.boolean().optional(),
 });
 export type Application = z.infer<typeof applicationSchema>;
@@ -122,6 +132,12 @@ export function boardFromApplications(apps: Application[], source: string): Boar
       byCompany.set(key, group);
     }
     group.applications.push(a);
+  }
+
+  // Within each company, newest activity first (so a card's top rows are the most
+  // recent — and a UI that shows only the first few shows the latest).
+  for (const g of byCompany.values()) {
+    g.applications.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
   }
 
   const latest = (g: CompanyGroup): string =>

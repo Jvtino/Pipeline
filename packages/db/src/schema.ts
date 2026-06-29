@@ -59,6 +59,10 @@ export const applications = pgTable(
     firstSeen: text("first_seen").notNull(),
     lastActivity: text("last_activity").notNull(),
     snippet: text("snippet").notNull(),
+    // Per-message timeline (JSON: [{date, from, status, snippet}]) — drives the
+    // click-to-expand history. Stores short per-message snippets (the privacy
+    // trade-off for a desktop-style timeline; still no full raw bodies).
+    timeline: text("timeline"),
     manual: boolean("manual").notNull().default(false),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

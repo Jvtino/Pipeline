@@ -42,11 +42,14 @@ CREATE TABLE IF NOT EXISTS applications (
   first_seen      text NOT NULL,
   last_activity   text NOT NULL,
   snippet         text NOT NULL,
+  timeline        text,
   manual          boolean NOT NULL DEFAULT false,
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_app_user_thread ON applications (user_id, thread_id);
 CREATE INDEX IF NOT EXISTS idx_app_user ON applications (user_id);
+-- additive column for existing deployments (timeline added after first ship)
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS timeline text;
 
 CREATE TABLE IF NOT EXISTS application_events (
   id              text PRIMARY KEY,

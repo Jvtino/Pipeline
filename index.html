@@ -625,6 +625,11 @@ function buildApplications(threads){
     if (th.manual) return buildManualApp(th);
     const msgs = [...(th.messages || [])].sort((a,b)=> a.date.localeCompare(b.date));
     if (!msgs.length) return null;   // skip malformed threads with no messages (defensive)
+    // Smarter gate (shared brain): keep only threads showing real application
+    // activity — a detected status, or a "you applied / submitted" confirmation —
+    // unless the user manually tracked this one. Drops job-board alerts & marketing.
+    const _hasOverride = state.statusOverrides && state.statusOverrides.get(th.threadId);
+    if (!_hasOverride && !isJobApplication(th.subject + " " + msgs.map(m => m.body).join(" "))) return null;
     const role = extractRole(th.subject);
     // Classify each message body chronologically; carry the status forward.
     let status = "applied";

@@ -45,9 +45,9 @@ describe("buildAuthUrl", () => {
     expect(q.get("prompt")).toBe("consent");
   });
 
-  it("builds a Microsoft consumers URL with Mail.Read scope", () => {
+  it("builds a Microsoft common-tenant URL with Mail.Read scope", () => {
     const url = new URL(buildAuthUrl("microsoft", "cid", "https://app/cb", "chal", "st8"));
-    expect(url.pathname).toContain("/consumers/oauth2/v2.0/authorize");
+    expect(url.pathname).toContain("/common/oauth2/v2.0/authorize");
     expect(url.searchParams.get("scope")).toContain("https://graph.microsoft.com/Mail.Read");
     expect(url.searchParams.get("response_mode")).toBe("query");
   });
@@ -74,11 +74,11 @@ describe("exchangeCode", () => {
     expect(form.client_secret).toBe("sec");
   });
 
-  it("public Microsoft client sends no client_secret", async () => {
+  it("confidential Microsoft client sends a client_secret", async () => {
     const capture: { url: string; form: Record<string, string> }[] = [];
     const transport = mockTransport({ access_token: "AT" }, capture);
-    await exchangeCode("microsoft", { clientId: "cid" }, "https://app/cb", "c", "v", { transport, now: 1 });
-    expect(capture[0]!.form.client_secret).toBeUndefined();
+    await exchangeCode("microsoft", { clientId: "cid", clientSecret: "ms-sec" }, "https://app/cb", "c", "v", { transport, now: 1 });
+    expect(capture[0]!.form.client_secret).toBe("ms-sec");
   });
 
   it("throws on an OAuth error response", async () => {

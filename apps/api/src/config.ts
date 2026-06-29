@@ -12,7 +12,7 @@ export function loadProviderConfigs(env: NodeJS.ProcessEnv = process.env): Provi
     c.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
   }
   if (env.MS_CLIENT_ID) {
-    c.microsoft = { clientId: env.MS_CLIENT_ID };
+    c.microsoft = { clientId: env.MS_CLIENT_ID, clientSecret: env.MS_CLIENT_SECRET };
   }
   return c;
 }

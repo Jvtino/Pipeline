@@ -11,6 +11,15 @@
 .env.local
 .env.*.local
 
+# Cloud Run env file written during deploy (holds secrets) — never commit
+env.yaml
+
+# Firebase project link — created per-user by `firebase use <project-id>`; not committed
+.firebaserc
+
+# Local persisted database (PGlite data dir created by start.command) — never commit
+.pipeline-data/
+
 # Desktop app (Electron)
 node_modules/
 dist/

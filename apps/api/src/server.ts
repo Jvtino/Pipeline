@@ -60,10 +60,15 @@ export async function buildServer(opts: ServerOptions = {}) {
     if (user) (req as RequestWithUser).user = user;
   });
 
+  const allowedEmails = new Set(
+    (process.env.ALLOWED_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
+  );
   registerAuthRoutes(app, {
     db: store.db,
     sessionSecret,
     devLoginEnabled: process.env.DISABLE_DEV_LOGIN !== "true",
+    allowedEmails: allowedEmails.size ? allowedEmails : undefined,
+    loginPassphrase: process.env.LOGIN_PASSPHRASE || undefined,
     onNewUser: seedDemoForUser,
   });
 

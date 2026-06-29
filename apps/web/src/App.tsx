@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { Board, CompanyGroup, Application, Status } from "@pipeline/contracts";
 
 type Plan = "free" | "pro" | "teams";
@@ -37,11 +37,14 @@ const CONNECT_TOASTS: { error: Toast; [status: string]: Toast } = {
   error: { type: "err", msg: "Mailbox connection failed or was cancelled." },
 };
 
-async function ensureSession(): Promise<void> {
+// Returns true if there's an authenticated session. Tries a frictionless demo
+// login, which succeeds only when no hosted gate (passphrase) is configured —
+// on a gated/hosted instance it fails and the app shows the sign-in screen.
+async function ensureSession(): Promise<boolean> {
   const me = await fetch("/auth/me");
-  if (me.status === 401) {
-    await fetch("/auth/dev/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "demo@pipeline.local" }) });
-  }
+  if (me.ok) return true;
+  const r = await fetch("/auth/dev/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "demo@pipeline.local" }) });
+  return r.ok;
 }
 async function getJson<T>(url: string): Promise<T> {
   const r = await fetch(url);
@@ -52,6 +55,51 @@ async function postJson<T>(url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   if (!r.ok) throw new Error(`${url} → ${r.status}`);
   return r.json() as Promise<T>;
+}
+
+// Sign-in screen, shown only when the API is gated (a hosted instance with a
+// passphrase set). On a local/ungated instance the silent demo login succeeds
+// and this never renders.
+function LoginScreen({ onLogin }: { onLogin: (email: string, passphrase: string) => Promise<void> }) {
+  const [email, setEmail] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      await onLogin(email.trim(), passphrase);
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Sign-in failed.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="login">
+      <form className="login-card" onSubmit={submit}>
+        <div className="brand">
+          <span className="logo" aria-hidden>▦</span> <strong>Pipeline</strong>
+        </div>
+        <p className="muted">Sign in to your board.</p>
+        <label>
+          Email
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required />
+        </label>
+        <label>
+          Passphrase
+          <input type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} autoComplete="current-password" required />
+        </label>
+        {err && <div className="login-err" role="alert">{err}</div>}
+        <button className="btn btn-primary" type="submit" disabled={busy}>
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+    </div>
+  );
 }
 
 export function App() {
@@ -65,11 +113,16 @@ export function App() {
   const [syncing, setSyncing] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
 
   const isPro = me?.plan === "pro" || me?.plan === "teams";
 
   const refresh = useCallback(async () => {
-    await ensureSession();
+    if (!(await ensureSession())) {
+      setNeedsLogin(true);
+      return;
+    }
+    setNeedsLogin(false);
     const meRes = await getJson<{ user: Me }>("/auth/me");
     setMe(meRes.user);
     setBoard(await getJson<Board>("/api/applications"));
@@ -143,6 +196,24 @@ export function App() {
       setSyncing(false);
     }
   }
+
+  async function login(email: string, passphrase: string) {
+    const r = await fetch("/auth/dev/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, passphrase }),
+    });
+    if (!r.ok) {
+      throw new Error(
+        r.status === 401 ? "Wrong passphrase." : r.status === 403 ? "That email isn’t allowed on this instance." : "Sign-in failed.",
+      );
+    }
+    setLoading(true);
+    await refresh();
+    setLoading(false);
+  }
+
+  if (needsLogin) return <LoginScreen onLogin={login} />;
 
   return (
     <div className="app">

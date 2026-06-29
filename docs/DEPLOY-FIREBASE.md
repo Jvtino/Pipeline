@@ -110,8 +110,10 @@ minute to propagate.
   Expect ~$0 for a single user. Watch the billing dashboard the first month.
 - **The ~weekly Gmail reconnect still applies** until Google verification
   (`GOOGLE-VERIFICATION.md`) — it's tied to "Testing" mode, not to hosting.
-- **Updating the app later**: in Cloud Shell, `git pull`, then re-run the step 4
-  deploy (API) and/or step 5 build + `firebase deploy` (UI).
+- **Updating the app later**: in Cloud Shell, from the repo, just run
+  `bash deploy.sh` (or `bash deploy.sh <project-id>`). It pulls the latest code,
+  rebuilds, and redeploys both the API and the UI in one go — then click
+  **Connect ▾ → Rebuild board** once so applications re-derive with any new fields.
 - **Opening it to other people** later means wiring real accounts (Clerk) and
   doing Google verification first — the allowlist/passphrase is a personal stopgap,
   not multi-user auth.

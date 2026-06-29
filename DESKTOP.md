@@ -90,3 +90,34 @@ the `server.py` web backend; with neither, it shows demo data — the **same UI*
 all three modes. The main process aggregates threads from every connected account
 into one list, and the company-grouping view naturally merges (e.g. a "Stripe" card
 can hold applications from both your Gmail and Outlook).
+
+---
+
+## Troubleshooting
+
+### Microsoft sign-in: `invalid_request … 'redirect_uri' is not valid`
+> *"The expected value is a URI which matches a redirect URI registered for this client application."*
+
+The desktop app signs in over a **loopback** redirect with a random port
+(`http://localhost:<port>`). Microsoft only ignores the port — and so accepts any
+port — when `http://localhost` is registered under the **Mobile and desktop
+applications** platform (a *public client*). If it's registered under the **Web**
+platform instead (or not at all), Microsoft demands an exact port match that can
+never happen, and you get this error.
+
+**Fix (Azure portal → App registrations → your app → Authentication):**
+1. Under **Platform configurations**, if `http://localhost` is listed under **Web**, remove it from there.
+2. **+ Add a platform → Mobile and desktop applications** → add **`http://localhost`** → Configure.
+3. **Advanced settings → Allow public client flows → Yes** → Save.
+
+Note: this flow is a *public client* and uses **no client secret** — a
+`MS_CLIENT_SECRET` is a sign the app was mistakenly registered as a *Web* app.
+
+### Desktop app won't open: `Electron failed to install correctly` / `EBADARCH`
+Electron's binary is missing or the wrong CPU type — usually because pnpm (the web
+app's installer) installed Electron without its postinstall. From the repo folder:
+```bash
+rm -rf node_modules/electron && npm install
+```
+`npm` runs Electron's postinstall, which downloads the correct binary for your Mac's
+chip. (The `Pipeline Desktop` launcher now does this check and self-heals automatically.)

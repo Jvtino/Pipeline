@@ -3,7 +3,14 @@
 The hosted product from `docs/Pipeline-Transformation-Plan.md`, in progress. Two apps over the shared packages (`@pipeline/contracts`, `@pipeline/classify`):
 
 - **`apps/api`** — Fastify (TypeScript). Reduces threads through `@pipeline/classify` into **derived application records** (company, role, status, dates, ≤600-char snippet — never raw email) and serves them, contract-validated, at `GET /api/applications`.
-- **`apps/web`** — React + Vite. Renders the company-grouped board from the API.
+- **`apps/web`** — React + Vite. A warm, light "leather-and-paper" workspace built on the API's
+  derived records: a sidebar-and-header shell over Dashboard, Applications, Companies, Contacts,
+  Calendar, Tasks, Statistics, Documents, Templates and Settings, plus an application detail drawer,
+  a New Application modal, and onboarding/connect. The board, sync and OAuth connect are wired to the
+  real API; the 7-status presentation system (the API serves 4), all metrics, and design-only
+  interactions (Move stage, manual apps, notes, tasks, sync settings) are derived from the board or
+  kept in a client-side `localStorage` overlay — the server contract is untouched. See
+  `src/lib/derive.ts` (board → screens) and `src/lib/overlay.ts` (client overlay).
 
 > **Status:** runs on **demo data**. Real Google/Microsoft OAuth connect, per-user persistence (Postgres), envelope-encrypted tokens, and incremental sync are the next steps (plan §8/§10) — not built yet.
 

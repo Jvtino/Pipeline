@@ -1,0 +1,133 @@
+#!/bin/bash
+# ============================================================================
+#  Pipeline.app — self-updating native macOS launcher.
+#
+#  First run: approve once (right-click → Open). The app then installs a copy of
+#  itself onto your Desktop with the quarantine flag removed, so from then on you
+#  just DOUBLE-CLICK the Desktop "Pipeline" icon — no Gatekeeper, no chmod. Every
+#  launch pulls the latest code from GitHub and opens the app in your browser.
+#  To STOP it: quit "Pipeline" from the Dock (right-click → Quit).
+# ============================================================================
+
+REPO_URL="https://github.com/Jvtino/Pipeline.git"
+BRANCH="claude/ui-pipeline-merge-o2duyr"   # the branch with the new UI + sync
+APP_DIR="$HOME/Pipeline"
+WEB_URL="http://localhost:5173"
+DESK_APP="$HOME/Desktop/Pipeline.app"
+LOG="$HOME/Library/Logs/PipelinePreview.log"
+mkdir -p "$HOME/Library/Logs" 2>/dev/null
+
+# ---- GUI apps launch with a bare environment: rebuild a useful PATH ---------
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.local/bin:$HOME/.volta/bin"
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" >/dev/null 2>&1
+for d in "$HOME"/.nvm/versions/node/*/bin "$HOME"/.fnm/node-versions/*/installation/bin "$HOME"/Library/Application\ Support/fnm/node-versions/*/installation/bin; do
+  [ -d "$d" ] && PATH="$d:$PATH"
+done
+export PATH
+
+exec >>"$LOG" 2>&1
+echo "=== $(date) — Pipeline launching ==="
+
+notify() { /usr/bin/osascript -e "display notification \"$1\" with title \"Pipeline\"" >/dev/null 2>&1; }
+alert()  { /usr/bin/osascript -e "display dialog \"$1\" buttons {\"OK\"} default button 1 with title \"Pipeline\" with icon caution" >/dev/null 2>&1; }
+pnpm_run() { COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack pnpm@10.33.0 "$@"; }
+
+# ---- Self-install onto the Desktop, de-quarantined --------------------------
+# (so future double-clicks of the Desktop icon never hit Gatekeeper again)
+SELF_APP="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd)"
+if [ -n "$SELF_APP" ] && [ "$SELF_APP" != "$DESK_APP" ]; then
+  rm -rf "$DESK_APP" 2>/dev/null
+  cp -R "$SELF_APP" "$DESK_APP" 2>/dev/null && echo "installed copy to Desktop"
+fi
+/usr/bin/xattr -dr com.apple.quarantine "$DESK_APP" 2>/dev/null
+
+# ---- Prerequisites ----------------------------------------------------------
+notify "Starting up… first run takes a couple of minutes."
+if ! command -v git >/dev/null 2>&1; then
+  alert "Git isn't installed yet. Open Terminal once and run:    xcode-select --install    then reopen Pipeline."
+  exit 1
+fi
+if ! command -v node >/dev/null 2>&1; then
+  alert "Node.js isn't installed. Go to https://nodejs.org, click the green LTS button to install it, then reopen Pipeline."
+  exit 1
+fi
+echo "node: $(node -v)  at $(command -v node)"
+
+# ---- Download on first run; otherwise FORCE-sync the branch -----------------
+if [ ! -d "$APP_DIR/.git" ]; then
+  if [ -e "$APP_DIR" ]; then
+    alert "A folder named Pipeline already exists in your home folder but isn't a Pipeline download. Rename or move it, then reopen Pipeline."
+    exit 1
+  fi
+  echo "cloning…"
+  git clone "$REPO_URL" "$APP_DIR" || { alert "Couldn't download Pipeline. Check your internet connection and reopen Pipeline."; exit 1; }
+fi
+cd "$APP_DIR" || { alert "Couldn't open $APP_DIR."; exit 1; }
+
+# Force this checkout ONTO the preview branch (the redesign isn't on main yet).
+if git fetch origin "$BRANCH" --quiet; then
+  git checkout -q -B "$BRANCH" "origin/$BRANCH" 2>/dev/null || git checkout -q "$BRANCH" 2>/dev/null || true
+  git reset --hard "origin/$BRANCH" --quiet 2>/dev/null
+  echo "synced to $BRANCH @ $(git rev-parse --short HEAD)"
+else
+  echo "offline — using existing copy @ $(git rev-parse --short HEAD 2>/dev/null)"
+fi
+
+# Keep the Desktop app's own launcher + icon current with the repo.
+if [ -f "$APP_DIR/launchers/mac-app/PipelinePreview" ]; then
+  cp "$APP_DIR/launchers/mac-app/PipelinePreview" "$DESK_APP/Contents/MacOS/PipelinePreview" 2>/dev/null && chmod +x "$DESK_APP/Contents/MacOS/PipelinePreview" 2>/dev/null
+  cp "$APP_DIR/launchers/mac-app/Info.plist" "$DESK_APP/Contents/Info.plist" 2>/dev/null
+  cp "$APP_DIR/build/icon.icns" "$DESK_APP/Contents/Resources/icon.icns" 2>/dev/null
+  /usr/bin/xattr -dr com.apple.quarantine "$DESK_APP" 2>/dev/null
+fi
+
+# ---- One-time local secrets so a connected mailbox + board persist ----------
+ensure_env_line() {
+  local var="$1" val="$2"
+  if ! grep -qE "^${var}=.+" .env 2>/dev/null; then
+    grep -v -E "^${var}=" .env > .env.tmp 2>/dev/null || true
+    { cat .env.tmp 2>/dev/null; echo "${var}=${val}"; } > .env
+    rm -f .env.tmp
+  fi
+}
+touch .env
+ensure_env_line PIPELINE_MASTER_KEY "$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")"
+ensure_env_line SESSION_SECRET      "$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")"
+ensure_env_line PGLITE_DIR          "$APP_DIR/.pipeline-data"
+chmod 600 .env 2>/dev/null
+set -a; . ./.env; set +a
+
+# ---- Install + build --------------------------------------------------------
+notify "Installing and building… (first run only)"
+if ! pnpm_run install --filter "@pipeline/*..."; then
+  pnpm_run install || { alert "Setup failed while installing. See the log at ~/Library/Logs/PipelinePreview.log"; exit 1; }
+fi
+pnpm_run -r --filter "./packages/*" build || { alert "Setup failed while building. See ~/Library/Logs/PipelinePreview.log"; exit 1; }
+
+# ---- Start the servers ------------------------------------------------------
+notify "Almost there — starting the app…"
+pnpm_run --filter @pipeline/api dev > "$HOME/Library/Logs/PipelinePreview-api.log" 2>&1 &
+API_PID=$!
+pnpm_run --filter @pipeline/web dev > "$HOME/Library/Logs/PipelinePreview-web.log" 2>&1 &
+WEB_PID=$!
+
+cleanup() { echo "=== stopping ==="; kill "$API_PID" "$WEB_PID" 2>/dev/null; pkill -f "tsx src/server.ts" 2>/dev/null; pkill -f "vite" 2>/dev/null; exit 0; }
+trap cleanup EXIT INT TERM
+
+# ---- Wait for both servers, then open the browser ---------------------------
+READY=""
+for _ in $(seq 1 180); do
+  if curl -fsS http://localhost:3001/api/health >/dev/null 2>&1 && curl -fsS "$WEB_URL/" >/dev/null 2>&1; then
+    READY=1; break
+  fi
+  sleep 1
+done
+if [ -n "$READY" ]; then
+  /usr/bin/open "$WEB_URL"
+  notify "Pipeline is open in your browser. From now on, use the Pipeline icon on your Desktop."
+else
+  alert "The app didn't finish starting in time. Open ~/Library/Logs/PipelinePreview-api.log to see why, then reopen Pipeline."
+fi
+
+# Keep the app running (and the servers alive) until the user quits it.
+wait

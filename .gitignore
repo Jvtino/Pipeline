@@ -16,6 +16,10 @@ node_modules/
 dist/
 config.json
 
+# Built mac preview app + local hosted-app DB
+dist-app/
+.pipeline-data/
+
 # macOS + local tooling
 .DS_Store
 **/.DS_Store

@@ -1,104 +1,106 @@
-import { useCallback, useEffect, useState } from "react";
-import type { Board, CompanyGroup, Application, Status } from "@pipeline/contracts";
+// App shell + orchestrator for the redesigned Pipeline web app.
+//
+// The server contract is untouched: we read the board from /api/applications,
+// trigger /api/sync, and start OAuth connect. Everything the warm-light redesign
+// adds beyond the 4-status board — the 7-status presentation system, manual
+// applications, "Move stage", notes, tasks, sync settings, disconnect — lives in
+// a client overlay (localStorage), layered on top of the server data.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Board } from "@pipeline/contracts";
+import type { Overlay, Plan, Screen, OverlaySettings, ViewState, AppMeta } from "./types";
+import type { UiStatus } from "./lib/status";
+import { STATUS } from "./lib/status";
+import { ensureSession, getMe, getBoard, runSync, postJson } from "./api";
+import { loadOverlay, saveOverlay, defaultOverlay } from "./lib/overlay";
+import { flattenBoard } from "./lib/derive";
+import { shortDate, syncedLabel } from "./lib/format";
+import { Sidebar, Header, Toast, StateLoading, StateError, screenTitle } from "./components";
+import type { Ctx } from "./ctx";
+import { Dashboard, Applications, Companies, Contacts, Calendar, Tasks, Statistics, Documents, Templates, Settings } from "./screens";
+import { DetailDrawer } from "./drawer";
+import { NewApplicationModal, type NewAppForm } from "./modals";
+import { Onboarding } from "./onboarding";
 
-type Plan = "free" | "pro" | "teams";
-interface Me {
-  email: string;
-  plan: Plan;
-}
-interface Nudge {
-  threadId: string;
-  company: string;
-  role: string;
-  daysSince: number;
-  suggestion: string;
-}
-interface Note {
-  id: string;
-  body: string;
-  createdAt: string;
-}
-interface Contact {
-  id: string;
-  name: string;
-  email: string | null;
-  role: string | null;
-}
-
-const STATUS_LABEL: Record<Status, string> = { applied: "Active", interview: "Interview", offer: "Offer", rejected: "Rejected" };
-const enc = (threadId: string) => encodeURIComponent(threadId);
-
-type Toast = { type: "ok" | "err"; msg: string };
-// Toast shown when the OAuth callback redirects back with ?connect=<status>.
-// `ok` additionally kicks off a sync (handled separately); any unknown status falls back to `error`.
-const CONNECT_TOASTS: { error: Toast; [status: string]: Toast } = {
-  ok: { type: "ok", msg: "Mailbox connected — syncing your applications…" },
-  unconfigured: { type: "err", msg: "That mailbox provider isn’t set up yet — add your OAuth client IDs (see DEPLOY.md)." },
-  error: { type: "err", msg: "Mailbox connection failed or was cancelled." },
+// Toast shown after the OAuth callback redirects back with ?connect=<status>.
+const CONNECT_TOASTS: Record<string, string> = {
+  ok: "Mailbox connected — syncing your applications…",
+  unconfigured: "That provider isn’t set up yet — add your OAuth client IDs (see DEPLOY.md).",
+  error: "Mailbox connection failed or was cancelled.",
 };
 
-async function ensureSession(): Promise<void> {
-  const me = await fetch("/auth/me");
-  if (me.status === 401) {
-    await fetch("/auth/dev/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "demo@pipeline.local" }) });
-  }
+function humanSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
-async function getJson<T>(url: string): Promise<T> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`${url} → ${r.status}`);
-  return r.json() as Promise<T>;
-}
-async function postJson<T>(url: string, body?: unknown): Promise<T> {
-  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
-  if (!r.ok) throw new Error(`${url} → ${r.status}`);
-  return r.json() as Promise<T>;
-}
+
+// Monotonic id so two overlay items created in the same millisecond never collide.
+let _idSeq = 0;
+const uid = (prefix: string): string => `${prefix}-${Date.now()}-${(_idSeq += 1)}`;
+
+const SCREENS: Record<Screen, (ctx: Ctx) => JSX.Element> = {
+  dashboard: Dashboard,
+  applications: Applications,
+  companies: Companies,
+  contacts: Contacts,
+  calendar: Calendar,
+  tasks: Tasks,
+  statistics: Statistics,
+  documents: Documents,
+  templates: Templates,
+  settings: Settings,
+};
 
 export function App() {
-  const [me, setMe] = useState<Me | null>(null);
+  const [nowMs] = useState(() => Date.now());
+  const [me, setMe] = useState<Plan | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
-  const [reminders, setReminders] = useState<Nudge[]>([]);
-  const [analytics, setAnalytics] = useState<{ interviewRate: number; offerRate: number } | null>(null);
-  const [selected, setSelected] = useState<Application | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [connectOpen, setConnectOpen] = useState(false);
-  const [toast, setToast] = useState<Toast | null>(null);
+  const [overlay, setOverlayState] = useState<Overlay>(() => loadOverlay());
 
-  const isPro = me?.plan === "pro" || me?.plan === "teams";
+  const [nav, setNav] = useState<Screen>("dashboard");
+  const [q, setQ] = useState("");
+  const [appTab, setAppTab] = useState<UiStatus | "all">("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [newIds, setNewIds] = useState<Set<string>>(new Set());
+
+  const [viewState, setViewState] = useState<ViewState>("loading");
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<number | null>(null);
+  // Toast carries a nonce so flashing the *same* message twice still produces a
+  // fresh state identity — otherwise React bails on the equal update and the
+  // [toast]-keyed auto-dismiss effect wouldn't re-arm the timer.
+  const [toast, setToast] = useState<{ msg: string; n: number } | null>(null);
+  const toastSeq = useRef(0);
+
+  // Persist the overlay on every change.
+  const setOverlay = useCallback((update: (o: Overlay) => Overlay) => {
+    setOverlayState((prev) => {
+      const next = update(prev);
+      saveOverlay(next);
+      return next;
+    });
+  }, []);
+
+  const flash = useCallback((msg: string) => setToast({ msg, n: (toastSeq.current += 1) }), []);
 
   const refresh = useCallback(async () => {
     await ensureSession();
-    const meRes = await getJson<{ user: Me }>("/auth/me");
-    setMe(meRes.user);
-    setBoard(await getJson<Board>("/api/applications"));
-    if (meRes.user.plan !== "free") {
-      try {
-        setReminders((await getJson<{ nudges: Nudge[] }>("/api/reminders")).nudges);
-      } catch {
-        setReminders([]);
-      }
-      try {
-        setAnalytics(await getJson<{ interviewRate: number; offerRate: number }>("/api/analytics"));
-      } catch {
-        setAnalytics(null);
-      }
-    } else {
-      setReminders([]);
-      setAnalytics(null);
-    }
+    setMe(await getMe());
+    setBoard(await getBoard());
+    setLastSync(Date.now());
   }, []);
 
+  // Initial load + post-connect (?connect=) handling.
   useEffect(() => {
     let alive = true;
     (async () => {
-      // Handle the post-connect redirect (?connect=ok|unconfigured|error) from the OAuth callback.
       const connect = new URLSearchParams(window.location.search).get("connect");
       if (connect) {
         window.history.replaceState({}, "", window.location.pathname);
-        setToast(CONNECT_TOASTS[connect] ?? CONNECT_TOASTS.error);
+        flash(CONNECT_TOASTS[connect] ?? "Mailbox connection failed or was cancelled.");
         if (connect === "ok") {
+          setOverlay((o) => ({ ...o, disconnected: false }));
           try {
             await postJson("/api/sync");
           } catch {
@@ -107,299 +109,233 @@ export function App() {
         }
       }
       await refresh();
-      if (alive) setLoading(false);
+      if (alive) setViewState("ready");
     })().catch((e: unknown) => {
       if (alive) {
-        setError(e instanceof Error ? e.message : String(e));
-        setLoading(false);
+        setViewState("error");
+        // eslint-disable-next-line no-console
+        console.error(e);
       }
     });
     return () => {
       alive = false;
     };
-  }, [refresh]);
+  }, [refresh, setOverlay, flash]);
 
   // Auto-dismiss toasts.
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 4500);
-    return () => clearTimeout(t);
+    const t = window.setTimeout(() => setToast(null), 4500);
+    return () => window.clearTimeout(t);
   }, [toast]);
 
-  async function setPlan(plan: Plan) {
-    await postJson("/auth/dev/upgrade", { plan });
-    await refresh();
-  }
+  const apps = useMemo(() => flattenBoard(board, overlay, nowMs), [board, overlay, nowMs]);
+  const email = me?.email ?? "you@gmail.com";
 
-  async function doSync() {
+  // ---- actions -------------------------------------------------------------
+  // Navigating dismisses any open drawer/modal so they don't linger over the
+  // new screen (the scrim only covers the content area, not the sidebar).
+  const goto = useCallback((s: Screen) => {
+    setNav(s);
+    setSelectedId(null);
+    setModalOpen(false);
+  }, []);
+  const openDetail = useCallback((id: string) => setSelectedId(id), []);
+  const onNewApp = useCallback(() => setModalOpen(true), []);
+
+  const flagNew = useCallback((ids: string[]) => {
+    if (!ids.length) return;
+    setNewIds((prev) => new Set([...prev, ...ids]));
+    window.setTimeout(() => setNewIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    }), 5000);
+  }, []);
+
+  const onSync = useCallback(async () => {
+    if (syncing) return;
     setSyncing(true);
+    const before = new Set(apps.map((a) => a.id));
     try {
-      const res = await postJson<{ connections: number }>("/api/sync");
-      await refresh();
-      setToast({ type: "ok", msg: res.connections ? `Synced ${res.connections} mailbox(es).` : "No mailbox connected yet — use Connect." });
+      const res = await runSync();
+      const nextBoard = await getBoard();
+      setBoard(nextBoard);
+      setLastSync(Date.now());
+      // Flag rows that appeared as a result of the sync.
+      const found = nextBoard.groups.flatMap((g) => g.applications.map((a) => a.threadId)).filter((id) => !before.has(id));
+      if (found.length) {
+        flagNew(found);
+        setNav("applications");
+        setAppTab("all");
+      }
+      flash(res.connections ? `Synced ${res.connections} mailbox(es).` : "No mailbox connected yet — connect one in Settings.");
     } catch {
-      setToast({ type: "err", msg: "Sync failed. Is a mailbox connected?" });
+      flash("Sync failed. Is a mailbox connected?");
     } finally {
       setSyncing(false);
     }
+  }, [syncing, apps, flash, flagNew]);
+
+  const setStatus = useCallback((id: string, s: UiStatus) => {
+    setOverlay((o) => ({ ...o, overrides: { ...o.overrides, [id]: s } }));
+    flash(`Moved to ${STATUS[s].label}`);
+  }, [setOverlay, flash]);
+
+  const setMeta = useCallback((id: string, patch: Partial<AppMeta>) => {
+    setOverlay((o) => ({ ...o, meta: { ...o.meta, [id]: { ...o.meta[id], ...patch } } }));
+  }, [setOverlay]);
+
+  const markNextDone = useCallback((id: string) => {
+    setOverlay((o) => ({ ...o, nextDone: { ...o.nextDone, [id]: true } }));
+    flash("Marked as done — nice work");
+  }, [setOverlay, flash]);
+
+  const addNote = useCallback((id: string, body: string) => {
+    setOverlay((o) => ({ ...o, notes: { ...o.notes, [id]: [{ body, when: "just now" }, ...(o.notes[id] ?? [])] } }));
+  }, [setOverlay]);
+
+  const toggleTask = useCallback((id: string) => {
+    setOverlay((o) => ({ ...o, doneTasks: { ...o.doneTasks, [id]: !o.doneTasks[id] } }));
+  }, [setOverlay]);
+
+  const setSetting = useCallback((patch: Partial<OverlaySettings>) => {
+    setOverlay((o) => ({ ...o, settings: { ...o.settings, ...patch } }));
+  }, [setOverlay]);
+
+  const addContact = useCallback((c: { name: string; title: string; email: string; company: string }) => {
+    setOverlay((o) => ({ ...o, contacts: [{ id: uid("c"), ...c }, ...o.contacts] }));
+    flash(`Added ${c.name}`);
+  }, [setOverlay, flash]);
+
+  const addDoc = useCallback((file: File) => {
+    const ext = (file.name.split(".").pop() ?? "").toUpperCase().slice(0, 3) || "DOC";
+    setOverlay((o) => ({
+      ...o,
+      docs: [{ id: uid("d"), name: file.name, type: ext.startsWith("PDF") ? "PDF" : ext, size: humanSize(file.size), date: shortDate(new Date(nowMs).toISOString().slice(0, 10)) }, ...o.docs],
+    }));
+    flash(`Added ${file.name}`);
+  }, [setOverlay, flash, nowMs]);
+
+  const exportCsv = useCallback(() => {
+    const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const header = ["Company", "Role", "Status", "Source", "Applied", "Last activity", "Next step"];
+    const lines = [header, ...apps.map((a) => [a.company, a.role, STATUS[a.status].label, a.source, a.appliedIso ?? "", a.lastActivityIso ?? "", a.nextStep])];
+    const csv = lines.map((r) => r.map((c) => cell(String(c))).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pipeline.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    flash("Exported your applications to CSV.");
+  }, [apps, flash]);
+
+  const deleteAll = useCallback(() => {
+    if (!window.confirm("Clear all your local Pipeline data (manual apps, notes, status changes, tasks)? Your inbox and server records are untouched.")) return;
+    const fresh = defaultOverlay();
+    saveOverlay(fresh);
+    setOverlayState(fresh);
+    setSelectedId(null);
+    flash("Your local data was cleared.");
+  }, [flash]);
+
+  const disconnect = useCallback(() => {
+    setOverlay((o) => ({ ...o, disconnected: true }));
+    setSelectedId(null);
+  }, [setOverlay]);
+
+  const copyTemplate = useCallback((title: string, snippet: string) => {
+    try {
+      void navigator.clipboard?.writeText(snippet);
+    } catch {
+      /* clipboard unavailable */
+    }
+    flash(`Copied “${title}” to your clipboard.`);
+  }, [flash]);
+
+  const saveNewApp = useCallback((f: NewAppForm) => {
+    const id = uid("m");
+    const createdIso = new Date(nowMs).toISOString().slice(0, 10);
+    setOverlay((o) => ({
+      ...o,
+      manual: [...o.manual, { id, company: f.company, role: f.role, status: f.status, dateLabel: f.dateLabel, source: f.source, createdIso }],
+      meta: { ...o.meta, [id]: { workType: f.workType ?? null, location: f.location?.trim() || null, salary: f.salary ?? null, resumeVersion: f.resumeVersion?.trim() || null } },
+    }));
+    setModalOpen(false);
+    setNav("applications");
+    setAppTab("all");
+    flagNew([id]);
+    flash(`Added ${f.company}`);
+  }, [setOverlay, nowMs, flagNew, flash]);
+
+  const ctx: Ctx = {
+    apps,
+    overlay,
+    newIds,
+    nowMs,
+    me,
+    email,
+    q,
+    appTab,
+    setAppTab,
+    goto,
+    openDetail,
+    onNewApp,
+    onSync,
+    setStatus,
+    setMeta,
+    markNextDone,
+    addNote,
+    toggleTask,
+    setSetting,
+    addContact,
+    addDoc,
+    exportCsv,
+    deleteAll,
+    disconnect,
+    copyTemplate,
+  };
+
+  // ---- onboarding takeover -------------------------------------------------
+  if (overlay.disconnected) {
+    return (
+      <div className="app">
+        <Onboarding onDemo={() => setOverlay((o) => ({ ...o, disconnected: false }))} />
+        {toast && <Toast msg={toast.msg} />}
+      </div>
+    );
   }
+
+  const selected = selectedId ? apps.find((a) => a.id === selectedId) ?? null : null;
+  const ScreenComp = SCREENS[nav];
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <span className="logo" aria-hidden>
-            ▦
-          </span>{" "}
-          Pipeline
-        </div>
-        <div className="topbar-right">
-          {board && <span className="chip">{board.source} data</span>}
+      <Sidebar active={nav} onNav={goto} me={me} />
+      <main className="main">
+        <Header
+          title={screenTitle(nav)}
+          q={q}
+          onSearch={setQ}
+          email={email}
+          syncLabel={syncing ? "syncing…" : syncedLabel(lastSync)}
+          syncing={syncing}
+          onSync={onSync}
+          onNewApp={onNewApp}
+        />
 
-          <div className="connect">
-            <button className="btn" onClick={() => setConnectOpen((o) => !o)} aria-expanded={connectOpen}>
-              Connect ▾
-            </button>
-            {connectOpen && (
-              <div className="connect-menu" onMouseLeave={() => setConnectOpen(false)}>
-                <a className="connect-item" href="/auth/google/start">
-                  Connect Gmail
-                </a>
-                <a className="connect-item" href="/auth/microsoft/start">
-                  Connect Outlook
-                </a>
-                <div className="connect-note muted">Requires your OAuth client IDs (see DEPLOY.md).</div>
-              </div>
-            )}
-          </div>
+        <div className="content">{viewState === "ready" && <ScreenComp {...ctx} />}</div>
 
-          <button className="btn" onClick={() => void doSync()} disabled={syncing}>
-            {syncing ? "Syncing…" : "Sync"}
-          </button>
-
-          {me && <span className={`badge badge-${me.plan}`}>{me.plan.toUpperCase()}</span>}
-          {isPro ? (
-            <>
-              <a className="btn" href="/api/export.csv">
-                Export CSV
-              </a>
-              <button className="btn btn-ghost" onClick={() => void setPlan("free")}>
-                Downgrade
-              </button>
-            </>
-          ) : (
-            <button className="btn btn-primary" onClick={() => void setPlan("pro")}>
-              Upgrade to Pro (demo)
-            </button>
-          )}
-        </div>
-      </header>
-
-      {toast && <div className={`toast toast-${toast.type}`} role="status">{toast.msg}</div>}
-
-      <main>
-        {loading && <p className="muted center">Loading your board…</p>}
-        {error && (
-          <div className="notice error" role="alert">
-            <strong>Couldn’t reach the API.</strong> {error}
-            <div className="muted">
-              Start it with <code>pnpm --filter @pipeline/api dev</code> (port 3001).
-            </div>
-          </div>
+        {viewState === "loading" && <StateLoading />}
+        {viewState === "error" && (
+          <StateError onRetry={() => { setViewState("loading"); refresh().then(() => setViewState("ready")).catch(() => setViewState("error")); }} onCheck={() => { setViewState("ready"); setNav("settings"); }} />
         )}
 
-        {isPro && reminders.length > 0 && (
-          <section className="reminders">
-            <div className="reminders-head">
-              ⏰ <strong>{reminders.length}</strong> follow-up{reminders.length > 1 ? "s" : ""} due
-            </div>
-            <ul>
-              {reminders.slice(0, 4).map((n) => (
-                <li key={n.threadId}>
-                  <strong>{n.company}</strong> — {n.role} · {n.daysSince}d quiet
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {board && board.groups.length > 0 && (
-          <>
-            <section className="stats">
-              <Stat label="Total" value={board.counts.total} tone="total" />
-              <Stat label="Active" value={board.counts.applied} tone="applied" />
-              <Stat label="Interview" value={board.counts.interview} tone="interview" />
-              <Stat label="Offer" value={board.counts.offer} tone="offer" />
-              <Stat label="Rejected" value={board.counts.rejected} tone="rejected" />
-              {analytics && (
-                <div className="stat stat-rate">
-                  <div className="stat-value">{Math.round(analytics.interviewRate * 100)}%</div>
-                  <div className="stat-label">Interview rate</div>
-                </div>
-              )}
-            </section>
-
-            <section className="grid">
-              {board.groups.map((g) => (
-                <CompanyCard key={g.company} group={g} onSelect={setSelected} />
-              ))}
-            </section>
-          </>
-        )}
+        {selected && <DetailDrawer app={selected} ctx={ctx} onClose={() => setSelectedId(null)} />}
+        {modalOpen && <NewApplicationModal onClose={() => setModalOpen(false)} onSave={saveNewApp} />}
+        {toast && <Toast msg={toast.msg} />}
       </main>
-
-      {selected && <ApplicationPanel app={selected} isPro={isPro} onClose={() => setSelected(null)} onUpgrade={() => void setPlan("pro")} />}
-
-      <footer className="foot muted">Derived records only — company, role, status, dates &amp; a short snippet. Never your raw email.</footer>
-    </div>
-  );
-}
-
-function Stat({ label, value, tone }: { label: string; value: number; tone: Status | "total" }) {
-  return (
-    <div className={`stat stat-${tone}`}>
-      <div className="stat-value">{value}</div>
-      <div className="stat-label">{label}</div>
-    </div>
-  );
-}
-
-function StatusPill({ status }: { status: Status }) {
-  return <span className={`pill pill-${status}`}>{STATUS_LABEL[status]}</span>;
-}
-
-function Avatar({ name }: { name: string }) {
-  return (
-    <div className="avatar" aria-hidden>
-      {name.trim().charAt(0).toUpperCase() || "?"}
-    </div>
-  );
-}
-
-function CompanyCard({ group, onSelect }: { group: CompanyGroup; onSelect: (a: Application) => void }) {
-  return (
-    <article className="card">
-      <header className="card-head">
-        <Avatar name={group.company} />
-        <div className="card-title">
-          <h2>{group.company}</h2>
-          <span className="muted">
-            {group.applications.length} role{group.applications.length > 1 ? "s" : ""}
-          </span>
-        </div>
-      </header>
-      <ul className="roles">
-        {group.applications.map((a) => (
-          <li key={a.id}>
-            <button className="role role-btn" onClick={() => onSelect(a)} title="Open notes & contacts">
-              <div className="role-main">
-                <span className="role-name">{a.role}</span>
-                <span className="muted role-date">{a.lastActivity}</span>
-              </div>
-              <StatusPill status={a.status} />
-            </button>
-          </li>
-        ))}
-      </ul>
-    </article>
-  );
-}
-
-function ApplicationPanel({ app, isPro, onClose, onUpgrade }: { app: Application; isPro: boolean; onClose: () => void; onUpgrade: () => void }) {
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [noteBody, setNoteBody] = useState("");
-  const [cName, setCName] = useState("");
-  const [cEmail, setCEmail] = useState("");
-
-  const load = useCallback(async () => {
-    if (!isPro) return;
-    setNotes((await getJson<{ notes: Note[] }>(`/api/applications/${enc(app.threadId)}/notes`)).notes);
-    setContacts((await getJson<{ contacts: Contact[] }>(`/api/applications/${enc(app.threadId)}/contacts`)).contacts);
-  }, [app.threadId, isPro]);
-
-  useEffect(() => {
-    load().catch(() => {});
-  }, [load]);
-
-  async function addNote() {
-    if (!noteBody.trim()) return;
-    await postJson(`/api/applications/${enc(app.threadId)}/notes`, { body: noteBody.trim() });
-    setNoteBody("");
-    await load();
-  }
-  async function addContact() {
-    if (!cName.trim()) return;
-    await postJson(`/api/applications/${enc(app.threadId)}/contacts`, { name: cName.trim(), email: cEmail.trim() || null });
-    setCName("");
-    setCEmail("");
-    await load();
-  }
-
-  return (
-    <div className="drawer-backdrop" onClick={onClose}>
-      <aside className="drawer" onClick={(e) => e.stopPropagation()}>
-        <header className="drawer-head">
-          <div>
-            <h3>{app.company}</h3>
-            <span className="muted">
-              {app.role} · <StatusPill status={app.status} />
-            </span>
-          </div>
-          <button className="btn btn-ghost" onClick={onClose}>
-            ✕
-          </button>
-        </header>
-
-        {!isPro ? (
-          <div className="pro-cta">
-            <p>📓 Notes &amp; contacts are a Pro feature.</p>
-            <button className="btn btn-primary" onClick={onUpgrade}>
-              Upgrade to Pro (demo)
-            </button>
-          </div>
-        ) : (
-          <>
-            <section className="drawer-sec">
-              <h4>Notes</h4>
-              {notes.length === 0 && <p className="muted">No notes yet.</p>}
-              <ul className="plain">
-                {notes.map((n) => (
-                  <li key={n.id} className="note">
-                    {n.body}
-                  </li>
-                ))}
-              </ul>
-              <div className="row-form">
-                <input value={noteBody} onChange={(e) => setNoteBody(e.target.value)} placeholder="Add a note…" />
-                <button className="btn" onClick={() => void addNote()}>
-                  Add
-                </button>
-              </div>
-            </section>
-
-            <section className="drawer-sec">
-              <h4>Contacts</h4>
-              {contacts.length === 0 && <p className="muted">No contacts yet.</p>}
-              <ul className="plain">
-                {contacts.map((c) => (
-                  <li key={c.id} className="contact">
-                    <strong>{c.name}</strong>
-                    {c.email ? <span className="muted"> · {c.email}</span> : null}
-                  </li>
-                ))}
-              </ul>
-              <div className="row-form">
-                <input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Name" />
-                <input value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="Email (optional)" />
-                <button className="btn" onClick={() => void addContact()}>
-                  Add
-                </button>
-              </div>
-            </section>
-          </>
-        )}
-      </aside>
     </div>
   );
 }

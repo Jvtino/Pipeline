@@ -8,6 +8,7 @@ import {
   getMailConnectionSecret,
   updateMailConnectionSecret,
   listUserIdsWithConnections,
+  deleteDemoApplications,
   type Database,
 } from "@pipeline/db";
 import type { ProviderConfigs } from "./config";
@@ -35,6 +36,12 @@ export async function syncAllConnections(deps: SyncDeps): Promise<SyncSummary> {
   const makeSource = deps.makeSource ?? defaultSourceFactory;
   const conns = await getMailConnections(deps.db, deps.userId);
   const results: SyncSummary["results"] = [];
+
+  // Once a real mailbox is connected, drop the seeded demo applications so the
+  // board reflects the user's actual mail (idempotent — a no-op after the first).
+  if (conns.some((c) => c.provider === "google" || c.provider === "microsoft")) {
+    await deleteDemoApplications(deps.db, deps.userId);
+  }
 
   for (const c of conns) {
     if (c.provider !== "google" && c.provider !== "microsoft") continue; // IMAP isn't OAuth-synced here

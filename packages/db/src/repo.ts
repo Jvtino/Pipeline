@@ -1,6 +1,6 @@
 // Repository — the only place app code touches the tables. Encrypts mail secrets
 // on write, decrypts on read, and enforces per-user scoping on every query.
-import { and, eq } from "drizzle-orm";
+import { and, eq, like } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { encryptJson, decryptJson } from "@pipeline/crypto";
 import { boardFromApplications, type Application, type Board, type Status } from "@pipeline/contracts";
@@ -231,6 +231,15 @@ export async function listContacts(db: Database, userId: string, applicationId: 
 /** Count a user's applications (cheap existence/empty check). */
 export async function countApplications(db: Database, userId: string): Promise<number> {
   return (await getApplicationsForUser(db, userId)).length;
+}
+
+/**
+ * Remove the seeded demo applications for a user. Called once the user connects a
+ * real mailbox, so their actual synced applications replace the sample board
+ * (demo threadIds are prefixed "demo:"). Manual/synced records are untouched.
+ */
+export async function deleteDemoApplications(db: Database, userId: string): Promise<void> {
+  await db.delete(applications).where(and(eq(applications.userId, userId), like(applications.threadId, "demo:%")));
 }
 
 /** Persist a connection's incremental-sync cursor (Gmail historyId / Graph deltaLink). */

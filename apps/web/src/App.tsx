@@ -5,7 +5,7 @@
 // adds beyond the 4-status board — the 7-status presentation system, manual
 // applications, "Move stage", notes, tasks, sync settings, disconnect — lives in
 // a client overlay (localStorage), layered on top of the server data.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Board } from "@pipeline/contracts";
 import type { Overlay, Plan, Screen, OverlaySettings, ViewState } from "./types";
 import type { UiStatus } from "./lib/status";
@@ -33,6 +33,10 @@ function humanSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+// Monotonic id so two overlay items created in the same millisecond never collide.
+let _idSeq = 0;
+const uid = (prefix: string): string => `${prefix}-${Date.now()}-${(_idSeq += 1)}`;
 
 const SCREENS: Record<Screen, (ctx: Ctx) => JSX.Element> = {
   dashboard: Dashboard,
@@ -63,7 +67,11 @@ export function App() {
   const [viewState, setViewState] = useState<ViewState>("loading");
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<number | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  // Toast carries a nonce so flashing the *same* message twice still produces a
+  // fresh state identity — otherwise React bails on the equal update and the
+  // [toast]-keyed auto-dismiss effect wouldn't re-arm the timer.
+  const [toast, setToast] = useState<{ msg: string; n: number } | null>(null);
+  const toastSeq = useRef(0);
 
   // Persist the overlay on every change.
   const setOverlay = useCallback((update: (o: Overlay) => Overlay) => {
@@ -74,7 +82,7 @@ export function App() {
     });
   }, []);
 
-  const flash = useCallback((msg: string) => setToast(msg), []);
+  const flash = useCallback((msg: string) => setToast({ msg, n: (toastSeq.current += 1) }), []);
 
   const refresh = useCallback(async () => {
     await ensureSession();
@@ -192,7 +200,7 @@ export function App() {
   }, [setOverlay]);
 
   const addContact = useCallback((c: { name: string; title: string; email: string; company: string }) => {
-    setOverlay((o) => ({ ...o, contacts: [{ id: `c-${Date.now()}`, ...c }, ...o.contacts] }));
+    setOverlay((o) => ({ ...o, contacts: [{ id: uid("c"), ...c }, ...o.contacts] }));
     flash(`Added ${c.name}`);
   }, [setOverlay, flash]);
 
@@ -200,7 +208,7 @@ export function App() {
     const ext = (file.name.split(".").pop() ?? "").toUpperCase().slice(0, 3) || "DOC";
     setOverlay((o) => ({
       ...o,
-      docs: [{ id: `d-${Date.now()}`, name: file.name, type: ext.startsWith("PDF") ? "PDF" : ext, size: humanSize(file.size), date: shortDate(new Date(nowMs).toISOString().slice(0, 10)) }, ...o.docs],
+      docs: [{ id: uid("d"), name: file.name, type: ext.startsWith("PDF") ? "PDF" : ext, size: humanSize(file.size), date: shortDate(new Date(nowMs).toISOString().slice(0, 10)) }, ...o.docs],
     }));
     flash(`Added ${file.name}`);
   }, [setOverlay, flash, nowMs]);
@@ -243,7 +251,7 @@ export function App() {
   }, [flash]);
 
   const saveNewApp = useCallback((f: NewAppForm) => {
-    const id = `m-${Date.now()}`;
+    const id = uid("m");
     const createdIso = new Date(nowMs).toISOString().slice(0, 10);
     setOverlay((o) => ({ ...o, manual: [...o.manual, { id, company: f.company, role: f.role, status: f.status, dateLabel: f.dateLabel, source: f.source, createdIso }] }));
     setModalOpen(false);
@@ -285,7 +293,7 @@ export function App() {
     return (
       <div className="app">
         <Onboarding onDemo={() => setOverlay((o) => ({ ...o, disconnected: false }))} />
-        {toast && <Toast msg={toast} />}
+        {toast && <Toast msg={toast.msg} />}
       </div>
     );
   }
@@ -317,7 +325,7 @@ export function App() {
 
         {selected && <DetailDrawer app={selected} ctx={ctx} onClose={() => setSelectedId(null)} />}
         {modalOpen && <NewApplicationModal onClose={() => setModalOpen(false)} onSave={saveNewApp} />}
-        {toast && <Toast msg={toast} />}
+        {toast && <Toast msg={toast.msg} />}
       </main>
     </div>
   );

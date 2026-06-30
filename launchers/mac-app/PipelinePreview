@@ -1,0 +1,120 @@
+#!/bin/bash
+# ============================================================================
+#  Pipeline Preview.app — native macOS launcher (no Terminal, no chmod).
+#
+#  Double-click the app. It downloads the redesigned Pipeline, starts it on
+#  your Mac, and opens it in your browser. Progress shows as notifications.
+#  To STOP it: quit "Pipeline Preview" from the Dock (right-click → Quit).
+# ============================================================================
+
+REPO_URL="https://github.com/Jvtino/Pipeline.git"
+BRANCH="claude/ui-pipeline-merge-o2duyr"   # the branch with the new UI + sync
+APP_DIR="$HOME/Pipeline"
+WEB_URL="http://localhost:5173"
+LOG="$HOME/Library/Logs/PipelinePreview.log"
+mkdir -p "$HOME/Library/Logs" 2>/dev/null
+
+# ---- GUI apps launch with a bare environment: rebuild a useful PATH ---------
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.local/bin:$HOME/.volta/bin"
+# Common Node managers (nvm / fnm) install node outside the standard PATH.
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" >/dev/null 2>&1
+for d in "$HOME"/.nvm/versions/node/*/bin "$HOME"/.fnm/node-versions/*/installation/bin "$HOME"/Library/Application\ Support/fnm/node-versions/*/installation/bin; do
+  [ -d "$d" ] && PATH="$d:$PATH"
+done
+export PATH
+
+exec >>"$LOG" 2>&1
+echo "=== $(date) — Pipeline Preview starting ==="
+
+notify() { /usr/bin/osascript -e "display notification \"$1\" with title \"Pipeline Preview\"" >/dev/null 2>&1; }
+alert()  { /usr/bin/osascript -e "display dialog \"$1\" buttons {\"OK\"} default button 1 with title \"Pipeline Preview\" with icon caution" >/dev/null 2>&1; }
+pnpm_run() { COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack pnpm@10.33.0 "$@"; }
+
+# ---- Prerequisites ----------------------------------------------------------
+if ! command -v git >/dev/null 2>&1; then
+  alert "Git isn't installed yet. Open Terminal once and run:    xcode-select --install    then reopen Pipeline Preview."
+  exit 1
+fi
+if ! command -v node >/dev/null 2>&1; then
+  alert "Node.js isn't installed. Go to https://nodejs.org, click the green LTS button to install it, then reopen Pipeline Preview."
+  exit 1
+fi
+echo "node: $(node -v)  at $(command -v node)"
+
+# ---- Download on first run; otherwise sync the branch -----------------------
+notify "Starting up… the first run takes a couple of minutes."
+if [ ! -d "$APP_DIR/.git" ]; then
+  if [ -e "$APP_DIR" ]; then
+    alert "A folder named Pipeline already exists in your home folder but isn't a Pipeline download. Rename or move it, then reopen Pipeline Preview."
+    exit 1
+  fi
+  echo "cloning…"
+  git clone "$REPO_URL" "$APP_DIR" || { alert "Couldn't download Pipeline. Check your internet connection and reopen Pipeline Preview."; exit 1; }
+fi
+cd "$APP_DIR" || { alert "Couldn't open $APP_DIR."; exit 1; }
+
+git fetch origin "$BRANCH" --quiet || echo "fetch failed — using existing copy"
+if [ -z "$(git status --porcelain)" ]; then
+  git checkout -q "$BRANCH" 2>/dev/null || git checkout -q -B "$BRANCH" "origin/$BRANCH"
+  git reset --hard "origin/$BRANCH" --quiet && echo "synced to $BRANCH"
+else
+  echo "local edits present — leaving them; trying checkout"
+  git checkout -q "$BRANCH" 2>/dev/null || true
+fi
+
+# ---- One-time local secrets so a connected mailbox + board persist ----------
+ensure_env_line() {
+  local var="$1" val="$2"
+  if ! grep -qE "^${var}=.+" .env 2>/dev/null; then
+    grep -v -E "^${var}=" .env > .env.tmp 2>/dev/null || true
+    { cat .env.tmp 2>/dev/null; echo "${var}=${val}"; } > .env
+    rm -f .env.tmp
+  fi
+}
+touch .env
+ensure_env_line PIPELINE_MASTER_KEY "$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")"
+ensure_env_line SESSION_SECRET      "$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")"
+ensure_env_line PGLITE_DIR          "$APP_DIR/.pipeline-data"
+chmod 600 .env 2>/dev/null
+set -a; . ./.env; set +a
+
+# ---- Install + build --------------------------------------------------------
+notify "Installing and building… (first run only)"
+if ! pnpm_run install --filter "@pipeline/*..."; then
+  pnpm_run install || { alert "Setup failed while installing. See the log at ~/Library/Logs/PipelinePreview.log"; exit 1; }
+fi
+pnpm_run -r --filter "./packages/*" build || { alert "Setup failed while building. See ~/Library/Logs/PipelinePreview.log"; exit 1; }
+
+# ---- Start the servers ------------------------------------------------------
+notify "Almost there — starting the app…"
+pnpm_run --filter @pipeline/api dev > "$HOME/Library/Logs/PipelinePreview-api.log" 2>&1 &
+API_PID=$!
+pnpm_run --filter @pipeline/web dev > "$HOME/Library/Logs/PipelinePreview-web.log" 2>&1 &
+WEB_PID=$!
+
+cleanup() {
+  echo "=== stopping ==="
+  kill "$API_PID" "$WEB_PID" 2>/dev/null
+  pkill -f "tsx src/server.ts" 2>/dev/null
+  pkill -f "vite" 2>/dev/null
+  exit 0
+}
+trap cleanup EXIT INT TERM
+
+# ---- Wait for both servers, then open the browser ---------------------------
+READY=""
+for _ in $(seq 1 180); do
+  if curl -fsS http://localhost:3001/api/health >/dev/null 2>&1 && curl -fsS "$WEB_URL/" >/dev/null 2>&1; then
+    READY=1; break
+  fi
+  sleep 1
+done
+if [ -n "$READY" ]; then
+  /usr/bin/open "$WEB_URL"
+  notify "Pipeline is open in your browser. Quit this app from the Dock to stop."
+else
+  alert "The app didn't finish starting in time. Open ~/Library/Logs/PipelinePreview-api.log to see why, then reopen Pipeline Preview."
+fi
+
+# Keep the app running (and the servers alive) until the user quits it.
+wait

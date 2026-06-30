@@ -41,12 +41,15 @@ pnpm -r --filter "./packages/*" build   # build the shared packages once
 cp .env.example .env
 ```
 
-Fill in at least a master key (so your tokens survive a restart) and a data dir:
+The local app **auto-persists** your mailbox tokens and login under `~/.pipeline`
+(override with `PIPELINE_HOME`), so you don't have to set anything here for them to
+survive a restart. You can still pin an explicit key + data dir if you prefer — and
+you **must** for a hosted/server deploy:
 
 ```bash
-# .env
-PIPELINE_MASTER_KEY=   # node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-PGLITE_DIR=.pipeline-data
+# .env  (all optional for local use — auto-managed under ~/.pipeline if unset)
+# PIPELINE_MASTER_KEY=   # node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+# PGLITE_DIR=.pipeline-data
 # Local defaults are assumed if unset:
 #   PUBLIC_URL=http://localhost:3001   (the API — used to build OAuth redirect URIs)
 #   WEB_URL=http://localhost:5173      (the web app — where you land after connecting)
@@ -64,18 +67,22 @@ Then add the provider(s) you want, from the steps below.
    - Personal Outlook/Hotmail/Live → **Personal Microsoft accounts only**.
    - A **work/school** Microsoft 365 mailbox → **Accounts in any org directory and
      personal Microsoft accounts** (and set `MS_TENANT=common` in `.env`).
-4. **Redirect URI** → platform **Web** →
+4. **Redirect URI** → platform **Public client/native (mobile & desktop)** →
    ```
    http://localhost:3001/auth/microsoft/callback
    ```
    (If you set a custom `PUBLIC_URL`, use `<PUBLIC_URL>/auth/microsoft/callback`.)
 5. **Register.** On the overview page copy the **Application (client) ID**.
-6. **API permissions → Add a permission → Microsoft Graph → Delegated** → add
+6. **Authentication → Advanced settings → Allow public client flows → Yes → Save.**
+   > Pipeline sends **no client secret** (it uses PKCE), so it must be a *public
+   > client*. Registering the redirect under the **Web** platform instead triggers a
+   > `redirect_uri is not valid` / "client secret required" error.
+7. **API permissions → Add a permission → Microsoft Graph → Delegated** → add
    **`Mail.Read`** (plus `offline_access`, `email`, `openid` — usually already there).
    No admin consent needed for a personal account.
-7. Leave it a **public client** — *no client secret*. Pipeline uses PKCE.
 
-Put it in `.env`:
+Save it with **`connect-outlook.command`** (double-click, paste the client ID — no
+terminal needed), or put it in `.env`:
 ```bash
 MS_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 # MS_TENANT=common     # only if it's a work/school account
@@ -86,17 +93,22 @@ MS_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 1. <https://console.cloud.google.com> → create a project.
 2. **APIs & Services → Library** → enable the **Gmail API**.
 3. **APIs & Services → OAuth consent screen** → **External** → fill the basics →
-   add the scope **`https://www.googleapis.com/auth/gmail.readonly`** → under
-   **Test users**, add your own Gmail address. (While the app is "Testing" you can
-   use it immediately; public launch later needs Google verification + a CASA
-   security assessment for this restricted scope.)
+   add the scope **`https://www.googleapis.com/auth/gmail.readonly`** → then
+   **Publish app** so the status reads **In production**.
+   > **Don't leave it in "Testing"** — Google expires the sign-in after **7 days**,
+   > which is the weekly reconnect. **In production** stays connected (just use it
+   > once every 6 months). You don't need to finish verification for personal use;
+   > you'll click through an "unverified app" warning once (**Advanced → Go to
+   > Pipeline**). A public launch later needs Google verification + a CASA security
+   > assessment for this restricted scope.
 4. **APIs & Services → Credentials → Create credentials → OAuth client ID →
    Web application.**
 5. **Authorized redirect URIs** → add:
    ```
    http://localhost:3001/auth/google/callback
    ```
-6. Copy the **Client ID** and **Client secret** into `.env`:
+6. Copy the **Client ID** and **Client secret** — save them with
+   **`connect-google.command`** (double-click, paste both), or put them in `.env`:
 ```bash
 GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxxxxxxx
@@ -161,7 +173,7 @@ keep the board fresh without clicking.
 | Provider error: **redirect_uri mismatch** | The redirect URI registered with Google/Microsoft must exactly equal `<PUBLIC_URL>/auth/<provider>/callback` (default `http://localhost:3001/...`). |
 | Outlook sign-in says the account isn't supported | It's a work/school account — set `MS_TENANT=common` (or `organizations`) and register the app with the broad account type. |
 | Sync result: **reauth required** | The refresh token expired/was revoked — click **Connect** again. (Google returns a refresh token because we request `access_type=offline&prompt=consent`.) |
-| Tokens gone after restarting the API | Set a real `PIPELINE_MASTER_KEY` and `PGLITE_DIR` (or `DATABASE_URL`) in `.env` — the dev fallback key is ephemeral. |
+| Tokens gone after restarting the API | The local app now auto-persists them under `~/.pipeline` (override with `PIPELINE_HOME`). They only reset if you set `PIPELINE_LOCAL=false` or run a hosted deploy without pinning `PIPELINE_MASTER_KEY` + `PGLITE_DIR`/`DATABASE_URL`. |
 
 ---
 

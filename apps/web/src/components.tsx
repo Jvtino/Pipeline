@@ -1,6 +1,7 @@
 // Shared presentational components for the redesigned shell: sidebar, header,
 // status pills, avatars, the dashboard donut + trend chart, toast, and the
 // loading / empty / error state overlays. Colors come from lib/status + avatar.
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { Screen, Plan } from "./types";
 import { STATUS, STATUS_ORDER, type UiStatus } from "./lib/status";
@@ -27,6 +28,7 @@ import {
   IconCheck,
   IconCloudOff,
   IconBox,
+  IconMail,
 } from "./lib/icons";
 
 /* ---- nav config ----------------------------------------------------------- */
@@ -79,6 +81,43 @@ export function CompanyAvatar({ name, size = 32, radius = 9, font = 13 }: { name
   );
 }
 
+// A real company logo from a free service (Clearbit logo, then Google's favicon),
+// layered over the lettered monogram. The monogram is always the base, so a
+// slow, missing, or blocked logo shows the avatar — never a blank box. The logo
+// follows the sender's domain; fictional/unknown companies just keep the monogram.
+// Common mail/ATS sender subdomains stripped so the logo service resolves the
+// real site (mail.notion.so → notion.so, hire.lever.co → lever.co).
+const LOGO_PREFIX = /^(www|mail|email|e|smtp|jobs|job|careers|career|apply|applications?|recruiting|recruit|hire|hiring|talent|notifications?|no-?reply|reply|hello|team)\./;
+
+export function CompanyLogo({ name, domain, size = 42, radius = 12, font = 17 }: { name: string; domain?: string; size?: number; radius?: number; font?: number }) {
+  const host = (domain ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/[/:].*$/, "")
+    .replace(LOGO_PREFIX, "");
+  const sources = host ? [`https://logo.clearbit.com/${host}?size=128`, `https://www.google.com/s2/favicons?domain=${host}&sz=128`] : [];
+  const [tier, setTier] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const src = sources[tier];
+  return (
+    <span style={{ position: "relative", width: size, height: size, flex: "0 0 auto", display: "inline-block" }}>
+      <CompanyAvatar name={name} size={size} radius={radius} font={font} />
+      {src && (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onLoad={() => setLoaded(true)}
+          onError={() => { setLoaded(false); setTier((t) => t + 1); }}
+          style={{ position: "absolute", inset: 0, width: size, height: size, borderRadius: radius, objectFit: "contain", background: "#fff", border: "1px solid rgba(34,31,26,.08)", opacity: loaded ? 1 : 0, transition: "opacity .15s" }}
+        />
+      )}
+    </span>
+  );
+}
+
 export function PersonAvatar({ name, company, size = 46, round = true }: { name: string; company?: string; size?: number; round?: boolean }) {
   const t = tintFor(company ?? name);
   return (
@@ -105,6 +144,26 @@ export function PersonAvatar({ name, company, size = 46, round = true }: { name:
 export function Sidebar({ active, onNav, me }: { active: Screen; onNav: (s: Screen) => void; me: Plan | null }) {
   const email = me?.email ?? "you@gmail.com";
   const name = (email.split("@")[0] ?? "you").replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const [connectOpen, setConnectOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Close the connect popover on an outside click or Escape.
+  useEffect(() => {
+    if (!connectOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setConnectOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConnectOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [connectOpen]);
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -119,13 +178,36 @@ export function Sidebar({ active, onNav, me }: { active: Screen; onNav: (s: Scre
           </button>
         ))}
       </nav>
-      <div className="userchip">
-        <span className="userchip-avatar">{(name[0] || "A").toUpperCase()}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="userchip-name">{name || "You"}</div>
-          <div className="userchip-email">{email}</div>
-        </div>
-        <IconChevronRight size={16} color="#b3ab9e" stroke={2} />
+      <div className="userchip-wrap" ref={wrapRef}>
+        {connectOpen && (
+          <div className="connect-pop" role="menu" aria-label="Connect your email">
+            <div className="connect-pop-title">Connect your email</div>
+            <div className="connect-pop-sub">Read-only — we store derived records, never your raw mail.</div>
+            <a className="connect-pop-btn" href="/auth/google/start" role="menuitem">
+              <IconMail size={17} color="#c06a57" />
+              Connect Gmail
+            </a>
+            <a className="connect-pop-btn" href="/auth/microsoft/start" role="menuitem">
+              <IconMail size={17} color="#6c7d96" />
+              Connect Outlook
+            </a>
+          </div>
+        )}
+        <button
+          type="button"
+          className={`userchip${connectOpen ? " open" : ""}`}
+          onClick={() => setConnectOpen((o) => !o)}
+          aria-haspopup="menu"
+          aria-expanded={connectOpen}
+          title="Connect your email"
+        >
+          <span className="userchip-avatar">{(name[0] || "A").toUpperCase()}</span>
+          <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+            <div className="userchip-name">{name || "You"}</div>
+            <div className="userchip-email">{email}</div>
+          </div>
+          <IconChevronRight size={16} color="#b3ab9e" stroke={2} className={`chev${connectOpen ? " chev-open" : ""}`} />
+        </button>
       </div>
     </aside>
   );

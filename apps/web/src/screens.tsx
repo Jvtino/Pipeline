@@ -27,7 +27,7 @@ import {
   type PerfRow,
 } from "./lib/derive";
 import { MONTHS } from "./lib/format";
-import { CompanyAvatar, PersonAvatar, StatusPill, Donut, TrendChart, CountChip } from "./components";
+import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip } from "./components";
 import { IconBolt, IconChevronRight, IconSearch, IconMail, IconDownload, IconPlus, IconShield, IconCheck } from "./lib/icons";
 
 const CARD = "card card-pad";
@@ -63,11 +63,6 @@ export function Dashboard(ctx: Ctx) {
   const thisM = trend.counts[trend.counts.length - 1] ?? 0;
   const lastM = trend.counts[trend.counts.length - 2] ?? 0;
   const totalDelta = lastM ? { pct: Math.round(((thisM - lastM) / lastM) * 100) } : undefined;
-  // PDF's "best dashboard stats" — effort, action, and what's working
-  const vol = volumeStats(apps, nowMs);
-  const timing = timingStats(apps, nowMs);
-  const bestSrc = sourcePerformance(apps).best;
-  const bestRole = rolePerformance(apps).best;
 
   return (
     <div>
@@ -107,15 +102,6 @@ export function Dashboard(ctx: Ctx) {
         <StatCard label="Offers" value={counts.offer} color="#1f7a52" sub="in play" />
         <StatCard label="Rejected" value={counts.rejected} color="#a85544" sub={`${pct(counts.rejected)}% of total`} />
         <StatCard label="No Response" value={counts.no_response} color="#857a64" sub={`${pct(counts.no_response)}% awaiting reply`} />
-      </div>
-
-      {/* PDF "best dashboard stats": effort · action · what's working */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 13, marginTop: 13 }}>
-        <VolTile value={String(vol.thisWeek)} label="This week" sub="applications" delta={vol.lastWeek ? vol.thisWeek - vol.lastWeek : undefined} />
-        <VolTile value={String(timing.followUpsDue)} label="Follow-ups due" sub="quiet 7+ days" color={timing.followUpsDue ? "#9a6a16" : undefined} />
-        <VolTile small value={bestSrc ? bestSrc.key : "—"} label="Best source" sub={bestSrc ? `${Math.round(bestSrc.interviewRate * 100)}% interview` : "needs data"} color="#1f7a52" />
-        <VolTile small value={bestRole ? bestRole.key : "—"} label="Best role" sub={bestRole ? `${Math.round(bestRole.responseRate * 100)}% reply` : "needs data"} />
-        <VolTile value={timing.medianResponseDays == null ? "—" : String(timing.medianResponseDays)} label="Avg reply time" sub={timing.medianResponseDays == null ? "no replies yet" : "days (median)"} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 14, marginTop: 14 }}>
@@ -270,7 +256,7 @@ export function Companies(ctx: Ctx) {
         return (
           <div key={c.company} className="card hover-border" style={{ padding: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-              <CompanyAvatar name={c.company} size={42} radius={12} font={17} />
+              <CompanyLogo name={c.company} domain={c.domain} size={42} radius={12} font={17} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ font: "650 14.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.company}</div>
                 <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)" }}>{c.sub}</div>
@@ -485,6 +471,43 @@ export function Statistics(ctx: Ctx) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* A1 — highlights (moved off the dashboard, redesigned with an extra context line each) */}
+      <div className="hl-row">
+        <HighlightCard
+          accent="#2a4a40"
+          label="This week"
+          value={String(vol.thisWeek)}
+          unit="apps"
+          delta={vol.lastWeek ? vol.thisWeek - vol.lastWeek : undefined}
+          context={`${vol.thisMonth} this month · ~${vol.perWeek}/wk pace`}
+        />
+        <HighlightCard
+          accent={timing.followUpsDue ? "#9a6a16" : "#3f7363"}
+          label="Follow-ups due"
+          value={String(timing.followUpsDue)}
+          context={timing.noResponse14 ? `${timing.noResponse14} silent 14+ days` : "you’re on top of it"}
+        />
+        <HighlightCard
+          accent="#1f7a52"
+          label="Best source"
+          value={src.best ? src.best.key : "—"}
+          context={src.best ? `${Math.round(src.best.interviewRate * 100)}% interview · ${Math.round(src.best.responseRate * 100)}% reply` : "needs more data"}
+        />
+        <HighlightCard
+          accent="#3f7363"
+          label="Best role"
+          value={role.best ? role.best.key : "—"}
+          context={role.best ? `${Math.round(role.best.responseRate * 100)}% reply · ${Math.round(role.best.interviewRate * 100)}% interview` : "needs more data"}
+        />
+        <HighlightCard
+          accent="#6c7d96"
+          label="Reply time"
+          value={timing.medianResponseDays == null ? "—" : String(timing.medianResponseDays)}
+          unit={timing.medianResponseDays == null ? "" : "d median"}
+          context={timing.medianInterviewDays == null ? "no interviews yet" : `${timing.medianInterviewDays}d to interview`}
+        />
       </div>
 
       {/* A2 — volume & momentum */}
@@ -717,6 +740,26 @@ function Takeaway({ children }: { children: ReactNode }) {
   );
 }
 
+// A richer, redesigned metric card for the Statistics "Highlights" band (the
+// stats that used to sit on the dashboard, now with an extra context line).
+function HighlightCard({ accent, label, value, unit, delta, context }: { accent: string; label: string; value: string; unit?: string; delta?: number; context: string }) {
+  const numeric = /^[\d.]+$/.test(value);
+  return (
+    <div style={{ position: "relative", overflow: "hidden", background: "var(--card)", border: "1px solid var(--card-border)", borderRadius: 14, padding: "15px 16px 14px 18px", boxShadow: "var(--card-shadow)" }}>
+      <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: accent, opacity: 0.85 }} />
+      <div style={{ font: "600 10px var(--mono)", letterSpacing: ".05em", textTransform: "uppercase", color: "var(--faint)" }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 9, minWidth: 0 }}>
+        <span title={value} style={{ font: `700 ${numeric ? 29 : 17}px/1 var(--sans)`, letterSpacing: "-.02em", color: accent, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</span>
+        {unit ? <span style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", flex: "0 0 auto" }}>{unit}</span> : null}
+        {delta != null && delta !== 0 && (
+          <span style={{ font: "600 11px var(--mono)", color: delta > 0 ? "#1f7a52" : "#a85544", marginLeft: "auto", flex: "0 0 auto" }}>{delta > 0 ? "↑" : "↓"}{Math.abs(delta)}</span>
+        )}
+      </div>
+      <div style={{ font: "500 11.5px/1.4 var(--sans)", color: "var(--text-3)", marginTop: 8 }}>{context}</div>
+    </div>
+  );
+}
+
 function PerfTable({ rows, keyHeader, best, worst }: { rows: PerfRow[]; keyHeader: string; best?: PerfRow | null; worst?: PerfRow | null }) {
   const grid = "1.5fr .8fr .8fr .7fr .7fr .9fr";
   const head: CSSProperties = { font: "600 10px var(--mono)", letterSpacing: ".04em", textTransform: "uppercase", color: "var(--faint)", textAlign: "right" };
@@ -851,33 +894,124 @@ export function DocBadge({ type, big = true }: { type: string; big?: boolean }) 
    TEMPLATES (static message templates)
    ========================================================================== */
 const TEMPLATES = [
-  { title: "Follow-up nudge", purpose: "When a company has gone quiet", snippet: "Hi [name], just following up on my application for [role] — still very excited about the team and the work…" },
-  { title: "Thank-you after interview", purpose: "Send within 24h of an interview", snippet: "Hi [name], thank you for taking the time today. I really enjoyed our conversation about [topic] and…" },
-  { title: "Reschedule request", purpose: "Politely move an interview", snippet: "Hi [name], something has come up and I was hoping we could find another time for [round]. I’m free…" },
-  { title: "Accept the offer", purpose: "Formally accept", snippet: "Hi [name], I’m thrilled to accept the [role] offer at [company]. Thank you for the trust — I can’t wait to…" },
-  { title: "Decline politely", purpose: "Turn one down gracefully", snippet: "Hi [name], thank you so much for the offer. After careful thought I’ve decided to pursue another path…" },
-  { title: "Withdraw application", purpose: "Bow out of a process", snippet: "Hi [name], I wanted to let you know I’m withdrawing my application for [role]. I appreciate your time…" },
+  {
+    title: "Follow-up nudge",
+    purpose: "When a company has gone quiet",
+    body: "Hi [name],\n\nI wanted to follow up on my application for the [role] position — I'm still very excited about the team and the work you're doing. If there's an update on the timeline, or anything else you need from me, I'd love to hear it.\n\nThank you for your time,\n[your name]",
+  },
+  {
+    title: "Thank-you after interview",
+    purpose: "Send within 24h of an interview",
+    body: "Hi [name],\n\nThank you for taking the time to meet today. I really enjoyed our conversation about [topic], and it left me even more excited about the [role] and the team. Please don't hesitate to reach out if there's anything else I can share.\n\nBest,\n[your name]",
+  },
+  {
+    title: "Reschedule request",
+    purpose: "Politely move an interview",
+    body: "Hi [name],\n\nSomething has come up and I want to be sure I can give our [round] interview my full attention. Would it be possible to find another time? I'm free [days/times], but I'm happy to work around your schedule.\n\nApologies for any inconvenience, and thank you for understanding.\n\nBest,\n[your name]",
+  },
+  {
+    title: "Accept the offer",
+    purpose: "Formally accept",
+    body: "Hi [name],\n\nI'm thrilled to formally accept the [role] offer at [company]. Thank you for the opportunity and for the trust the team has placed in me — I can't wait to get started.\n\nPlease let me know what you need from me next on paperwork and a start date.\n\nWith appreciation,\n[your name]",
+  },
+  {
+    title: "Decline politely",
+    purpose: "Turn one down gracefully",
+    body: "Hi [name],\n\nThank you so much for the offer, and for the time everyone spent with me through the process. After careful thought, I've decided to pursue a different path that's a closer fit for me right now.\n\nIt was a genuine pleasure getting to know the team, and I hope our paths cross again.\n\nWarm regards,\n[your name]",
+  },
+  {
+    title: "Withdraw application",
+    purpose: "Bow out of a process",
+    body: "Hi [name],\n\nI wanted to let you know that I'm withdrawing my application for the [role] position. After some reflection I've decided it isn't the right fit at this time.\n\nI appreciate the time you and the team invested, and I hope we might connect again down the road.\n\nBest,\n[your name]",
+  },
 ];
 
+const TEMPLATE_EDITS_KEY = "pipeline.templateEdits";
+function loadTemplateEdits(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(TEMPLATE_EDITS_KEY) || "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+const tplPrimaryBtn: CSSProperties = { flex: 1, textAlign: "center", padding: 9, background: "var(--primary)", color: "var(--on-primary)", border: "none", borderRadius: 9, font: "600 12.5px var(--sans)", cursor: "pointer" };
+const tplGhostBtn: CSSProperties = { padding: "9px 14px", background: "#fff", border: "1px solid rgba(34,31,26,.14)", borderRadius: 9, font: "600 12.5px var(--sans)", color: "var(--text-3)", cursor: "pointer" };
+
 export function Templates(ctx: Ctx) {
+  // User edits persist locally (overlay-style) so a tweaked template sticks.
+  const [edits, setEdits] = useState<Record<string, string>>(loadTemplateEdits);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+
+  const persist = (next: Record<string, string>) => {
+    setEdits(next);
+    try {
+      localStorage.setItem(TEMPLATE_EDITS_KEY, JSON.stringify(next));
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  const saveEdit = (title: string) => {
+    persist({ ...edits, [title]: draft });
+    setEditing(null);
+  };
+  const resetEdit = (title: string) => {
+    const next = { ...edits };
+    delete next[title];
+    persist(next);
+    setEditing(null);
+  };
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
-      {TEMPLATES.map((tp) => (
-        <div key={tp.title} className="card hover-border" style={{ padding: 17, display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(42,74,64,.1)", display: "grid", placeItems: "center", flex: "0 0 auto" }}>
-              <IconMail size={16} color="#2a4a40" />
-            </span>
-            <div style={{ font: "650 14px var(--sans)" }}>{tp.title}</div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16 }}>
+      {TEMPLATES.map((tp) => {
+        const body = edits[tp.title] ?? tp.body;
+        const isEditing = editing === tp.title;
+        const edited = edits[tp.title] != null;
+        return (
+          <div key={tp.title} className="card hover-border" style={{ padding: 20, display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(42,74,64,.1)", display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+                <IconMail size={16} color="#2a4a40" />
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ font: "650 14px var(--sans)" }}>{tp.title}</div>
+                <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", marginTop: 1 }}>{tp.purpose}</div>
+              </div>
+              {edited && <span style={{ font: "600 9.5px var(--mono)", letterSpacing: ".06em", color: "#9a6a16", background: "#f8f1e8", padding: "2px 7px", borderRadius: 5, flex: "0 0 auto" }}>EDITED</span>}
+            </div>
+
+            {isEditing ? (
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                autoFocus
+                style={{ marginTop: 14, padding: "13px 14px", minHeight: 200, resize: "vertical", background: "#fffdf9", border: "1px solid rgba(42,74,64,.4)", borderRadius: 10, font: "400 12.5px/1.6 var(--sans)", color: "#3f3a33", outline: "none", flex: 1 }}
+              />
+            ) : (
+              <div style={{ font: "400 12.5px/1.6 var(--sans)", color: "#5f5a51", marginTop: 14, padding: "14px 15px", background: "#f6f1e8", borderRadius: 10, whiteSpace: "pre-wrap", flex: 1 }}>{body}</div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+              {isEditing ? (
+                <>
+                  <button onClick={() => saveEdit(tp.title)} style={tplPrimaryBtn}>Save</button>
+                  <button onClick={() => setEditing(null)} style={tplGhostBtn}>Cancel</button>
+                  {edited && (
+                    <button onClick={() => resetEdit(tp.title)} style={tplGhostBtn} title="Restore the original wording">Reset</button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button onClick={() => ctx.copyTemplate(tp.title, body)} style={tplPrimaryBtn}>Use template</button>
+                  <button onClick={() => { setDraft(body); setEditing(tp.title); }} style={tplGhostBtn}>Edit</button>
+                </>
+              )}
+            </div>
           </div>
-          <div style={{ font: "500 12px var(--sans)", color: "var(--muted-2)", marginTop: 8 }}>{tp.purpose}</div>
-          <div style={{ font: "400 12px/1.55 var(--sans)", color: "#7a7468", marginTop: 11, padding: "11px 12px", background: "#f6f1e8", borderRadius: 10, flex: 1 }}>{tp.snippet}</div>
-          <div style={{ display: "flex", gap: 8, marginTop: 13 }}>
-            <button onClick={() => ctx.copyTemplate(tp.title, tp.snippet)} style={{ flex: 1, textAlign: "center", padding: 8, background: "var(--primary)", color: "var(--on-primary)", border: "none", borderRadius: 9, font: "600 12px var(--sans)", cursor: "pointer" }}>Use template</button>
-            <button onClick={() => ctx.copyTemplate(tp.title, tp.snippet)} style={{ padding: "8px 12px", background: "#fff", border: "1px solid rgba(34,31,26,.14)", borderRadius: 9, font: "600 12px var(--sans)", color: "var(--text-3)", cursor: "pointer" }}>Edit</button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

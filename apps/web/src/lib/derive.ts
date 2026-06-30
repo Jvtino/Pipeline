@@ -252,6 +252,7 @@ export function trendSeries(apps: UiApplication[], nowMs: number): { labels: str
 
 export interface CompanyCardData {
   company: string;
+  domain: string;
   sub: string;
   topStatus: UiStatus;
   dots: UiStatus[];
@@ -269,6 +270,7 @@ export function companyCards(apps: UiApplication[]): CompanyCardData[] {
     const first = roles[0] as UiApplication;
     return {
       company: first.company,
+      domain: roles.find((r) => r.companyDomain)?.companyDomain ?? "",
       sub: `${roles.length} role${roles.length > 1 ? "s" : ""}`,
       topStatus: first.status,
       dots: roles.map((r) => r.status),

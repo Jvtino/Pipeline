@@ -2,8 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Pipeline Preview</string>
-  <key>CFBundleDisplayName</key><string>Pipeline Preview</string>
+  <key>CFBundleName</key><string>Pipeline</string>
+  <key>CFBundleDisplayName</key><string>Pipeline</string>
   <key>CFBundleIdentifier</key><string>com.pipeline.preview</string>
   <key>CFBundleVersion</key><string>1.0</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>

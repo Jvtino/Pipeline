@@ -10,10 +10,24 @@ import type { MailSource, FetchResult } from "./engine";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+// A generous SUPERSET query — it only narrows what we fetch (so we don't pull the
+// whole mailbox). The authoritative relevance decision is the shared
+// looksLikeJobApplication() gate in the engine, identical for every provider, so
+// this must not pre-exclude anything that gate would keep. Covers ATS senders
+// (which carry no keywords) plus application-context phrases.
 const GMAIL_Q =
-  'in:anywhere newer_than:1y (subject:(application OR applying OR interview OR ' +
-  'candidacy OR recruiting OR position OR offer) OR "thank you for applying" ' +
-  'OR "your application" OR "received your application")';
+  "in:anywhere newer_than:1y (" +
+  "from:greenhouse.io OR from:greenhouse-mail.io OR from:hire.lever.co OR from:lever.co OR " +
+  "from:myworkday.com OR from:myworkdayjobs.com OR from:workday.com OR from:icims.com OR " +
+  "from:ashbyhq.com OR from:smartrecruiters.com OR from:workable.com OR from:jobvite.com OR " +
+  "from:bamboohr.com OR from:taleo.net OR from:successfactors.com OR from:indeed.com OR " +
+  "from:linkedin.com OR from:ziprecruiter.com OR from:glassdoor.com OR " +
+  '"thank you for applying" OR "your application" OR "received your application" OR ' +
+  '"application has been" OR "applying for" OR "applying to" OR "applied to" OR ' +
+  '"your candidacy" OR "schedule an interview" OR "interview invitation" OR ' +
+  '"offer of employment" OR "move forward with your application" OR "unfortunately, after" OR ' +
+  'subject:(application OR applying OR interview OR candidacy OR recruiting OR "job application")' +
+  ")";
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 

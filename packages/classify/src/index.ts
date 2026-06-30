@@ -79,13 +79,17 @@ export function detectStatus(text: string | null | undefined): Status | null {
 
 // High-precision application-context phrases (deliberately avoids bare
 // "offer"/"role"/"interview" to dodge marketing/transactional false positives).
+// Pairs with detectStatus() — which already covers offer/reject/interview/applied
+// wording — to add the "this is an application at all" signals it doesn't model.
 const JOB_APPLICATION_RE =
-  /\b(thank(?:s| you) for (?:applying|your application|your interest in (?:the|our|this))|your (?:job )?application|received your application|application (?:has been |was |is )?(?:received|submitted|under review|reviewed)|appl(?:ied|ying) (?:for|to)\b|job application|candidacy|candidate for (?:the |this )?(?:role|position)|recruit(?:er|ing|ment)|talent (?:acquisition|team|partner|community)|hiring (?:team|manager|committee)|(?:phone|technical|video|onsite|on-site|first|final)[ -](?:screen|interview|round)|interview (?:invitation|invite|request|with (?:the|our) team)|(?:would|we(?:'?d| would)) like to (?:schedule|invite|interview|set up a (?:call|time))|offer of employment|offer letter|moving forward with your (?:application|candidacy)|next steps? in (?:the|your) (?:application|process|interview))\b/i;
+  /\b(thank(?:s| you) for (?:applying|your application|your interest in (?:the|our|this|joining|working))|appreciate your (?:interest|application)|your (?:job )?application|received your (?:application|cv|resume)|application (?:has been |was |is )?(?:received|submitted|under review|reviewed|on file)|application (?:id|number|reference|status|portal)|appl(?:ied|ying) (?:for|to)\b|job application|candidacy|candidate (?:for|portal|profile|experience)|recruit(?:er|ing|ment)|talent (?:acquisition|team|partner|community|network)|hiring (?:team|manager|committee|process)|(?:phone|technical|video|onsite|on-site|first|final|hiring)[ -](?:screen|interview|round|manager)|(?:coding|technical|online|skills?) assessment|take[- ]?home (?:assignment|exercise|test)|interview (?:invitation|invite|request|loop|with (?:the|our) team)|(?:would|we(?:'?d| would)) like to (?:schedule|invite|interview|move you)|schedule (?:a|an|your) (?:interview|screen|conversation)|availability (?:for|to) (?:a |an |the )?(?:interview|screen|chat|conversation)|offer of employment|offer letter|pleased to (?:offer|extend)|extend(?:ing)? (?:you )?an offer|moving forward with your (?:application|candidacy)|next steps? (?:in|on) (?:the|your) (?:application|process|interview|candidacy)|regret to inform|not (?:be )?(?:moving|proceeding) forward with your|position (?:has been|is now) filled)\b/i;
 
 /**
  * Whether a thread looks like a real job application (so it belongs on the board).
- * True if any message is decisively classifiable, the sender is a known ATS, or
- * the subject/body carries clear application-context language.
+ * This is the SINGLE relevance decision applied to every inbox (Gmail + Outlook):
+ * the sync engine runs it on each fetched thread regardless of provider. True if
+ * the sender is a known ATS, any message is decisively classifiable, or the
+ * subject/body carries clear application-context language.
  */
 export function looksLikeJobApplication(thread: Pick<Thread, "domain" | "subject" | "messages">): boolean {
   if (isAtsDomain(thread.domain)) return true;
@@ -170,7 +174,7 @@ function isStopCompany(s: string | null | undefined): boolean {
   return STOP_COMPANY_RE.test(String(s || "").trim());
 }
 
-function acceptCompany(s: string | null | undefined): string | null {
+export function acceptCompany(s: string | null | undefined): string | null {
   const c = cleanCompanyName(s);
   if (!c || c.length < 2) return null;
   if (isStopCompany(c) || isPlatformWord(c)) return null;

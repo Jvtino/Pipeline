@@ -33,9 +33,14 @@ type Toast = { type: "ok" | "err"; msg: string };
 // `ok` additionally kicks off a sync (handled separately); any unknown status falls back to `error`.
 const CONNECT_TOASTS: { error: Toast; [status: string]: Toast } = {
   ok: { type: "ok", msg: "Mailbox connected — syncing your applications…" },
-  unconfigured: { type: "err", msg: "That mailbox provider isn’t set up yet — add your OAuth client IDs (see DEPLOY.md)." },
+  unconfigured: { type: "err", msg: "That mailbox provider isn’t set up yet — add your OAuth client IDs (see EMAIL-SETUP.md)." },
   error: { type: "err", msg: "Mailbox connection failed or was cancelled." },
 };
+
+// Friendly name for a sync result's provider, used in reconnect prompts.
+const providerLabel = (p: string): string => (p === "google" ? "Gmail" : p === "microsoft" ? "Outlook" : p);
+// A sync result error means the stored token can no longer be refreshed → reconnect.
+const isReauthError = (msg: string | undefined): boolean => /reauth|invalid_grant|expired|revoked/i.test(msg ?? "");
 
 async function ensureSession(): Promise<void> {
   const me = await fetch("/auth/me");
@@ -134,9 +139,21 @@ export function App() {
   async function doSync() {
     setSyncing(true);
     try {
-      const res = await postJson<{ connections: number }>("/api/sync");
+      const res = await postJson<{ connections: number; results?: { provider: string; error?: string }[] }>("/api/sync");
       await refresh();
-      setToast({ type: "ok", msg: res.connections ? `Synced ${res.connections} mailbox(es).` : "No mailbox connected yet — use Connect." });
+      const failed = (res.results ?? []).filter((r) => r.error);
+      const reauth = failed.filter((r) => isReauthError(r.error));
+      if (reauth.length > 0) {
+        const who = [...new Set(reauth.map((r) => providerLabel(r.provider)))].join(" & ");
+        const tip = reauth.some((r) => r.provider === "google")
+          ? " (Publish your Google app to “In production” so this stops recurring — see EMAIL-SETUP.md.)"
+          : "";
+        setToast({ type: "err", msg: `${who} needs reconnecting — use Connect ▾.${tip}` });
+      } else if (failed.length > 0) {
+        setToast({ type: "err", msg: `Sync issue: ${failed[0]?.error ?? "unknown error"}` });
+      } else {
+        setToast({ type: "ok", msg: res.connections ? `Synced ${res.connections} mailbox(es).` : "No mailbox connected yet — use Connect." });
+      }
     } catch {
       setToast({ type: "err", msg: "Sync failed. Is a mailbox connected?" });
     } finally {
@@ -168,7 +185,7 @@ export function App() {
                 <a className="connect-item" href="/auth/microsoft/start">
                   Connect Outlook
                 </a>
-                <div className="connect-note muted">Requires your OAuth client IDs (see DEPLOY.md).</div>
+                <div className="connect-note muted">One-time setup per provider — see EMAIL-SETUP.md.</div>
               </div>
             )}
           </div>

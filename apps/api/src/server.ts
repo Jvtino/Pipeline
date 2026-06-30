@@ -29,14 +29,20 @@ import {
 
 export interface ServerOptions {
   transport?: HttpTransport; // injected in tests; defaults to real fetch
+  // Local single-user mode (the desktop launcher): persist the master key,
+  // session secret and DB to ~/.pipeline so connected mailboxes survive a
+  // restart. Defaults to off, so tests stay ephemeral + isolated. Hosted
+  // deployments leave this off and supply the secrets/DATABASE_URL via env.
+  local?: boolean;
 }
 
 export async function buildServer(opts: ServerOptions = {}) {
+  const local = opts.local ?? false;
   const app = Fastify({ logger: true });
   app.register(cors, { origin: true });
 
-  const store = await initStore();
-  const masterKey = resolveMasterKey();
+  const store = await initStore(local);
+  const masterKey = resolveMasterKey(local);
   const configs = loadProviderConfigs(process.env);
   app.addHook("onClose", async () => {
     await store.close();
@@ -54,7 +60,7 @@ export async function buildServer(opts: ServerOptions = {}) {
   });
 
   // Resolve the authenticated user from the session cookie on every request.
-  const sessionSecret = resolveSessionSecret();
+  const sessionSecret = resolveSessionSecret(local);
   app.addHook("preHandler", async (req) => {
     const user = verifySession(sessionSecret, readCookie(req, SESSION_COOKIE));
     if (user) (req as RequestWithUser).user = user;
@@ -134,10 +140,16 @@ export async function buildServer(opts: ServerOptions = {}) {
 const isDirectRun = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
 if (isDirectRun) {
   const port = Number(process.env.PORT ?? 3001);
-  buildServer()
+  // Local single-user run (the double-click launcher): no managed Postgres →
+  // persist secrets + DB to ~/.pipeline so connected mailboxes survive a restart.
+  // A hosted deploy sets DATABASE_URL, which keeps this off (and can opt out
+  // explicitly with PIPELINE_LOCAL=false).
+  const local = !process.env.DATABASE_URL && process.env.PIPELINE_LOCAL !== "false";
+  buildServer({ local })
     .then((app) =>
       app.listen({ port, host: "0.0.0.0" }).then(() => {
         app.log.info(`Pipeline API ready on http://localhost:${port}/api/applications`);
+        if (local) app.log.info("Local mode: mailboxes + session persist in ~/.pipeline (set PIPELINE_HOME to change).");
       }),
     )
     .catch((err) => {

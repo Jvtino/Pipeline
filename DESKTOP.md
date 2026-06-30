@@ -57,11 +57,21 @@ cp config.example.json config.json     # config.json is git-ignored
 ### Google (Gmail)
 1. **console.cloud.google.com** → create a project
 2. **APIs & Services → Library** → enable **Gmail API**
-3. **OAuth consent screen** → External → fill basics → **Add test users**
-   (add the Gmail addresses you'll connect; up to 100, no verification needed)
+3. **OAuth consent screen** → External → fill basics → **Publish app** so the
+   status reads **In production**.
+   > Leaving it in **Testing** makes Google **expire your sign-in after 7 days**,
+   > forcing a weekly reconnect. *In production* keeps it connected. You don't need
+   > to finish verification for personal use — you'll just click through an
+   > "unverified app" warning once (**Advanced → Go to Pipeline**).
 4. **Credentials → Create credentials → OAuth client ID → Desktop app**
 5. Copy the **Client ID** and **Client secret** → `config.json` →
    `google.clientId` / `google.clientSecret`
+
+> Running the **web app** (the double-click launcher) instead of this native build?
+> The setup is the same idea but the Google client is a **Web application** with
+> redirect `http://localhost:3001/auth/google/callback`, and you save the values
+> with `connect-google.command` / `connect-outlook.command`. Full walkthrough:
+> **[EMAIL-SETUP.md](EMAIL-SETUP.md)**.
 
 ### Any other provider (IMAP) — no config needed
 In the app, choose **any other mailbox**, enter your address + an **app password**

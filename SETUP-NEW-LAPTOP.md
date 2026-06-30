@@ -40,9 +40,17 @@ icon on every run.
 ## Your private credentials (not on GitHub, by design)
 
 Your Google/Microsoft sign-in secrets are **never** uploaded to GitHub. To connect
-your mailbox on the new Mac, double-click **`connect-google.command`** (in the
-downloaded `Pipeline` folder in your Home folder) and follow the prompts — same as
-before. See `GOOGLE-VERIFICATION.md` / `WEB-OAUTH.md` for details.
+your mailboxes on the new Mac, double-click **`connect-google.command`** (Gmail) and
+**`connect-outlook.command`** (Outlook) in the downloaded `Pipeline` folder in your
+Home folder, and follow the prompts — same as before.
+
+First-time setup of those Google/Microsoft credentials (which you do once, then
+reuse) is in **[EMAIL-SETUP.md](EMAIL-SETUP.md)** — including the one-time
+"publish to production" step that keeps Gmail from disconnecting every week.
+
+> Your **connected mailboxes and data** also persist between launches now (saved
+> under `~/.pipeline`), so day-to-day you never reconnect — only a brand-new
+> computer needs the credentials re-entered.
 
 ## Everyday use
 

@@ -52,6 +52,17 @@ See `.env.example`. Required in prod: `PIPELINE_MASTER_KEY`, `DATABASE_URL`.
 To connect real mailboxes: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, `MS_CLIENT_ID`,
 `PUBLIC_URL`, `WEB_URL`. For billing: `BILLING_WEBHOOK_SECRET` and the license keys.
 
+The OAuth **redirect URIs** to register with each provider are
+`<PUBLIC_URL>/auth/google/callback` and `<PUBLIC_URL>/auth/microsoft/callback`
+(locally, `PUBLIC_URL` defaults to `http://localhost:3001`). A friendly,
+end-user walkthrough — including Google's one-time *publish to production* step —
+is in [`EMAIL-SETUP.md`](../EMAIL-SETUP.md).
+
+> **Running locally without `DATABASE_URL`/`PIPELINE_MASTER_KEY`?** The API runs in
+> single-user **local mode**: it persists the DB, master key and session secret
+> under `~/.pipeline` (override with `PIPELINE_HOME`) so connected mailboxes survive
+> restarts. Set `PIPELINE_LOCAL=false` to force the old ephemeral dev behavior.
+
 ## 5. Endpoints
 
 | Method | Path | Notes |

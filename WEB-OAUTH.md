@@ -38,8 +38,13 @@ You can also pass them as env vars: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, 
 ### Google (Gmail)
 1. <https://console.cloud.google.com/> → create a project.
 2. **APIs & Services → Enable APIs** → enable **Gmail API**.
-3. **OAuth consent screen** → External → add the **`gmail.readonly`** scope → add your
-   Google account as a **Test user** (while the app is unverified).
+3. **OAuth consent screen** → External → add the **`gmail.readonly`** scope → then
+   **Publish app** so the status is **In production**.
+   > Don't just add yourself as a *Test user*: in **Testing**, Google **expires
+   > your sign-in after 7 days**, so you'd have to reconnect weekly. **In
+   > production** stays connected. You don't need to finish verification for
+   > personal use — you'll click through an "unverified app" warning once
+   > (**Advanced → Go to Pipeline**).
 4. **Credentials → Create credentials → OAuth client ID → Web application.**
 5. Add an **Authorized redirect URI**:
    ```
@@ -51,10 +56,14 @@ You can also pass them as env vars: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, 
 ### Microsoft (Outlook / Hotmail / Live)
 1. <https://entra.microsoft.com/> → **App registrations → New registration**.
 2. Supported account types: **Personal Microsoft accounts** (consumers).
-3. **Redirect URI** → platform **Web** →
+3. **Authentication → Add a platform → Mobile and desktop applications** →
+   add a **custom redirect URI**:
    ```
    http://localhost:8000/auth/microsoft/callback
    ```
+   then **Advanced settings → Allow public client flows → Yes → Save**.
+   (Pipeline sends no client secret, so it must be a *public client* — registering
+   the redirect under the **Web** platform causes a `redirect_uri is not valid` error.)
 4. **API permissions** → Microsoft Graph → Delegated → **Mail.Read** (+ `offline_access`, `email`, `openid`).
 5. Copy the **Application (client) ID** into `config.json`. No secret needed (PKCE public client).
 

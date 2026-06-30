@@ -5,6 +5,7 @@
 // (verify the provider's session token in the preHandler instead of our cookie).
 import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { loadOrCreateLocalSecrets } from "./local-state";
 
 export const SESSION_COOKIE = "pipeline_session";
 const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -21,10 +22,17 @@ interface SessionPayload extends AuthUser {
 
 export type RequestWithUser = FastifyRequest & { user?: AuthUser };
 
-/** Session signing secret from env, or an ephemeral dev key (sessions won't survive a restart). */
-export function resolveSessionSecret(): string {
+/**
+ * Session signing secret.
+ *   - SESSION_SECRET set                 → use it.
+ *   - else `local` (single-user desktop) → a STABLE key persisted under ~/.pipeline,
+ *                                           so you stay signed in across restarts.
+ *   - else (tests)                       → an ephemeral key (with a warning).
+ */
+export function resolveSessionSecret(local = false): string {
   const s = process.env.SESSION_SECRET;
   if (s) return s;
+  if (local) return loadOrCreateLocalSecrets().sessionSecret;
   // eslint-disable-next-line no-console
   console.warn("[pipeline] SESSION_SECRET not set — using an EPHEMERAL dev key; sessions reset on restart.");
   return randomBytes(32).toString("base64");

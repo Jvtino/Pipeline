@@ -29,7 +29,13 @@ interface ProviderDef {
   extraAuth: Record<string, string>;
 }
 
-const MS_TENANT = "consumers"; // personal Microsoft accounts (outlook/live/hotmail)
+// Which Microsoft sign-in authority to use:
+//   "consumers"     — personal accounts only (outlook/live/hotmail) — the default
+//   "common"        — personal AND work/school accounts
+//   "organizations" — work/school only
+//   "<tenant-guid>" — a single specific org
+// Override with MS_TENANT when connecting a work/school mailbox.
+const MS_TENANT = process.env.MS_TENANT || "consumers";
 
 export const PROVIDERS: Record<ProviderId, ProviderDef> = {
   google: {

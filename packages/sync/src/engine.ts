@@ -3,7 +3,7 @@
 // and upserts derived records, then advances the cursor. This is O(changes), not
 // O(mailbox) — the fix for the full-rescan path (plan §8). First sync (no cursor)
 // does a backfill; every sync after is a delta.
-import { threadsToApplications } from "@pipeline/classify";
+import { threadsToApplications, looksLikeJobApplication } from "@pipeline/classify";
 import type { Thread } from "@pipeline/contracts";
 import { upsertApplications, saveCursor, getCursor, type Database } from "@pipeline/db";
 
@@ -20,6 +20,7 @@ export interface MailSource {
 export interface SyncResult {
   cursor: string;
   fetched: number; // threads returned by the source
+  relevant: number; // threads that look like job applications (kept)
   upserted: number; // derived records written
 }
 
@@ -30,8 +31,12 @@ export async function runSync(
 ): Promise<SyncResult> {
   const prev = (await getCursor(db, params.connectionId)) ?? undefined;
   const { threads, cursor } = await params.source.fetch({ cursor: prev });
-  const apps = threadsToApplications(threads);
+  // Keep only genuine job-application threads. Sources that pre-filter (Gmail's
+  // search query) pass through; sources that don't (Graph's inbox delta hands us
+  // the WHOLE inbox) are gated here so non-job mail never reaches the board.
+  const relevant = threads.filter(looksLikeJobApplication);
+  const apps = threadsToApplications(relevant);
   if (apps.length) await upsertApplications(db, params.userId, apps);
   await saveCursor(db, params.connectionId, cursor);
-  return { cursor, fetched: threads.length, upserted: apps.length };
+  return { cursor, fetched: threads.length, relevant: relevant.length, upserted: apps.length };
 }

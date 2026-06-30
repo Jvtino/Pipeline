@@ -69,6 +69,36 @@ export function detectStatus(text: string | null | undefined): Status | null {
 }
 
 /* ============================================================================
+   RELEVANCE GATE
+   "Is this thread a job application at all?" — needed because some sources hand
+   us a whole inbox (Microsoft Graph's inbox delta has no server-side keyword
+   filter, unlike the Gmail search query). Without this gate, statusForThread()
+   would label EVERY thread "applied" and the board would fill with non-job mail.
+   Bias: precise enough not to flood, broad enough not to miss real applications.
+   ========================================================================== */
+
+// High-precision application-context phrases (deliberately avoids bare
+// "offer"/"role"/"interview" to dodge marketing/transactional false positives).
+const JOB_APPLICATION_RE =
+  /\b(thank(?:s| you) for (?:applying|your application|your interest in (?:the|our|this))|your (?:job )?application|received your application|application (?:has been |was |is )?(?:received|submitted|under review|reviewed)|appl(?:ied|ying) (?:for|to)\b|job application|candidacy|candidate for (?:the |this )?(?:role|position)|recruit(?:er|ing|ment)|talent (?:acquisition|team|partner|community)|hiring (?:team|manager|committee)|(?:phone|technical|video|onsite|on-site|first|final)[ -](?:screen|interview|round)|interview (?:invitation|invite|request|with (?:the|our) team)|(?:would|we(?:'?d| would)) like to (?:schedule|invite|interview|set up a (?:call|time))|offer of employment|offer letter|moving forward with your (?:application|candidacy)|next steps? in (?:the|your) (?:application|process|interview))\b/i;
+
+/**
+ * Whether a thread looks like a real job application (so it belongs on the board).
+ * True if any message is decisively classifiable, the sender is a known ATS, or
+ * the subject/body carries clear application-context language.
+ */
+export function looksLikeJobApplication(thread: Pick<Thread, "domain" | "subject" | "messages">): boolean {
+  if (isAtsDomain(thread.domain)) return true;
+  const subject = thread.subject ?? "";
+  if (JOB_APPLICATION_RE.test(subject)) return true;
+  for (const m of thread.messages ?? []) {
+    const text = `${subject} ${m.body ?? ""}`;
+    if (detectStatus(text) || JOB_APPLICATION_RE.test(text)) return true;
+  }
+  return false;
+}
+
+/* ============================================================================
    COMPANY RESOLUTION
    ========================================================================== */
 

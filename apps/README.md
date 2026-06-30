@@ -12,7 +12,11 @@ The hosted product from `docs/Pipeline-Transformation-Plan.md`, in progress. Two
   kept in a client-side `localStorage` overlay — the server contract is untouched. See
   `src/lib/derive.ts` (board → screens) and `src/lib/overlay.ts` (client overlay).
 
-> **Status:** runs on **demo data**. Real Google/Microsoft OAuth connect, per-user persistence (Postgres), envelope-encrypted tokens, and incremental sync are the next steps (plan §8/§10) — not built yet.
+> **Status:** runs on **demo data** out of the box, and can connect a **real
+> mailbox** — Google/Microsoft OAuth (PKCE), per-user persistence, envelope-encrypted
+> tokens, a relevance-gated incremental sync, and demo data cleared on first connect
+> are all wired. Connecting Gmail/Outlook needs **your** OAuth client IDs + consent:
+> see **[../CONNECT-MAILBOX.md](../CONNECT-MAILBOX.md)**.
 
 ## Run it locally
 

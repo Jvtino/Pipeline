@@ -85,4 +85,19 @@ describe("incremental sync engine", () => {
     expect(await getCursor(h.db, "conn1")).toBe("h2");
     expect((await getBoardForUser(h.db, "u1", "live")).counts.total).toBe(1);
   });
+
+  it("filters out non-job mail from a whole-inbox source (the Graph/Outlook case)", async () => {
+    const newsletter: Thread = {
+      threadId: "t-news",
+      domain: "news.substack.com",
+      subject: "This week in tech",
+      messages: [{ date: "2026-01-01", from: "editor@news.substack.com", body: "The top 10 stories you missed this week." }],
+    };
+    const source = new FakeSource([{ threads: [acmeThread("thank you for applying"), newsletter], cursor: "h1" }]);
+    const r = await runSync(h.db, { userId: "u1", connectionId: "conn1", source });
+    expect(r.fetched).toBe(2); // both threads came from the source
+    expect(r.relevant).toBe(1); // only the job thread survived the relevance gate
+    expect(r.upserted).toBe(1);
+    expect((await getBoardForUser(h.db, "u1", "live")).counts.total).toBe(1);
+  });
 });

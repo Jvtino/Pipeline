@@ -7,7 +7,7 @@
 // a client overlay (localStorage), layered on top of the server data.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Board } from "@pipeline/contracts";
-import type { Overlay, Plan, Screen, OverlaySettings, ViewState } from "./types";
+import type { Overlay, Plan, Screen, OverlaySettings, ViewState, AppMeta } from "./types";
 import type { UiStatus } from "./lib/status";
 import { STATUS } from "./lib/status";
 import { ensureSession, getMe, getBoard, runSync, postJson } from "./api";
@@ -182,6 +182,10 @@ export function App() {
     flash(`Moved to ${STATUS[s].label}`);
   }, [setOverlay, flash]);
 
+  const setMeta = useCallback((id: string, patch: Partial<AppMeta>) => {
+    setOverlay((o) => ({ ...o, meta: { ...o.meta, [id]: { ...o.meta[id], ...patch } } }));
+  }, [setOverlay]);
+
   const markNextDone = useCallback((id: string) => {
     setOverlay((o) => ({ ...o, nextDone: { ...o.nextDone, [id]: true } }));
     flash("Marked as done — nice work");
@@ -253,7 +257,11 @@ export function App() {
   const saveNewApp = useCallback((f: NewAppForm) => {
     const id = uid("m");
     const createdIso = new Date(nowMs).toISOString().slice(0, 10);
-    setOverlay((o) => ({ ...o, manual: [...o.manual, { id, company: f.company, role: f.role, status: f.status, dateLabel: f.dateLabel, source: f.source, createdIso }] }));
+    setOverlay((o) => ({
+      ...o,
+      manual: [...o.manual, { id, company: f.company, role: f.role, status: f.status, dateLabel: f.dateLabel, source: f.source, createdIso }],
+      meta: { ...o.meta, [id]: { workType: f.workType ?? null, location: f.location?.trim() || null, salary: f.salary ?? null, resumeVersion: f.resumeVersion?.trim() || null } },
+    }));
     setModalOpen(false);
     setNav("applications");
     setAppTab("all");
@@ -276,6 +284,7 @@ export function App() {
     onNewApp,
     onSync,
     setStatus,
+    setMeta,
     markNextDone,
     addNote,
     toggleTask,

@@ -16,6 +16,7 @@ export function defaultOverlay(): Overlay {
     docs: [],
     doneTasks: {},
     nextDone: {},
+    meta: {},
     settings: { autoSync: "30 min", syncOnOpen: true },
     disconnected: false,
   };
@@ -39,6 +40,7 @@ export function loadOverlay(): Overlay {
       docs: parsed.docs ?? base.docs,
       doneTasks: parsed.doneTasks ?? base.doneTasks,
       nextDone: parsed.nextDone ?? base.nextDone,
+      meta: parsed.meta ?? base.meta,
     };
   } catch {
     return defaultOverlay();

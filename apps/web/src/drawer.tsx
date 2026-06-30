@@ -1,9 +1,9 @@
 // Application detail drawer — right-docked, slides in over a scrim. Tabs:
 // Overview (next step + move stage + progress timeline + details), Notes,
 // Contacts, Files. Notes/contacts/files read & write the client overlay.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Ctx } from "./ctx";
-import type { UiApplication } from "./types";
+import type { UiApplication, WorkType } from "./types";
 import { STATUS, MOVE_STAGES, type UiStatus } from "./lib/status";
 import { CompanyAvatar, PersonAvatar, StatusPill } from "./components";
 import { DocBadge } from "./screens";
@@ -156,6 +156,28 @@ export function DetailDrawer({ app, ctx, onClose }: { app: UiApplication; ctx: C
                 <DetailBox label="Last activity" value={app.lastActivityIso ? app.dateLabel : "—"} />
                 <DetailBox label="Stage" value={s.label} />
               </div>
+
+              {/* editable tracking fields — power the work-type / location / salary / résumé stats */}
+              <div className="eyebrow" style={{ margin: "20px 0 11px" }}>Tracking</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11 }}>
+                <MetaField label="Work type">
+                  <select className="select" style={{ padding: "8px 10px", fontSize: 13 }} value={app.workType ?? ""} onChange={(e) => ctx.setMeta(app.id, { workType: (e.target.value || null) as WorkType | null })}>
+                    <option value="">—</option>
+                    <option value="remote">Remote</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="onsite">Onsite</option>
+                  </select>
+                </MetaField>
+                <MetaField label="Location">
+                  <input className="input" style={{ padding: "8px 10px", fontSize: 13 }} defaultValue={app.location ?? ""} onBlur={(e) => ctx.setMeta(app.id, { location: e.target.value.trim() || null })} placeholder="—" />
+                </MetaField>
+                <MetaField label="Salary">
+                  <input className="input" style={{ padding: "8px 10px", fontSize: 13 }} inputMode="numeric" defaultValue={app.salary == null ? "" : String(app.salary)} onBlur={(e) => { const n = parseInt(e.target.value.replace(/[^0-9]/g, ""), 10); ctx.setMeta(app.id, { salary: Number.isFinite(n) ? n : null }); }} placeholder="—" />
+                </MetaField>
+                <MetaField label="Résumé version">
+                  <input className="input" style={{ padding: "8px 10px", fontSize: 13 }} defaultValue={app.resumeVersion ?? ""} onBlur={(e) => ctx.setMeta(app.id, { resumeVersion: e.target.value.trim() || null })} placeholder="—" />
+                </MetaField>
+              </div>
             </div>
           )}
 
@@ -235,6 +257,15 @@ function DetailBox({ label, value }: { label: string; value: string }) {
     <div style={{ padding: "12px 14px", background: "var(--card)", border: "1px solid rgba(34,31,26,.07)", borderRadius: 11 }}>
       <div style={{ font: "500 11px var(--sans)", color: "var(--muted-2)" }}>{label}</div>
       <div style={{ font: "600 13px var(--sans)", marginTop: 3 }}>{value}</div>
+    </div>
+  );
+}
+
+function MetaField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <div style={{ font: "500 11px var(--sans)", color: "var(--muted-2)", marginBottom: 4 }}>{label}</div>
+      {children}
     </div>
   );
 }

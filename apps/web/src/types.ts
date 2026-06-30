@@ -19,6 +19,18 @@ export type Screen =
 export type ViewState = "ready" | "loading" | "empty" | "error";
 export type DetailTab = "overview" | "notes" | "contacts" | "files";
 
+export type WorkType = "remote" | "hybrid" | "onsite";
+
+/** Optional, user-entered tracking fields for any application (server or manual).
+ *  Keyed by application id in the overlay so it annotates synced apps too — and
+ *  powers the work-type / location / salary / resume-version statistics. */
+export interface AppMeta {
+  workType?: WorkType | null;
+  location?: string | null;
+  salary?: number | null; // annual, user's currency
+  resumeVersion?: string | null;
+}
+
 export interface Plan {
   email: string;
   plan: "free" | "pro" | "teams";
@@ -39,6 +51,11 @@ export interface UiApplication {
   nextStep: string; // human next action, or "—"
   snippet: string;
   manual: boolean;
+  // user-entered tracking fields (from the overlay) — optional
+  workType: WorkType | null;
+  location: string | null;
+  salary: number | null;
+  resumeVersion: string | null;
 }
 
 export interface NoteEntry {
@@ -86,6 +103,7 @@ export interface Overlay {
   docs: DocEntry[];
   doneTasks: Record<string, boolean>;
   nextDone: Record<string, boolean>;
+  meta: Record<string, AppMeta>; // per-application tracking fields, keyed by app id
   settings: OverlaySettings;
   disconnected: boolean;
 }

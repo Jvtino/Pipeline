@@ -1,6 +1,6 @@
 // The single context object App builds and hands to every screen/drawer/modal.
 // Keeps prop-threading flat: screens destructure what they need.
-import type { Screen, Plan, Overlay, UiApplication, OverlaySettings } from "./types";
+import type { Screen, Plan, Overlay, UiApplication, OverlaySettings, AppMeta } from "./types";
 import type { UiStatus } from "./lib/status";
 
 export interface Ctx {
@@ -24,6 +24,7 @@ export interface Ctx {
 
   // mutations (persisted to the localStorage overlay)
   setStatus: (id: string, s: UiStatus) => void;
+  setMeta: (id: string, patch: Partial<AppMeta>) => void;
   markNextDone: (id: string) => void;
   addNote: (id: string, body: string) => void;
   toggleTask: (id: string) => void;

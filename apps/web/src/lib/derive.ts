@@ -43,6 +43,15 @@ function nextStepFor(status: UiStatus, daysSince: number | null): string {
 /** Flatten the server board (+ manual overlay apps) into presentation rows. */
 export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: number): UiApplication[] {
   const apps: UiApplication[] = [];
+  const metaFor = (id: string) => {
+    const m = overlay.meta[id];
+    return {
+      workType: m?.workType ?? null,
+      location: m?.location ?? null,
+      salary: m?.salary ?? null,
+      resumeVersion: m?.resumeVersion ?? null,
+    };
+  };
 
   for (const group of board?.groups ?? []) {
     for (const a of group.applications) {
@@ -69,6 +78,7 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
         nextStep: nextStepFor(status, daysSince),
         snippet: a.snippet,
         manual: a.manual ?? false,
+        ...metaFor(a.threadId),
       });
     }
   }
@@ -91,6 +101,7 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
       nextStep: nextStepFor(status, 0),
       snippet: "",
       manual: true,
+      ...metaFor(m.id),
     });
   }
 
@@ -435,4 +446,226 @@ export function computeStats(apps: UiApplication[], nowMs: number): Stats {
   const activePipeline = apps.filter((a) => ["applied", "screening", "interview", "offer"].includes(a.status)).length;
 
   return { responseRate, replied, sent, health, markerPct, funnel, advance, biggestLeak, sources, aging, timeToFirstReply, ghostRate, activePipeline };
+}
+
+/* ============================================================================
+   EXTENDED STATISTICS  (from the "Job Application Tracker Stats" spec)
+   Everything below is derived from the real board + the per-app tracking meta.
+   Definitions, consistent across sections:
+     applied/"sent"  = any application that isn't just wishlisted
+     responses       = got any reply (screening | interview | offer | rejected)
+     interviews      = reached interview or beyond (interview | offer)
+     offers          = offer
+   ========================================================================== */
+
+const REPLIED_SET: UiStatus[] = ["screening", "interview", "offer", "rejected"];
+const INTERVIEW_SET: UiStatus[] = ["interview", "offer"];
+const isSent = (a: UiApplication): boolean => a.status !== "wishlist";
+const isReplied = (a: UiApplication): boolean => REPLIED_SET.includes(a.status);
+const isInterview = (a: UiApplication): boolean => INTERVIEW_SET.includes(a.status);
+const isOffer = (a: UiApplication): boolean => a.status === "offer";
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_MS = 86_400_000;
+
+export interface VolumeStats {
+  total: number; // applied (non-wishlist)
+  thisWeek: number;
+  lastWeek: number;
+  thisMonth: number;
+  perWeek: number; // average applications/week over the active span
+  bestDay: { label: string; count: number } | null;
+  streakDays: number;
+  wishlist: number; // saved-not-applied backlog
+}
+
+export function volumeStats(apps: UiApplication[], nowMs: number): VolumeStats {
+  const sent = apps.filter((a) => isSent(a) && a.appliedIso);
+  const age = (iso: string) => daysBetween(nowMs, parseIso(iso));
+  const within = (lo: number, hi: number) =>
+    sent.filter((a) => { const d = age(a.appliedIso as string); return d >= lo && d < hi; }).length;
+
+  let perWeek = 0;
+  if (sent.length) {
+    const times = sent.map((a) => parseIso(a.appliedIso as string)).filter((n) => !Number.isNaN(n));
+    if (times.length) {
+      const spanWeeks = Math.max(1, (nowMs - Math.min(...times)) / (7 * DAY_MS));
+      perWeek = Math.round((sent.length / spanWeeks) * 10) / 10;
+    }
+  }
+
+  const dow = new Array<number>(7).fill(0);
+  for (const a of sent) {
+    const d = new Date(parseIso(a.appliedIso as string));
+    if (!Number.isNaN(d.getTime())) { const i = d.getUTCDay(); dow[i] = (dow[i] ?? 0) + 1; }
+  }
+  let bestDay: VolumeStats["bestDay"] = null;
+  { let bi = -1, bc = 0; dow.forEach((c, i) => { if (c > bc) { bc = c; bi = i; } }); if (bi >= 0) bestDay = { label: DOW[bi] as string, count: bc }; }
+
+  const appliedDays = new Set(sent.map((a) => a.appliedIso));
+  let streakDays = 0;
+  for (let i = 0; i < 366; i++) {
+    const iso = new Date(nowMs - i * DAY_MS).toISOString().slice(0, 10);
+    if (appliedDays.has(iso)) streakDays += 1;
+    else if (i === 0) continue; // today may simply not be done yet
+    else break;
+  }
+
+  return {
+    total: sent.length,
+    thisWeek: within(0, 7),
+    lastWeek: within(7, 14),
+    thisMonth: within(0, 30),
+    perWeek,
+    bestDay,
+    streakDays,
+    wishlist: apps.filter((a) => a.status === "wishlist").length,
+  };
+}
+
+export interface PerfRow {
+  key: string;
+  applied: number;
+  responses: number;
+  interviews: number;
+  offers: number;
+  responseRate: number;
+  interviewRate: number;
+}
+
+function performanceBy(apps: UiApplication[], keyOf: (a: UiApplication) => string): PerfRow[] {
+  const map = new Map<string, PerfRow>();
+  for (const a of apps) {
+    if (!isSent(a)) continue;
+    const key = (keyOf(a) || "—").trim() || "—";
+    let r = map.get(key);
+    if (!r) { r = { key, applied: 0, responses: 0, interviews: 0, offers: 0, responseRate: 0, interviewRate: 0 }; map.set(key, r); }
+    r.applied += 1;
+    if (isReplied(a)) r.responses += 1;
+    if (isInterview(a)) r.interviews += 1;
+    if (isOffer(a)) r.offers += 1;
+  }
+  const rows = [...map.values()];
+  for (const r of rows) { r.responseRate = r.applied ? r.responses / r.applied : 0; r.interviewRate = r.applied ? r.interviews / r.applied : 0; }
+  rows.sort((a, b) => b.applied - a.applied);
+  return rows;
+}
+
+function bestRow(rows: PerfRow[]): PerfRow | null {
+  const meaningful = rows.filter((r) => r.applied >= 2);
+  const pool = meaningful.length ? meaningful : rows;
+  return [...pool].sort((a, b) => b.interviewRate - a.interviewRate || b.responseRate - a.responseRate || b.applied - a.applied)[0] ?? null;
+}
+function worstRow(rows: PerfRow[]): PerfRow | null {
+  const pool = rows.filter((r) => r.applied >= 3);
+  return [...pool].sort((a, b) => a.responseRate - b.responseRate || b.applied - a.applied)[0] ?? null;
+}
+
+export function sourcePerformance(apps: UiApplication[]): { rows: PerfRow[]; best: PerfRow | null } {
+  const rows = performanceBy(apps, (a) => a.source);
+  return { rows, best: bestRow(rows) };
+}
+export function rolePerformance(apps: UiApplication[]): { rows: PerfRow[]; best: PerfRow | null; worst: PerfRow | null } {
+  const rows = performanceBy(apps, (a) => a.role);
+  return { rows, best: bestRow(rows), worst: worstRow(rows) };
+}
+const WORK_LABEL: Record<string, string> = { remote: "Remote", hybrid: "Hybrid", onsite: "Onsite" };
+export function workTypePerformance(apps: UiApplication[]): PerfRow[] {
+  return performanceBy(apps.filter((a) => a.workType), (a) => WORK_LABEL[a.workType as string] ?? (a.workType as string));
+}
+export function locationPerformance(apps: UiApplication[]): PerfRow[] {
+  return performanceBy(apps.filter((a) => a.location), (a) => a.location as string);
+}
+export function resumePerformance(apps: UiApplication[]): { rows: PerfRow[]; best: PerfRow | null } {
+  const rows = performanceBy(apps.filter((a) => a.resumeVersion), (a) => a.resumeVersion as string);
+  return { rows, best: bestRow(rows) };
+}
+
+export interface CompanyInsights {
+  companiesAppliedTo: number;
+  multiple: { company: string; count: number }[];
+  bestResponders: { company: string; responseRate: number; applied: number }[];
+  neverResponded: string[];
+}
+export function companyInsights(apps: UiApplication[]): CompanyInsights {
+  const map = new Map<string, { company: string; applied: number; responses: number }>();
+  for (const a of apps) {
+    if (!isSent(a)) continue;
+    const key = a.company.toLowerCase();
+    let r = map.get(key);
+    if (!r) { r = { company: a.company, applied: 0, responses: 0 }; map.set(key, r); }
+    r.applied += 1;
+    if (isReplied(a)) r.responses += 1;
+  }
+  const rows = [...map.values()];
+  return {
+    companiesAppliedTo: rows.length,
+    multiple: rows.filter((r) => r.applied > 1).map((r) => ({ company: r.company, count: r.applied })).sort((a, b) => b.count - a.count),
+    bestResponders: rows.filter((r) => r.responses > 0).map((r) => ({ company: r.company, responseRate: r.responses / r.applied, applied: r.applied })).sort((a, b) => b.responseRate - a.responseRate).slice(0, 5),
+    neverResponded: rows.filter((r) => r.responses === 0).map((r) => r.company),
+  };
+}
+
+export interface TimingStats {
+  medianResponseDays: number | null;
+  medianRejectionDays: number | null;
+  medianInterviewDays: number | null;
+  oldestWishlistDays: number | null;
+  followUpsDue: number;
+  noResponse14: number;
+}
+export function timingStats(apps: UiApplication[], nowMs: number): TimingStats {
+  const span = (a: UiApplication) =>
+    a.appliedIso && a.lastActivityIso ? daysBetween(parseIso(a.lastActivityIso), parseIso(a.appliedIso)) : NaN;
+  const med = (arr: number[]) => median(arr.filter((d) => !Number.isNaN(d) && d >= 0));
+  const wishAges = apps
+    .filter((a) => a.status === "wishlist" && a.appliedIso)
+    .map((a) => daysBetween(nowMs, parseIso(a.appliedIso as string)))
+    .filter((d) => !Number.isNaN(d) && d >= 0);
+  const staleOpen = (minDays: number) =>
+    apps.filter((a) => (a.status === "applied" || a.status === "no_response") && a.lastActivityIso && daysBetween(nowMs, parseIso(a.lastActivityIso)) >= minDays).length;
+  return {
+    medianResponseDays: med(apps.filter(isReplied).map(span)),
+    medianRejectionDays: med(apps.filter((a) => a.status === "rejected").map(span)),
+    medianInterviewDays: med(apps.filter(isInterview).map(span)),
+    oldestWishlistDays: wishAges.length ? Math.max(...wishAges) : null,
+    followUpsDue: staleOpen(7),
+    noResponse14: staleOpen(14),
+  };
+}
+
+export interface WeekPoint { label: string; applied: number; responses: number; rate: number }
+export function responseByWeek(apps: UiApplication[], nowMs: number, weeks = 6): WeekPoint[] {
+  const out: WeekPoint[] = [];
+  for (let w = weeks - 1; w >= 0; w--) {
+    const hi = nowMs - w * 7 * DAY_MS;
+    const lo = hi - 7 * DAY_MS;
+    const inWk = apps.filter((a) => {
+      if (!isSent(a) || !a.appliedIso) return false;
+      const t = parseIso(a.appliedIso);
+      return t >= lo && t < hi;
+    });
+    const applied = inWk.length;
+    const responses = inWk.filter(isReplied).length;
+    out.push({ label: w === 0 ? "now" : `${w}w`, applied, responses, rate: applied ? responses / applied : 0 });
+  }
+  return out;
+}
+
+export interface SalaryStats {
+  count: number;
+  median: number | null;
+  min: number | null;
+  max: number | null;
+  byRole: { role: string; median: number; count: number }[];
+}
+export function salaryStats(apps: UiApplication[]): SalaryStats {
+  const withSal = apps.filter((a) => isSent(a) && typeof a.salary === "number" && (a.salary as number) > 0);
+  const vals = withSal.map((a) => a.salary as number);
+  if (!vals.length) return { count: 0, median: null, min: null, max: null, byRole: [] };
+  const byRoleMap = new Map<string, number[]>();
+  for (const a of withSal) { const arr = byRoleMap.get(a.role) ?? []; arr.push(a.salary as number); byRoleMap.set(a.role, arr); }
+  const byRole = [...byRoleMap.entries()]
+    .map(([role, arr]) => ({ role, median: median(arr) as number, count: arr.length }))
+    .sort((a, b) => b.median - a.median);
+  return { count: vals.length, median: median(vals), min: Math.min(...vals), max: Math.max(...vals), byRole };
 }

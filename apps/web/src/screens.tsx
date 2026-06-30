@@ -1,7 +1,7 @@
 // The ten content screens of the redesign. Each reads the shared Ctx (derived
 // from the real Board + overlay) and renders the warm-light design. Per-screen
 // layout uses design-system classes from styles.css plus a few inline grids.
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Ctx } from "./ctx";
 import type { UiApplication } from "./types";
 import { STATUS, STATUS_ORDER, NEW_APP_STATUSES, type UiStatus } from "./lib/status";
@@ -14,6 +14,17 @@ import {
   deriveTasks,
   calendarFor,
   computeStats,
+  volumeStats,
+  sourcePerformance,
+  rolePerformance,
+  workTypePerformance,
+  locationPerformance,
+  resumePerformance,
+  companyInsights,
+  timingStats,
+  salaryStats,
+  responseByWeek,
+  type PerfRow,
 } from "./lib/derive";
 import { MONTHS } from "./lib/format";
 import { CompanyAvatar, PersonAvatar, StatusPill, Donut, TrendChart, CountChip } from "./components";
@@ -52,6 +63,11 @@ export function Dashboard(ctx: Ctx) {
   const thisM = trend.counts[trend.counts.length - 1] ?? 0;
   const lastM = trend.counts[trend.counts.length - 2] ?? 0;
   const totalDelta = lastM ? { pct: Math.round(((thisM - lastM) / lastM) * 100) } : undefined;
+  // PDF's "best dashboard stats" — effort, action, and what's working
+  const vol = volumeStats(apps, nowMs);
+  const timing = timingStats(apps, nowMs);
+  const bestSrc = sourcePerformance(apps).best;
+  const bestRole = rolePerformance(apps).best;
 
   return (
     <div>
@@ -91,6 +107,15 @@ export function Dashboard(ctx: Ctx) {
         <StatCard label="Offers" value={counts.offer} color="#1f7a52" sub="in play" />
         <StatCard label="Rejected" value={counts.rejected} color="#a85544" sub={`${pct(counts.rejected)}% of total`} />
         <StatCard label="No Response" value={counts.no_response} color="#857a64" sub={`${pct(counts.no_response)}% awaiting reply`} />
+      </div>
+
+      {/* PDF "best dashboard stats": effort · action · what's working */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 13, marginTop: 13 }}>
+        <VolTile value={String(vol.thisWeek)} label="This week" sub="applications" delta={vol.lastWeek ? vol.thisWeek - vol.lastWeek : undefined} />
+        <VolTile value={String(timing.followUpsDue)} label="Follow-ups due" sub="quiet 7+ days" color={timing.followUpsDue ? "#9a6a16" : undefined} />
+        <VolTile small value={bestSrc ? bestSrc.key : "—"} label="Best source" sub={bestSrc ? `${Math.round(bestSrc.interviewRate * 100)}% interview` : "needs data"} color="#1f7a52" />
+        <VolTile small value={bestRole ? bestRole.key : "—"} label="Best role" sub={bestRole ? `${Math.round(bestRole.responseRate * 100)}% reply` : "needs data"} />
+        <VolTile value={timing.medianResponseDays == null ? "—" : String(timing.medianResponseDays)} label="Avg reply time" sub={timing.medianResponseDays == null ? "no replies yet" : "days (median)"} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 14, marginTop: 14 }}>
@@ -399,6 +424,18 @@ export function Tasks(ctx: Ctx) {
 export function Statistics(ctx: Ctx) {
   const s = computeStats(ctx.apps, ctx.nowMs);
   if (s.sent === 0) return <EmptyInline title="No data yet" sub="Statistics appear once you’ve applied to a few roles. Add an application or run a sync to begin." />;
+  const vol = volumeStats(ctx.apps, ctx.nowMs);
+  const src = sourcePerformance(ctx.apps);
+  const role = rolePerformance(ctx.apps);
+  const comp = companyInsights(ctx.apps);
+  const timing = timingStats(ctx.apps, ctx.nowMs);
+  const work = workTypePerformance(ctx.apps);
+  const loc = locationPerformance(ctx.apps);
+  const sal = salaryStats(ctx.apps);
+  const resume = resumePerformance(ctx.apps);
+  const wk = responseByWeek(ctx.apps, ctx.nowMs, 6);
+  const hasMeta = work.length > 0 || loc.length > 0 || sal.count > 0 || resume.rows.length > 0;
+  const dDays = (n: number | null) => (n == null ? "—" : String(n));
   const ratePct = Math.round(s.responseRate * 100);
   const healthLabel = s.health === "healthy" ? "healthy" : s.health === "ok" ? "okay" : "needs work";
   const healthColor = s.health === "healthy" ? "#1f7a52" : s.health === "ok" ? "#9a6a16" : "#a85544";
@@ -450,6 +487,16 @@ export function Statistics(ctx: Ctx) {
         </div>
       </div>
 
+      {/* A2 — volume & momentum */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 13, marginTop: 14 }}>
+        <VolTile value={String(vol.thisWeek)} label="This week" sub="applications" delta={vol.lastWeek ? vol.thisWeek - vol.lastWeek : undefined} />
+        <VolTile value={String(vol.thisMonth)} label="This month" sub="last 30 days" />
+        <VolTile value={String(vol.perWeek)} label="Per week" sub="average pace" />
+        <VolTile value={vol.bestDay ? vol.bestDay.label : "—"} label="Best day" sub={vol.bestDay ? `${vol.bestDay.count} applied` : "no pattern yet"} />
+        <VolTile value={String(vol.streakDays)} label="Day streak" sub="keep it going" color="#9a6a16" />
+        <VolTile value={String(vol.wishlist)} label="Saved" sub="not applied yet" color="#6b5e86" />
+      </div>
+
       {/* B — funnel */}
       <div className="card" style={{ padding: "20px 22px", marginTop: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 18 }}>
@@ -489,52 +536,236 @@ export function Statistics(ctx: Ctx) {
         </div>
       </div>
 
-      {/* C — source effectiveness + aging */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 14, marginTop: 14 }}>
-        <div className="card" style={{ padding: "20px 22px" }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 16 }}>
-            <span className="cardtitle">Source effectiveness</span>
-            <span style={{ font: "500 12px var(--sans)", color: "var(--muted-2)" }}>reply rate by channel</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-            {s.sources.map((src) => {
-              const rate = Math.round(src.rate * 100);
-              const col = rate >= 50 ? "#2f9266" : rate >= 35 ? "#3f7363" : rate >= 25 ? "#6c7d96" : rate >= 12 ? "#a99e88" : "#c06a57";
-              return (
-                <div key={src.label}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                    <span style={{ font: "600 12.5px var(--sans)", color: "#3f3a33" }}>{src.label}</span>
-                    <span style={{ font: "500 11px var(--mono)", color: "var(--muted-2)" }}>{src.replied} / {src.total} · <b style={{ color: col }}>{rate}%</b></span>
-                  </div>
-                  <div style={{ height: 9, borderRadius: 5, background: "#eef0eb", overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${src.pct}%`, background: col, borderRadius: 5 }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: "20px 22px" }}>
-          <div className="cardtitle">Aging &amp; stale</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, padding: "13px 15px", background: "#f9ecea", border: "1px solid rgba(192,106,87,.22)", borderRadius: 12 }}>
-            <div style={{ font: "700 30px/1 var(--sans)", color: "#a85544", flex: "0 0 auto" }}>{s.aging.silent21}</div>
-            <div>
-              <div style={{ font: "600 12.5px var(--sans)", color: "#2a2620" }}>apps silent 21+ days</div>
-              <div style={{ font: "500 11.5px var(--sans)", color: "#9b8278", marginTop: 1 }}>Most are silent rejections — treat as dead, move on.</div>
+      {/* C — aging & stale */}
+      <div className="card" style={{ padding: "20px 22px", marginTop: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 22, alignItems: "center" }}>
+          <div>
+            <div className="cardtitle">Aging &amp; stale</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, padding: "13px 15px", background: "#f9ecea", border: "1px solid rgba(192,106,87,.22)", borderRadius: 12 }}>
+              <div style={{ font: "700 30px/1 var(--sans)", color: "#a85544", flex: "0 0 auto" }}>{s.aging.silent21}</div>
+              <div>
+                <div style={{ font: "600 12.5px var(--sans)", color: "#2a2620" }}>apps silent 21+ days</div>
+                <div style={{ font: "500 11.5px var(--sans)", color: "#9b8278", marginTop: 1 }}>Most are silent rejections — treat as dead, move on.</div>
+              </div>
             </div>
           </div>
           <AgingBars buckets={s.aging.buckets} />
         </div>
       </div>
 
-      {/* D — context */}
+      {/* D — source performance (full table) */}
+      <div className="card" style={{ padding: "20px 22px", marginTop: 14 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 14 }}>
+          <span className="cardtitle">Source performance</span>
+          <span style={{ font: "500 12px var(--sans)", color: "var(--muted-2)" }}>which channels actually convert</span>
+        </div>
+        <PerfTable rows={src.rows} keyHeader="Source" best={src.best} />
+        {src.best && (
+          <Takeaway>
+            Your strongest channel is <b style={{ color: "var(--primary)" }}>{src.best.key}</b> — {Math.round(src.best.interviewRate * 100)}% reach an interview and {Math.round(src.best.responseRate * 100)}% reply. Lean into it; the channels at the bottom are mostly wasted effort.
+          </Takeaway>
+        )}
+      </div>
+
+      {/* E — role performance */}
+      <div className="card" style={{ padding: "20px 22px", marginTop: 14 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 14 }}>
+          <span className="cardtitle">Role / title performance</span>
+          <span style={{ font: "500 12px var(--sans)", color: "var(--muted-2)" }}>what the market actually responds to</span>
+        </div>
+        <PerfTable rows={role.rows} keyHeader="Role" best={role.best} worst={role.worst} />
+        {role.best && (
+          <Takeaway>
+            <b style={{ color: "var(--primary)" }}>{role.best.key}</b> is where you’re strongest ({Math.round(role.best.responseRate * 100)}% reply).{role.worst && role.worst.key !== role.best.key ? <> {role.worst.key} is the weakest — consider whether it’s worth chasing.</> : null}
+          </Takeaway>
+        )}
+      </div>
+
+      {/* F — company insights + speed/follow-up */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 14 }}>
+        <div className="card" style={{ padding: "20px 22px" }}>
+          <div className="cardtitle">Company insights</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, marginTop: 14 }}>
+            <ContextCard value={String(comp.companiesAppliedTo)} unit="" color="#3f3a33" title="Companies" sub="distinct employers applied to" />
+            <ContextCard value={String(comp.multiple.length)} unit="" color="#6b5e86" title="Applied 2+ times" sub="multiple roles at one company" />
+          </div>
+          {comp.bestResponders.length > 0 && (
+            <>
+              <div className="eyebrow" style={{ margin: "16px 0 9px" }}>Best responders</div>
+              {comp.bestResponders.slice(0, 4).map((c) => (
+                <div key={c.company} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderTop: "1px solid rgba(34,31,26,.05)" }}>
+                  <span style={{ font: "600 12.5px var(--sans)", color: "#3f3a33" }}>{c.company}</span>
+                  <span style={{ font: "500 11px var(--mono)", color: "var(--muted-2)" }}><b style={{ color: "#1f7a52" }}>{Math.round(c.responseRate * 100)}%</b> · {c.applied} app{c.applied > 1 ? "s" : ""}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {comp.neverResponded.length > 0 && (
+            <div style={{ font: "500 12px/1.5 var(--sans)", color: "var(--text-3)", marginTop: 13, paddingTop: 11, borderTop: "1px solid rgba(34,31,26,.07)" }}>
+              <b style={{ color: "#a85544" }}>{comp.neverResponded.length}</b> compan{comp.neverResponded.length > 1 ? "ies" : "y"} never replied — treat them as dead ends.
+            </div>
+          )}
+        </div>
+
+        <div className="card" style={{ padding: "20px 22px" }}>
+          <div className="cardtitle">Speed &amp; follow-up</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 11, marginTop: 14 }}>
+            <ContextCard value={dDays(timing.medianResponseDays)} unit={timing.medianResponseDays == null ? "" : "d"} color="#3f3a33" title="To first reply" sub="median" />
+            <ContextCard value={dDays(timing.medianInterviewDays)} unit={timing.medianInterviewDays == null ? "" : "d"} color="#9a6a16" title="To interview" sub="median" />
+            <ContextCard value={dDays(timing.medianRejectionDays)} unit={timing.medianRejectionDays == null ? "" : "d"} color="#a85544" title="To rejection" sub="median" />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, padding: "12px 14px", background: "#f8f1e8", border: "1px solid rgba(192,138,42,.2)", borderRadius: 12 }}>
+            <div style={{ font: "700 26px/1 var(--sans)", color: "#9a6a16", flex: "0 0 auto" }}>{timing.followUpsDue}</div>
+            <div style={{ font: "500 12px/1.45 var(--sans)", color: "#6f685d" }}>application{timing.followUpsDue === 1 ? "" : "s"} need a follow-up (quiet 7+ days). <b>{timing.noResponse14}</b> have had no reply after 14 days.</div>
+          </div>
+          <div className="eyebrow" style={{ margin: "16px 0 9px" }}>Reply rate by week</div>
+          <WeekBars points={wk} />
+        </div>
+      </div>
+
+      {/* G — tracking-based breakdowns (work type / location / résumé / salary) */}
+      {hasMeta ? (
+        <>
+          <div className="eyebrow" style={{ margin: "20px 2px 11px" }}>From your tracking</div>
+          {(work.length > 0 || loc.length > 0) && (
+            <div style={{ display: "grid", gridTemplateColumns: work.length > 0 && loc.length > 0 ? "1fr 1fr" : "1fr", gap: 14 }}>
+              {work.length > 0 && (
+                <div className="card" style={{ padding: "20px 22px" }}>
+                  <div className="cardtitle" style={{ marginBottom: 12 }}>Work arrangement</div>
+                  <PerfTable rows={work} keyHeader="Type" />
+                </div>
+              )}
+              {loc.length > 0 && (
+                <div className="card" style={{ padding: "20px 22px" }}>
+                  <div className="cardtitle" style={{ marginBottom: 12 }}>Location</div>
+                  <PerfTable rows={loc.slice(0, 6)} keyHeader="Location" />
+                </div>
+              )}
+            </div>
+          )}
+          {resume.rows.length > 0 && (
+            <div className="card" style={{ padding: "20px 22px", marginTop: 14 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 12 }}>
+                <span className="cardtitle">Résumé performance</span>
+                <span style={{ font: "500 12px var(--sans)", color: "var(--muted-2)" }}>which version actually works</span>
+              </div>
+              <PerfTable rows={resume.rows} keyHeader="Résumé" best={resume.best} />
+              {resume.best && <Takeaway>Your <b style={{ color: "var(--primary)" }}>{resume.best.key}</b> résumé performs best — use it as your default and retire the weak ones.</Takeaway>}
+            </div>
+          )}
+          {sal.count > 0 && (
+            <div className="card" style={{ padding: "20px 22px", marginTop: 14 }}>
+              <div className="cardtitle" style={{ marginBottom: 14 }}>Salary snapshot</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 11 }}>
+                <ContextCard value={sal.median == null ? "—" : money(sal.median)} unit="" color="#1f7a52" title="Median (applied)" sub={`${sal.count} with salary`} />
+                <ContextCard value={sal.min == null ? "—" : money(sal.min)} unit="" color="#3f3a33" title="Lowest" sub="floor" />
+                <ContextCard value={sal.max == null ? "—" : money(sal.max)} unit="" color="#3f3a33" title="Highest" sub="ceiling" />
+              </div>
+              {sal.byRole.length > 1 && (
+                <div style={{ marginTop: 12 }}>
+                  {sal.byRole.slice(0, 5).map((r) => (
+                    <div key={r.role} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderTop: "1px solid rgba(34,31,26,.05)" }}>
+                      <span style={{ font: "600 12.5px var(--sans)", color: "#3f3a33" }}>{r.role}</span>
+                      <span style={{ font: "500 11.5px var(--mono)", color: "var(--muted)" }}>{money(r.median)} · {r.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="card" style={{ padding: "16px 18px", marginTop: 14, display: "flex", gap: 11, alignItems: "center" }}>
+          <span style={{ font: "500 12.5px/1.5 var(--sans)", color: "var(--text-3)" }}>
+            <b style={{ color: "var(--primary)" }}>Unlock more breakdowns:</b> add a work type, location, salary or résumé version to an application — in the <b>New Application</b> form or any application’s <b>Tracking</b> panel — and you’ll get response rates by remote/hybrid/onsite, by location, by pay, and by résumé version here.
+          </span>
+        </div>
+      )}
+
+      {/* H — context */}
       <div className="eyebrow" style={{ margin: "20px 2px 11px" }}>For context, not action</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 13 }}>
         <ContextCard value={s.timeToFirstReply == null ? "—" : String(s.timeToFirstReply)} unit={s.timeToFirstReply == null ? "" : "days"} color="#3f3a33" title="Time to first reply" sub="Median time a reply takes to land. After this, an app is going quiet." />
         <ContextCard value={`${Math.round(s.ghostRate * 100)}%`} unit="" color="#a85544" title="Ghost rate" sub="Died with zero reply. Normal — it’s a volume + targeting game." />
         <ContextCard value={String(s.activePipeline)} unit="" color="#1f7a52" title="Active pipeline" sub="Genuinely in play right now — not ghosted or rejected." />
       </div>
+    </div>
+  );
+}
+
+const money = (n: number) => "$" + Math.round(n).toLocaleString();
+
+function VolTile({ value, label, sub, color, delta, small }: { value: string; label: string; sub?: string; color?: string; delta?: number; small?: boolean }) {
+  const ell: CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+  return (
+    <div className="card" style={{ padding: "13px 15px", minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, minWidth: 0 }}>
+        <div style={{ font: `700 ${small ? 15 : 22}px/1.1 var(--sans)`, letterSpacing: "-.02em", color, ...ell }}>{value}</div>
+        {delta != null && delta !== 0 && (
+          <div style={{ font: "600 10.5px var(--mono)", color: delta >= 0 ? "#1f7a52" : "#a85544", marginBottom: 1, flex: "0 0 auto" }}>{delta >= 0 ? "↑" : "↓"}{Math.abs(delta)}</div>
+        )}
+      </div>
+      <div style={{ font: "600 11.5px var(--sans)", color: "#5f5a51", marginTop: 6, ...ell }}>{label}</div>
+      {sub && <div style={{ font: "500 10.5px var(--sans)", color: "var(--muted-2)", marginTop: 1, ...ell }}>{sub}</div>}
+    </div>
+  );
+}
+
+function Takeaway({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ font: "500 12px/1.55 var(--sans)", color: "var(--text-3)", marginTop: 14, paddingTop: 13, borderTop: "1px solid rgba(34,31,26,.07)" }}>{children}</div>
+  );
+}
+
+function PerfTable({ rows, keyHeader, best, worst }: { rows: PerfRow[]; keyHeader: string; best?: PerfRow | null; worst?: PerfRow | null }) {
+  const grid = "1.5fr .8fr .8fr .7fr .7fr .9fr";
+  const head: CSSProperties = { font: "600 10px var(--mono)", letterSpacing: ".04em", textTransform: "uppercase", color: "var(--faint)", textAlign: "right" };
+  if (rows.length === 0) return <div className="muted" style={{ fontSize: 12 }}>No data yet.</div>;
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: grid, gap: 10, padding: "0 2px 8px" }}>
+        <span style={{ ...head, textAlign: "left" }}>{keyHeader}</span>
+        <span style={head}>Applied</span>
+        <span style={head}>Replies</span>
+        <span style={head}>Intv</span>
+        <span style={head}>Offers</span>
+        <span style={head}>Reply&nbsp;%</span>
+      </div>
+      {rows.map((r) => {
+        const rate = Math.round(r.responseRate * 100);
+        const isBest = best?.key === r.key;
+        const isWorst = worst?.key === r.key && !isBest;
+        const col = rate >= 40 ? "#1f7a52" : rate >= 20 ? "#3f7363" : rate >= 10 ? "#857a64" : "#a85544";
+        const numR: CSSProperties = { font: "500 12px var(--mono)", color: "var(--muted)", textAlign: "right" };
+        return (
+          <div key={r.key} style={{ display: "grid", gridTemplateColumns: grid, gap: 10, alignItems: "center", padding: "9px 2px", borderTop: "1px solid rgba(34,31,26,.05)" }}>
+            <span style={{ font: "600 12.5px var(--sans)", color: "#3f3a33", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+              {r.key}
+              {isBest && <span style={{ font: "700 8px var(--mono)", color: "#1f7a52", background: "rgba(47,146,102,.14)", padding: "1px 5px", borderRadius: 4, flex: "0 0 auto" }}>BEST</span>}
+              {isWorst && <span style={{ font: "700 8px var(--mono)", color: "#a85544", background: "rgba(192,106,87,.13)", padding: "1px 5px", borderRadius: 4, flex: "0 0 auto" }}>WEAK</span>}
+            </span>
+            <span style={{ ...numR, color: "#3f3a33", fontWeight: 600 }}>{r.applied}</span>
+            <span style={numR}>{r.responses}</span>
+            <span style={numR}>{r.interviews}</span>
+            <span style={{ ...numR, color: r.offers ? "#1f7a52" : "var(--muted-2)" }}>{r.offers}</span>
+            <span style={{ ...numR, color: col, fontWeight: 600 }}>{rate}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function WeekBars({ points }: { points: { label: string; applied: number; responses: number; rate: number }[] }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 70 }}>
+      {points.map((p, i) => (
+        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, height: "100%", justifyContent: "flex-end" }}>
+          <div style={{ font: "600 10px var(--mono)", color: "var(--muted-2)" }}>{p.applied ? `${Math.round(p.rate * 100)}%` : "—"}</div>
+          <div style={{ width: "100%", maxWidth: 30, height: `${Math.max(p.applied ? p.rate * 100 : 0, p.applied ? 6 : 2)}%`, background: p.rate >= 0.25 ? "#9ec7b1" : p.rate >= 0.1 ? "#e6cd97" : "#dca596", borderRadius: "5px 5px 0 0" }} />
+          <span style={{ font: "500 9.5px var(--mono)", color: "var(--faint)" }}>{p.label}</span>
+        </div>
+      ))}
     </div>
   );
 }

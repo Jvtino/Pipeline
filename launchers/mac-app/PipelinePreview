@@ -53,13 +53,14 @@ if [ ! -d "$APP_DIR/.git" ]; then
 fi
 cd "$APP_DIR" || { alert "Couldn't open $APP_DIR."; exit 1; }
 
-git fetch origin "$BRANCH" --quiet || echo "fetch failed — using existing copy"
-if [ -z "$(git status --porcelain)" ]; then
-  git checkout -q "$BRANCH" 2>/dev/null || git checkout -q -B "$BRANCH" "origin/$BRANCH"
-  git reset --hard "origin/$BRANCH" --quiet && echo "synced to $BRANCH"
+# Force this checkout ONTO the preview branch (the redesign isn't on main yet);
+# handles a copy previously left on main or on an older commit.
+if git fetch origin "$BRANCH" --quiet; then
+  git checkout -q -B "$BRANCH" "origin/$BRANCH" 2>/dev/null || git checkout -q "$BRANCH" 2>/dev/null || true
+  git reset --hard "origin/$BRANCH" --quiet 2>/dev/null
+  echo "synced to $BRANCH @ $(git rev-parse --short HEAD)"
 else
-  echo "local edits present — leaving them; trying checkout"
-  git checkout -q "$BRANCH" 2>/dev/null || true
+  echo "offline — using existing copy @ $(git rev-parse --short HEAD 2>/dev/null)"
 fi
 
 # ---- One-time local secrets so a connected mailbox + board persist ----------

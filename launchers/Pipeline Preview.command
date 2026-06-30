@@ -55,13 +55,14 @@ fi
 cd "$APP_DIR" || die "Could not open $APP_DIR."
 
 say "Getting the latest preview from GitHub…"
-git fetch origin "$BRANCH" --quiet || echo "   (couldn't reach GitHub — using the copy you already have)"
-if [ -z "$(git status --porcelain)" ]; then
-  git checkout -q "$BRANCH" 2>/dev/null || git checkout -q -B "$BRANCH" "origin/$BRANCH"
-  git reset --hard "origin/$BRANCH" --quiet && echo "   ✓ Up to date with the preview branch"
+# Force this checkout ONTO the preview branch (the redesign isn't on main yet);
+# handles a copy previously left on main or on an older commit.
+if git fetch origin "$BRANCH" --quiet; then
+  git checkout -q -B "$BRANCH" "origin/$BRANCH" 2>/dev/null || git checkout -q "$BRANCH" 2>/dev/null || true
+  git reset --hard "origin/$BRANCH" --quiet 2>/dev/null
+  echo "   ✓ Showing the latest preview — ${BRANCH} @ $(git rev-parse --short HEAD)"
 else
-  echo "   ⚠ You have local edits — leaving them alone and running your current copy."
-  git checkout -q "$BRANCH" 2>/dev/null || true
+  echo "   ⚠ Couldn't reach GitHub — running the copy you already have ($(git rev-parse --short HEAD 2>/dev/null))."
 fi
 
 # 3) One-time local secrets so a connected mailbox + your board survive restarts.

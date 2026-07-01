@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { boardSchema } from "@pipeline/contracts";
 import { buildServer } from "./server";
+import { signSession, SESSION_COOKIE } from "./auth";
 
 /** Log in via the dev login and return the session cookie pair for subsequent requests. */
 export async function login(app: FastifyInstance, email = "demo@pipeline.local"): Promise<string> {
@@ -98,6 +99,31 @@ describe("api server (authenticated)", () => {
       expect((await app.inject({ method: "GET", url: "/api/reminders", headers: { cookie } })).statusCode).toBe(200);
     } finally {
       await app.close();
+    }
+  });
+
+  it("treats a signed session for a missing user as unauthenticated (survives a local DB reset)", async () => {
+    const prev = process.env.SESSION_SECRET;
+    process.env.SESSION_SECRET = "test-secret-missing-user";
+    try {
+      const app = await buildServer();
+      try {
+        // A validly-signed cookie for a user that was never created — i.e. the DB
+        // was reset out from under a live session. /auth/me must 401 so the client
+        // re-logs-in and recreates the user, instead of letting a later mail-connection
+        // save blow up on the users foreign key.
+        const ghost = signSession(process.env.SESSION_SECRET!, { id: "ghost@x.com", email: "ghost@x.com" });
+        const res = await app.inject({ method: "GET", url: "/auth/me", headers: { cookie: `${SESSION_COOKIE}=${encodeURIComponent(ghost)}` } });
+        expect(res.statusCode).toBe(401);
+        // A real login still resolves normally.
+        const cookie = await login(app);
+        expect((await app.inject({ method: "GET", url: "/auth/me", headers: { cookie } })).statusCode).toBe(200);
+      } finally {
+        await app.close();
+      }
+    } finally {
+      if (prev === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = prev;
     }
   });
 

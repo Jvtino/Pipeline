@@ -103,6 +103,25 @@ describe("@pipeline/db", () => {
     expect(byThread["t-none"]).toBeUndefined();
   });
 
+  it("round-trips extracted enrichment as JSON (absent → undefined)", async () => {
+    await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
+    const enrichment = {
+      interviewDateTime: "Tue, Jun 12 at 3pm PT",
+      interviewLink: "https://calendly.com/acme/loop",
+      compensation: "$150k–$180k",
+      location: "Remote",
+      recruiterName: "Jordan Lee",
+      recruiterEmail: "jordan@acme.com",
+    };
+    await upsertApplications(h.db, "u1", [
+      { ...appFixture("t-e", "Acme", "interview"), enrichment },
+      appFixture("t-plain", "Globex", "applied"),
+    ]);
+    const byThread = Object.fromEntries((await getApplicationsForUser(h.db, "u1")).map((a) => [a.threadId, a.enrichment]));
+    expect(byThread["t-e"]).toEqual(enrichment);
+    expect(byThread["t-plain"]).toBeUndefined();
+  });
+
   it("notes + contacts are scoped to (user, application)", async () => {
     await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
     await upsertApplications(h.db, "u1", [appFixture("t1", "Acme", "applied")]);

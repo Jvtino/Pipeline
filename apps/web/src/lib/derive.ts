@@ -83,6 +83,7 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
         snippet: a.snippet,
         manual: a.manual ?? false,
         needsReview: a.confidence != null && a.confidence < REVIEW_CONFIDENCE,
+        enrichment: a.enrichment ?? null,
         ...metaFor(a.threadId),
       });
     }
@@ -107,6 +108,7 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
       snippet: "",
       manual: true,
       needsReview: false, // user-entered → nothing to confirm
+      enrichment: null,
       ...metaFor(m.id),
     });
   }

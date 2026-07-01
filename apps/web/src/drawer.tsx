@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Ctx } from "./ctx";
 import type { UiApplication, WorkType } from "./types";
 import { STATUS, MOVE_STAGES, type UiStatus } from "./lib/status";
-import { CompanyAvatar, PersonAvatar, StatusPill } from "./components";
+import { CompanyAvatar, PersonAvatar, StatusPill, NeedsReviewBadge } from "./components";
 import { DocBadge } from "./screens";
 import { IconX, IconClock, IconCheck, IconDownload } from "./lib/icons";
 
@@ -56,6 +56,9 @@ export function DetailDrawer({ app, ctx, onClose }: { app: UiApplication; ctx: C
   const docs = ctx.overlay.docs;
   const nextDone = !!ctx.overlay.nextDone[app.id];
   const hasNext = app.nextStep && app.nextStep !== "—";
+  const enr = app.enrichment;
+  const recruiterLine = [enr?.recruiterName, enr?.recruiterTitle].filter(Boolean).join(" · ");
+  const hasEnrichment = !!(enr && (enr.interviewDateTime || enr.interviewLink || enr.compensation || enr.location || recruiterLine || enr.recruiterEmail));
 
   const addNote = () => {
     const t = noteDraft.trim();
@@ -98,6 +101,13 @@ export function DetailDrawer({ app, ctx, onClose }: { app: UiApplication; ctx: C
         <div className="drawer-body">
           {tab === "overview" && (
             <div>
+              {/* low-confidence review nudge */}
+              {app.needsReview && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 13px", marginBottom: 14, background: "rgba(192,138,42,.09)", border: "1px solid rgba(192,138,42,.22)", borderRadius: 12 }}>
+                  <NeedsReviewBadge />
+                  <span style={{ font: "500 12px/1.45 var(--sans)", color: "#7a5a1a" }}>The classifier wasn't fully sure here. Confirm the stage below if it's right, or fix it.</span>
+                </div>
+              )}
               {/* next step */}
               <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "14px 15px", background: "#f4ede0", border: "1px solid rgba(192,138,42,.22)", borderRadius: 13 }}>
                 <span style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(192,138,42,.16)", display: "grid", placeItems: "center", flex: "0 0 auto" }}>
@@ -156,6 +166,35 @@ export function DetailDrawer({ app, ctx, onClose }: { app: UiApplication; ctx: C
                 <DetailBox label="Last activity" value={app.lastActivityIso ? app.dateLabel : "—"} />
                 <DetailBox label="Stage" value={s.label} />
               </div>
+
+              {/* extracted-from-email (read-only; value-or-null, never guessed) */}
+              {hasEnrichment && (
+                <>
+                  <div className="eyebrow" style={{ margin: "20px 0 11px" }}>Extracted from email</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+                    {enr!.interviewDateTime && <EnrichRow label="Interview" value={enr!.interviewDateTime} />}
+                    {enr!.interviewLink && (
+                      <EnrichRow label="Booking link" value={<a href={enr!.interviewLink} target="_blank" rel="noreferrer" style={{ color: "var(--primary)", textDecoration: "none", wordBreak: "break-all" }}>{enr!.interviewLink}</a>} />
+                    )}
+                    {enr!.compensation && <EnrichRow label="Compensation" value={enr!.compensation} />}
+                    {enr!.location && <EnrichRow label="Location" value={enr!.location} />}
+                    {(recruiterLine || enr!.recruiterEmail) && (
+                      <EnrichRow
+                        label="Recruiter"
+                        value={
+                          <>
+                            {recruiterLine}
+                            {recruiterLine && enr!.recruiterEmail ? " · " : ""}
+                            {enr!.recruiterEmail && (
+                              <a href={`mailto:${enr!.recruiterEmail}`} style={{ color: "var(--primary)", textDecoration: "none" }}>{enr!.recruiterEmail}</a>
+                            )}
+                          </>
+                        }
+                      />
+                    )}
+                  </div>
+                </>
+              )}
 
               {/* editable tracking fields — power the work-type / location / salary / résumé stats */}
               <div className="eyebrow" style={{ margin: "20px 0 11px" }}>Tracking</div>
@@ -257,6 +296,15 @@ function DetailBox({ label, value }: { label: string; value: string }) {
     <div style={{ padding: "12px 14px", background: "var(--card)", border: "1px solid rgba(34,31,26,.07)", borderRadius: 11 }}>
       <div style={{ font: "500 11px var(--sans)", color: "var(--muted-2)" }}>{label}</div>
       <div style={{ font: "600 13px var(--sans)", marginTop: 3 }}>{value}</div>
+    </div>
+  );
+}
+
+function EnrichRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={{ display: "flex", gap: 12, padding: "11px 14px", background: "var(--card)", border: "1px solid rgba(34,31,26,.07)", borderRadius: 11 }}>
+      <div style={{ font: "600 10px var(--mono)", letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted-2)", flex: "0 0 88px", paddingTop: 1 }}>{label}</div>
+      <div style={{ font: "600 13px var(--sans)", color: "#2a2620", minWidth: 0, flex: 1 }}>{value}</div>
     </div>
   );
 }

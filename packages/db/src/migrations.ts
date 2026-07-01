@@ -44,13 +44,16 @@ CREATE TABLE IF NOT EXISTS applications (
   snippet         text NOT NULL,
   manual          boolean NOT NULL DEFAULT false,
   confidence      real,
+  enrichment      text,
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_app_user_thread ON applications (user_id, thread_id);
 CREATE INDEX IF NOT EXISTS idx_app_user ON applications (user_id);
--- Additive, nullable: classifier confidence (0..1). ADD COLUMN IF NOT EXISTS
--- backfills existing installs idempotently (no data migration, no default).
+-- Additive, nullable columns. ADD COLUMN IF NOT EXISTS backfills existing installs
+-- idempotently (no data migration, no default).
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS confidence real;
+-- Extracted enrichment (interview/comp/location/recruiter) as a JSON string.
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS enrichment text;
 
 CREATE TABLE IF NOT EXISTS application_events (
   id              text PRIMARY KEY,

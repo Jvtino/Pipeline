@@ -14,7 +14,7 @@ import {
   type LocationInfo,
   type RecruiterContact,
 } from "./extract";
-import type { Thread, Application, Status, ResolvedCompany } from "@pipeline/contracts";
+import type { Thread, Application, Status, ResolvedCompany, Enrichment } from "@pipeline/contracts";
 
 const byDateAsc = (a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date);
 
@@ -203,9 +203,24 @@ export function statusForThread(thread: Thread): Status {
   return status;
 }
 
+/** Flatten the rich classification's value-or-null fields into the persisted
+ *  Enrichment shape. Returns undefined when nothing was extracted (so we never
+ *  store an empty object). */
+function enrichmentFrom(c: Classification): Enrichment | undefined {
+  const e: Enrichment = {};
+  if (c.interview?.dateTimeText) e.interviewDateTime = c.interview.dateTimeText;
+  if (c.interview?.bookingLink) e.interviewLink = c.interview.bookingLink;
+  if (c.compensation?.text) e.compensation = c.compensation.text;
+  if (c.location?.value) e.location = c.location.value;
+  if (c.recruiterContact?.name) e.recruiterName = c.recruiterContact.name;
+  if (c.recruiterContact?.title) e.recruiterTitle = c.recruiterContact.title;
+  if (c.recruiterContact?.email) e.recruiterEmail = c.recruiterContact.email;
+  return Object.keys(e).length ? e : undefined;
+}
+
 /** Reduce one thread to a derived Application record (no raw body persisted).
  *  Company/role/status come from classifyThread(), so the persisted record and the
- *  rich classification can never disagree; `confidence` rides along (additive). */
+ *  rich classification can never disagree; `confidence` + `enrichment` ride along. */
 export function threadToApplication(thread: Thread): Application {
   const c = classifyThread(thread);
   const msgs = [...thread.messages].sort(byDateAsc);
@@ -222,6 +237,7 @@ export function threadToApplication(thread: Thread): Application {
     lastActivity: last?.date ?? "",
     snippet: (last?.body ?? "").slice(0, 600),
     confidence: c.confidence,
+    enrichment: enrichmentFrom(c),
   };
 }
 

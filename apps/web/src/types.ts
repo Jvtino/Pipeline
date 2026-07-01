@@ -3,6 +3,7 @@
 // shapes the screens render, plus the client-side overlay persisted to
 // localStorage (status overrides, manual apps, notes, tasks, settings).
 import type { UiStatus } from "./lib/status";
+import type { Enrichment } from "@pipeline/contracts";
 
 export type Screen =
   | "dashboard"
@@ -52,6 +53,7 @@ export interface UiApplication {
   snippet: string;
   manual: boolean;
   needsReview: boolean; // classifier confidence below the review threshold → "unconfirmed" affordance
+  enrichment: Enrichment | null; // facts extracted from the email (value-or-null), shown read-only
   // user-entered tracking fields (from the overlay) — optional
   workType: WorkType | null;
   location: string | null;

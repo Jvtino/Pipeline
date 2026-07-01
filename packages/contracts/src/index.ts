@@ -70,6 +70,22 @@ export function safeParseThread(value: unknown): z.SafeParseReturnType<unknown, 
    This is the privacy-preserving "store derived, not raw" shape from plan §7.
    -------------------------------------------------------------------------- */
 
+/**
+ * Facts the classifier extracted from the thread — each value-or-null, never
+ * guessed. Optional/additive: absent on older records and on the DB read path
+ * until persisted. The UI shows these read-only ("extracted from email").
+ */
+export const enrichmentSchema = z.object({
+  interviewDateTime: z.string().nullable().optional(),
+  interviewLink: z.string().nullable().optional(),
+  compensation: z.string().nullable().optional(),
+  location: z.string().nullable().optional(),
+  recruiterName: z.string().nullable().optional(),
+  recruiterTitle: z.string().nullable().optional(),
+  recruiterEmail: z.string().nullable().optional(),
+});
+export type Enrichment = z.infer<typeof enrichmentSchema>;
+
 /** A single tracked application — one reduced thread. The board's atom. */
 export const applicationSchema = z.object({
   id: z.string(),
@@ -90,6 +106,8 @@ export const applicationSchema = z.object({
    * it — a valid, backward-compatible optional, never a breaking change.
    */
   confidence: z.number().min(0).max(1).optional(),
+  /** Value-or-null facts extracted from the thread (interview/comp/location/recruiter). */
+  enrichment: enrichmentSchema.optional(),
 });
 export type Application = z.infer<typeof applicationSchema>;
 

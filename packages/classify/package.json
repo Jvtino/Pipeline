@@ -16,12 +16,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "try": "tsx scripts/try.ts",
+    "add-case": "node scripts/add-case.mjs"
   },
   "dependencies": {
     "@pipeline/contracts": "workspace:*"
   },
   "devDependencies": {
+    "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
   }

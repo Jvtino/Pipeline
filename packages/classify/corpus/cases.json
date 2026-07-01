@@ -20,7 +20,20 @@
     { "text": "After your interview, we have decided to go in a different direction.", "expected": "rejected" },
     { "text": "We are unable to offer you the position at this time.", "expected": "rejected" },
     { "text": "Here's our company newsletter for June.", "expected": null },
-    { "text": "Your package has shipped and will arrive tomorrow.", "expected": null }
+    { "text": "Your package has shipped and will arrive tomorrow.", "expected": null },
+    { "text": "Your application was viewed by the recruiter.", "expected": null },
+    { "text": "New jobs matching your saved search are available on Indeed.", "expected": null }
+  ],
+  "_comment_confidence": "TS-only (classifyStatus). Not read by the parity gate. `low` = confidence < LOW_CONFIDENCE (flag for review); `reason` must appear in the reasons array.",
+  "confidence": [
+    { "text": "We are pleased to offer you the position of Data Scientist at Acme.", "low": false, "reason": "strong_phrase" },
+    { "text": "We'd like to schedule a phone screen — please share your availability.", "low": false, "reason": "strong_phrase" },
+    { "text": "Please find your offer letter attached. Welcome to the team!", "low": false, "reason": "strong_phrase" },
+    { "text": "Thanks again for the interview.", "low": true, "reason": "weak_cue_only" },
+    { "text": "Just a quick note — congratulations!", "low": true, "reason": "weak_cue_only" },
+    { "text": "We really enjoyed your interview, but unfortunately we're moving forward with other candidates.", "low": true, "reason": "mixed_signal" },
+    { "text": "After your interview, we have decided to go in a different direction.", "low": true, "reason": "mixed_signal" },
+    { "text": "Here's our company newsletter for June.", "low": true, "reason": "no_signal" }
   ],
   "company": [
     { "domain": "careers.stripe.com", "from": "Stripe <jobs@stripe.com>", "subject": "Your application for Engineer at Stripe", "body": "", "expected": "Stripe" },
@@ -51,5 +64,48 @@
     { "subject": "Your application was sent to Initech", "expected": "Application" },
     { "subject": "Thank you for your interest in Initech", "expected": "Application" },
     { "subject": "Software Engineer", "expected": "Software Engineer" }
+  ],
+  "_comment_roleClean": "TS-only (cleanRole in aggregate.ts). Not read by the parity gate. Polishes extractRole output; `company` (optional) lets a trailing employer be stripped safely.",
+  "roleClean": [
+    { "raw": "Software Engineer II (Remote) — Req #12345 — Acme", "company": "Acme", "clean": "Software Engineer II" },
+    { "raw": "Staff Product Designer (Hybrid, US) | Req R-4471 | Globex", "company": "Globex", "clean": "Staff Product Designer" },
+    { "raw": "Senior Data Engineer, Remote", "clean": "Senior Data Engineer" },
+    { "raw": "Re: Backend Engineer", "clean": "Backend Engineer" },
+    { "raw": "Data Analyst - Job ID: R-778", "clean": "Data Analyst" },
+    { "raw": "Engineer (Platform)", "clean": "Engineer (Platform)" },
+    { "raw": "Senior Software Engineer", "company": "Acme", "clean": "Senior Software Engineer" },
+    { "raw": "Application", "clean": "Application" },
+    { "raw": "Req #778", "clean": "Req #778" }
+  ],
+  "_comment_enrich": "TS-only enrichment extractors (extract.ts). Not read by the parity gate. Every field is value-or-null; null cases are as important as positives.",
+  "interview": [
+    { "text": "Your interview is confirmed for Tuesday, June 12 at 3:00pm PT. Join here: https://calendly.com/acme/loop", "hasDateTime": true, "link": "https://calendly.com/acme/loop" },
+    { "text": "Grab a time that works for you: https://calendly.com/recruiter/30min", "hasDateTime": false, "hasLink": true },
+    { "text": "Let's meet Thursday at 2:30pm ET.", "hasDateTime": true, "hasLink": false },
+    { "text": "We'll be interviewing candidates over the coming weeks and will be in touch.", "null": true },
+    { "text": "Thanks for taking the time to speak with us yesterday.", "null": true }
+  ],
+  "compensation": [
+    { "text": "The base salary range for this role is $120,000–$150,000.", "expect": "$120,000–$150,000" },
+    { "text": "Compensation: $120k plus meaningful equity.", "expect": "$120k" },
+    { "text": "This is a contract position at $60/hr.", "expect": "$60/hr" },
+    { "text": "The salary is £90k per year.", "expect": "£90k per year" },
+    { "text": "We offer a highly competitive salary and generous equity.", "null": true },
+    { "text": "Salary is commensurate with experience (DOE).", "null": true }
+  ],
+  "location": [
+    { "text": "This role is fully Remote (US).", "kind": "remote" },
+    { "text": "Hybrid — 3 days a week in our Austin, TX office.", "kind": "hybrid", "contains": "Austin" },
+    { "text": "This position is on-site in Berlin.", "kind": "onsite", "contains": "Berlin" },
+    { "text": "The team is based in Seattle, WA.", "kind": "city", "contains": "Seattle" },
+    { "text": "We're a fully distributed, global team.", "null": true },
+    { "text": "Location: flexible.", "null": true }
+  ],
+  "recruiterContact": [
+    { "text": "Looking forward to connecting!\nBest,\nJordan Lee\nSenior Technical Recruiter\njordan.lee@acme.com", "name": "Jordan Lee", "titleContains": "Recruiter", "email": "jordan.lee@acme.com" },
+    { "text": "Please reach out to Dana Kim, Talent Acquisition Partner, with any questions.", "name": "Dana Kim", "titleContains": "Talent Acquisition" },
+    { "text": "Sent from Greenhouse on behalf of the team. Do not reply to this message.", "null": true },
+    { "text": "Thanks,\nThe Hiring Team", "null": true },
+    { "text": "Questions? Contact us at no-reply@greenhouse.io", "null": true }
   ]
 }

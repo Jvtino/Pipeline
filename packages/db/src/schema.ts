@@ -3,7 +3,7 @@
 // PRIVACY: we persist DERIVED records (company, role, status, dates, <=600-char
 // snippet) and ENVELOPE-ENCRYPTED mail tokens only. No raw email bodies, no
 // plaintext tokens. Every row is owned by a user_id for row-level isolation.
-import { pgTable, text, timestamp, boolean, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, real, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 export const planEnum = pgEnum("plan", ["free", "pro", "teams"]);
 export const providerEnum = pgEnum("provider", ["google", "microsoft", "imap"]);
@@ -60,6 +60,7 @@ export const applications = pgTable(
     lastActivity: text("last_activity").notNull(),
     snippet: text("snippet").notNull(),
     manual: boolean("manual").notNull().default(false),
+    confidence: real("confidence"), // classifier confidence 0..1; nullable (additive)
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

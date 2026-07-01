@@ -82,6 +82,14 @@ export const applicationSchema = z.object({
   lastActivity: z.string(), // ISO date of the latest message
   snippet: z.string().max(600), // latest message snippet only — never the full body
   manual: z.boolean().optional(),
+  /**
+   * Classifier confidence in this derived record, 0..1 (optional, additive — like
+   * `manual`). Below a UI threshold the app flags the card as "needs review"
+   * (the human-in-the-loop affordance). Populated on the live reduction path;
+   * absent (undefined) on records read back from the DB until a column persists
+   * it — a valid, backward-compatible optional, never a breaking change.
+   */
+  confidence: z.number().min(0).max(1).optional(),
 });
 export type Application = z.infer<typeof applicationSchema>;
 

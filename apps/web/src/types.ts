@@ -51,6 +51,7 @@ export interface UiApplication {
   nextStep: string; // human next action, or "—"
   snippet: string;
   manual: boolean;
+  needsReview: boolean; // classifier confidence below the review threshold → "unconfirmed" affordance
   // user-entered tracking fields (from the overlay) — optional
   workType: WorkType | null;
   location: string | null;

@@ -1,6 +1,6 @@
 // Repository — the only place app code touches the tables. Encrypts mail secrets
 // on write, decrypts on read, and enforces per-user scoping on every query.
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, like, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { encryptJson, decryptJson } from "@pipeline/crypto";
 import { boardFromApplications, type Application, type Board, type Status } from "@pipeline/contracts";
@@ -240,6 +240,39 @@ export async function countApplications(db: Database, userId: string): Promise<n
  */
 export async function deleteDemoApplications(db: Database, userId: string): Promise<void> {
   await db.delete(applications).where(and(eq(applications.userId, userId), like(applications.threadId, "demo:%")));
+}
+
+/**
+ * Rebuild recovery: purge a user's AUTO-SYNCED applications and reset their sync
+ * cursors so the NEXT sync re-backfills the board through the current relevance
+ * gate. Used to recover after a bad sync floods the board with non-application
+ * mail — the derived record alone can't be re-classified (we don't persist the raw
+ * thread), so the safe fix is to clear + re-derive from the mailbox.
+ *
+ * Deliberately preserved: manual entries (added by hand, never came from a sync)
+ * and any application the user has ANNOTATED with notes/contacts — deleting those
+ * would cascade-delete that work. Re-synced applications return with the same
+ * `${userId}:${threadId}` id, so annotations stay attached.
+ */
+export async function rebuildSyncedApplications(db: Database, userId: string): Promise<{ removed: number }> {
+  const annotated = new Set<string>([
+    ...(await db.select({ id: notes.applicationId }).from(notes).where(eq(notes.userId, userId))).map((r) => r.id),
+    ...(await db.select({ id: contacts.applicationId }).from(contacts).where(eq(contacts.userId, userId))).map((r) => r.id),
+  ]);
+  const synced = await db
+    .select({ id: applications.id })
+    .from(applications)
+    .where(and(eq(applications.userId, userId), eq(applications.manual, false)));
+  const removable = synced.map((r) => r.id).filter((id) => !annotated.has(id));
+  if (removable.length) await db.delete(applications).where(inArray(applications.id, removable));
+
+  // Null every cursor for the user's connections → next sync is a full backfill,
+  // not a no-op delta, so real applications are re-derived and re-listed.
+  const conns = await db.select({ id: mailConnections.id }).from(mailConnections).where(eq(mailConnections.userId, userId));
+  for (const c of conns) {
+    await db.update(syncState).set({ cursor: null, lastSyncedAt: null }).where(eq(syncState.connectionId, c.id));
+  }
+  return { removed: removable.length };
 }
 
 /** Persist a connection's incremental-sync cursor (Gmail historyId / Graph deltaLink). */

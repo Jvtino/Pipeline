@@ -84,20 +84,46 @@ export function detectStatus(text: string | null | undefined): Status | null {
 const JOB_APPLICATION_RE =
   /\b(thank(?:s| you) for (?:applying|your application|your interest in (?:the|our|this|joining|working))|appreciate your (?:interest|application)|your (?:job )?application|received your (?:application|cv|resume)|application (?:has been |was |is )?(?:received|submitted|under review|reviewed|on file)|application (?:id|number|reference|status|portal)|appl(?:ied|ying) (?:for|to)\b|job application|candidacy|candidate (?:for|portal|profile|experience)|recruit(?:er|ing|ment)|talent (?:acquisition|team|partner|community|network)|hiring (?:team|manager|committee|process)|(?:phone|technical|video|onsite|on-site|first|final|hiring)[ -](?:screen|interview|round|manager)|(?:coding|technical|online|skills?) assessment|take[- ]?home (?:assignment|exercise|test)|interview (?:invitation|invite|request|loop|with (?:the|our) team)|(?:would|we(?:'?d| would)) like to (?:schedule|invite|interview|move you)|schedule (?:a|an|your) (?:interview|screen|conversation)|availability (?:for|to) (?:a |an |the )?(?:interview|screen|chat|conversation)|offer of employment|offer letter|pleased to (?:offer|extend)|extend(?:ing)? (?:you )?an offer|moving forward with your (?:application|candidacy)|next steps? (?:in|on) (?:the|your) (?:application|process|interview|candidacy)|regret to inform|not (?:be )?(?:moving|proceeding) forward with your|position (?:has been|is now) filled)\b/i;
 
+// A job-application CONTEXT anchor: application-specific vocabulary a real hiring
+// email reliably carries but ordinary inbox mail does not. Deliberately EXCLUDES
+// ambient words ("offer", "role", "position", "team", "welcome", "congratulations")
+// that show up all over a normal inbox. Used to gate the broad status classifier
+// below so it can only vote "relevant" when the mail is actually about a job.
+const JOB_CONTEXT_RE =
+  /\b(applications?|appl(?:y|ying|ied|icant)|candidacy|candidates?|recruit(?:er|ers|ing|ment)|talent acquisition|hiring (?:team|manager|committee|process)|interviews?|offer of employment|offer letter)\b/i;
+
+// Social / job-board platforms that ALSO send heavy NON-application mail (profile
+// views, "people you may know", saved-search digests, connection requests). Unlike
+// pure ATS senders — which email almost exclusively about applications — their
+// domain alone doesn't imply an application, so we still require a content signal.
+const NOISY_JOB_BOARDS = new Set(["linkedin", "indeed", "glassdoor", "ziprecruiter", "wellfound", "angellist"]);
+
 /**
  * Whether a thread looks like a real job application (so it belongs on the board).
  * This is the SINGLE relevance decision applied to every inbox (Gmail + Outlook):
- * the sync engine runs it on each fetched thread regardless of provider. True if
- * the sender is a known ATS, any message is decisively classifiable, or the
- * subject/body carries clear application-context language.
+ * the sync engine runs it on each fetched thread regardless of provider.
+ *
+ * A thread qualifies when: the sender is a pure ATS platform; OR the subject/body
+ * carries high-precision application language (JOB_APPLICATION_RE); OR it shows a
+ * decisive application OUTCOME (offer/rejection/interview/received) *and* names the
+ * hiring context (JOB_CONTEXT_RE).
+ *
+ * That last clause is why detectStatus() is gated by an anchor rather than trusted
+ * on its own: detectStatus is a STATUS classifier meant to run on mail already known
+ * to be a job application, so in isolation it fires on ambient words ("unfortunately",
+ * "congratulations", "welcome to the team", "we have received your …", "declined").
+ * Trusting it directly floods a whole-inbox (Outlook/Graph) sync with hundreds of
+ * non-application emails — order receipts, shipping notices, meeting invites, promos.
  */
 export function looksLikeJobApplication(thread: Pick<Thread, "domain" | "subject" | "messages">): boolean {
-  if (isAtsDomain(thread.domain)) return true;
+  if (isAtsDomain(thread.domain) && !NOISY_JOB_BOARDS.has(rootName(thread.domain))) return true;
   const subject = thread.subject ?? "";
   if (JOB_APPLICATION_RE.test(subject)) return true;
   for (const m of thread.messages ?? []) {
     const text = `${subject} ${m.body ?? ""}`;
-    if (detectStatus(text) || JOB_APPLICATION_RE.test(text)) return true;
+    if (JOB_APPLICATION_RE.test(text)) return true;
+    // Broad status signal is admitted ONLY alongside a job-context anchor.
+    if (JOB_CONTEXT_RE.test(text) && detectStatus(text)) return true;
   }
   return false;
 }

@@ -21,6 +21,7 @@ export interface Ctx {
   openDetail: (id: string) => void;
   onNewApp: () => void;
   onSync: () => void;
+  onRebuild: () => void; // clear synced apps + re-scan the mailbox from scratch
 
   // mutations (persisted to the localStorage overlay)
   setStatus: (id: string, s: UiStatus) => void;

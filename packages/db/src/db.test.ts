@@ -16,6 +16,9 @@ import {
   listNotes,
   addContact,
   listContacts,
+  rebuildSyncedApplications,
+  saveCursor,
+  getCursor,
 } from "./repo";
 
 const masterKey = () => Buffer.from(generateMasterKey(), "base64");
@@ -107,5 +110,27 @@ describe("@pipeline/db", () => {
     expect(contact.name).toBe("Jane");
     expect(await listContacts(h.db, "u1", appId)).toHaveLength(1);
     expect(await listContacts(h.db, "u2", appId)).toHaveLength(0);
+  });
+
+  it("rebuild clears unannotated synced apps, keeps manual + annotated, and resets cursors", async () => {
+    const mk = masterKey();
+    await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
+    await saveMailConnection(h.db, mk, { id: "c1", userId: "u1", provider: "microsoft", email: "u1@live.com", secret: { access_token: "x" } });
+    await saveCursor(h.db, "c1", "delta-123");
+
+    await upsertApplications(h.db, "u1", [
+      appFixture("t-junk", "Netflix", "applied"), // synced noise → should be cleared
+      appFixture("t-real", "Stripe", "interview"), // synced but annotated → kept
+      { ...appFixture("t-manual", "Handadded", "offer"), manual: true }, // manual → kept
+    ]);
+    await addNote(h.db, { userId: "u1", applicationId: "u1:t-real", body: "phone screen went well" });
+
+    const { removed } = await rebuildSyncedApplications(h.db, "u1");
+    expect(removed).toBe(1); // only t-junk
+
+    const left = (await getApplicationsForUser(h.db, "u1")).map((a) => a.threadId).sort();
+    expect(left).toEqual(["t-manual", "t-real"]);
+    expect(await listNotes(h.db, "u1", "u1:t-real")).toHaveLength(1); // annotation survived
+    expect(await getCursor(h.db, "c1")).toBeNull(); // next sync is a full backfill
   });
 });

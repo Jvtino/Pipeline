@@ -47,6 +47,15 @@ export function runSync(): Promise<{ connections: number }> {
   return postJson<{ connections: number }>("/api/sync");
 }
 
+/**
+ * Rebuild the board from the connected mailboxes: clear auto-synced applications
+ * (manual + annotated ones are kept), reset cursors, then re-scan from scratch.
+ * `removed` is how many stale synced rows were cleared.
+ */
+export function resync(): Promise<{ removed: number; connections: number }> {
+  return postJson<{ removed: number; connections: number }>("/api/resync");
+}
+
 export interface Connections {
   count: number;
   mailboxes: { provider: string; email: string }[];

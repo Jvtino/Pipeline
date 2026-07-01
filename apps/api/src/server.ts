@@ -6,7 +6,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { boardSchema } from "@pipeline/contracts";
-import { getBoardForUser, setUserPlan, getMailConnections } from "@pipeline/db";
+import { getBoardForUser, setUserPlan, getMailConnections, rebuildSyncedApplications } from "@pipeline/db";
 import { issueLicense } from "@pipeline/license";
 import type { HttpTransport } from "@pipeline/providers";
 import { initStore, seedDemoForUser, resolveMasterKey } from "./store";
@@ -87,6 +87,21 @@ export async function buildServer(opts: ServerOptions = {}) {
     const user = requireUser(req, reply);
     if (!user) return reply;
     return syncAllConnections({ db: store.db, masterKey, userId: user.id, configs, transport: opts.transport });
+  });
+
+  // Rebuild the board from the connected mailboxes. Clears the AUTO-SYNCED
+  // applications (keeping manual + annotated ones), resets the sync cursors, then
+  // runs a full sync so only mail that passes the CURRENT relevance gate is
+  // re-listed. This is the recovery path after a bad sync floods the board with
+  // non-application mail — the gate fix stops new floods; this clears an old one.
+  app.post("/api/resync", async (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return reply;
+    // No mailbox to rebuild from → safe no-op (don't clear the seeded demo board).
+    if ((await getMailConnections(store.db, user.id)).length === 0) return { removed: 0, connections: 0, results: [] };
+    const { removed } = await rebuildSyncedApplications(store.db, user.id);
+    const summary = await syncAllConnections({ db: store.db, masterKey, userId: user.id, configs, transport: opts.transport });
+    return { removed, ...summary };
   });
 
   // Connected mailboxes (metadata only — no secrets). Powers the header's

@@ -9,6 +9,10 @@ import { STATUS, STATUS_ORDER } from "./status";
 import { daysBetween, parseIso, shortDate, MONTHS } from "./format";
 
 const STALE_DAYS = 21; // an "applied" record silent this long reads as no-response
+// Below this classifier confidence a card is "unconfirmed" and invites a one-tap fix.
+// Sits between the brain's low band (weak/mixed/fallback ≈0.3–0.45) and high (0.9),
+// so the exact value isn't sensitive. Absent confidence (older/DB records) ⇒ not flagged.
+const REVIEW_CONFIDENCE = 0.5;
 
 /** Map a sender/company domain to the design's source channels. */
 export function sourceFromDomain(domain: string): string {
@@ -78,6 +82,7 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
         nextStep: nextStepFor(status, daysSince),
         snippet: a.snippet,
         manual: a.manual ?? false,
+        needsReview: a.confidence != null && a.confidence < REVIEW_CONFIDENCE,
         ...metaFor(a.threadId),
       });
     }
@@ -101,6 +106,7 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
       nextStep: nextStepFor(status, 0),
       snippet: "",
       manual: true,
+      needsReview: false, // user-entered → nothing to confirm
       ...metaFor(m.id),
     });
   }

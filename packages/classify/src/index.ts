@@ -40,7 +40,22 @@ const INTERVIEW_RE =
 const APPLIED_RE =
   /\b(thank(?:s| you) for (?:applying|your application|submitting|your interest)|appreciate your (?:interest|application)|application (?:has been |was )?(?:received|submitted|registered)|received your application|we(?:'?ve| have) received your|successfully (?:submitted|applied|received)|your application (?:is|has been|was) (?:received|submitted|under review|being reviewed|in)|(?:currently |now )?(?:under|in) review|reviewing your application|will (?:review|be in touch|get back)|in our (?:system|database)|has been received)\b/;
 
-export function detectStatus(text: string | null | undefined): Status | null {
+// Precedence used to break score ties — the EARLIER status wins. detectStatus()
+// and classifyStatus() must argmax over this exact order (strict `>`), or their
+// labels drift apart and the parity gate breaks.
+const STATUS_PRECEDENCE = ["offer", "rejected", "interview", "applied"] as const;
+
+// Strong, decisive phrases score high (8-10); weak single-word cues score low
+// (1-2) so they only decide when nothing stronger fired. Threshold above which a
+// status is "strongly" supported (i.e. a decisive phrase, not just a weak cue).
+const STRONG_SCORE = 3;
+
+/**
+ * The raw status score map — the SINGLE place the scoring rules live. Kept
+ * separate from the argmax so classifyStatus() can surface the confidence signal
+ * detectStatus() otherwise discards. Pure; TS-only (not part of the parity gate).
+ */
+export function scoreStatus(text: string | null | undefined): Record<Status, number> {
   const t = " " + String(text || "").toLowerCase().replace(/\s+/g, " ") + " ";
   const score: Record<Status, number> = { offer: 0, rejected: 0, interview: 0, applied: 0 };
 
@@ -56,16 +71,69 @@ export function detectStatus(text: string | null | undefined): Status | null {
   if (/\b(rejected|declined|not selected)\b/.test(t)) score.rejected += 2;
   if (/\b(congratulations|congrats)\b/.test(t)) score.offer += 1;
 
-  // pick the highest; precedence offer > rejected > interview > applied on ties
+  return score;
+}
+
+/** argmax over the score map with the fixed precedence tie-break; null when all zero. */
+function topStatus(score: Record<Status, number>): Status | null {
   let best: Status | null = null;
   let bestScore = 0;
-  for (const k of ["offer", "rejected", "interview", "applied"] as const) {
+  for (const k of STATUS_PRECEDENCE) {
     if (score[k] > bestScore) {
       best = k;
       bestScore = score[k];
     }
   }
-  return best; // null when nothing matched (caller keeps the prior status)
+  return best;
+}
+
+export function detectStatus(text: string | null | undefined): Status | null {
+  return topStatus(scoreStatus(text)); // null when nothing matched (caller keeps the prior status)
+}
+
+/* ----------------------------------------------------------------------------
+   CONFIDENCE — expose the signal detectStatus() discards (additive; TS-only, not
+   part of the parity gate). classifyStatus() returns the SAME label as
+   detectStatus() plus how sure we are and why, so callers can flag low-confidence
+   results for a human to review (the plan's "unconfirmed" affordance).
+   -------------------------------------------------------------------------- */
+
+/** Confidence at/under this is treated as "flag for review". The low band
+ *  (weak-cue-only ≈0.35, mixed-signal ≈0.45) sits well below the high band (0.9),
+ *  so the exact cut is not sensitive. */
+export const LOW_CONFIDENCE = 0.5;
+
+/** A status decision with the confidence (0..1) and the reasons behind it. */
+export interface StatusResult {
+  status: Status | null;
+  confidence: number;
+  reasons: string[];
+}
+
+/**
+ * Like detectStatus(), but also reports HOW sure we are and WHY, computed from
+ * the same score map — so `classifyStatus(t).status === detectStatus(t)` for all
+ * inputs. Low confidence when only weak single-word cues fired (`weak_cue_only`),
+ * or a decisive email also carries a conflicting signal (`mixed_signal`, e.g.
+ * "great interview — unfortunately we're moving forward with other candidates").
+ */
+export function classifyStatus(text: string | null | undefined): StatusResult {
+  const score = scoreStatus(text);
+  const status = topStatus(score);
+  if (!status) return { status: null, confidence: 0, reasons: ["no_signal"] };
+
+  const best = score[status];
+  const strong = best >= STRONG_SCORE; // a decisive phrase fired, not just a weak cue
+  // Conflicting valence: a progression cue (interview/offer) present alongside a
+  // decisive rejection — the label is still correct, but the thread is ambiguous.
+  const positive = Math.max(score.interview, score.offer);
+  const mixed = strong && positive >= 2 && score.rejected >= STRONG_SCORE;
+
+  const reasons: string[] = [strong ? "strong_phrase" : "weak_cue_only"];
+  if (mixed) reasons.push("mixed_signal");
+
+  const confidence = !strong ? 0.35 : mixed ? 0.45 : 0.9;
+  return { status, confidence, reasons };
 }
 
 /* ============================================================================

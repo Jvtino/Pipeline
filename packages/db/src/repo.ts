@@ -3,7 +3,7 @@
 import { and, eq, like, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { encryptJson, decryptJson } from "@pipeline/crypto";
-import { boardFromApplications, type Application, type Board, type Status } from "@pipeline/contracts";
+import { boardFromApplications, type Application, type Board, type Status, type Enrichment } from "@pipeline/contracts";
 import type { Database } from "./client";
 import { users, mailConnections, applications, syncState, notes, contacts } from "./schema";
 
@@ -111,6 +111,7 @@ export async function upsertApplications(db: Database, userId: string, apps: App
       snippet: a.snippet,
       manual: a.manual ?? false,
       confidence: a.confidence ?? null,
+      enrichment: a.enrichment ? JSON.stringify(a.enrichment) : null,
     };
     await db
       .insert(applications)
@@ -127,6 +128,7 @@ export async function upsertApplications(db: Database, userId: string, apps: App
           snippet: a.snippet,
           manual: a.manual ?? false,
           confidence: a.confidence ?? null,
+          enrichment: a.enrichment ? JSON.stringify(a.enrichment) : null,
           updatedAt: new Date(),
         },
       });
@@ -147,6 +149,7 @@ export async function getApplicationsForUser(db: Database, userId: string): Prom
     snippet: r.snippet,
     manual: r.manual,
     confidence: r.confidence ?? undefined,
+    enrichment: r.enrichment ? (JSON.parse(r.enrichment) as Enrichment) : undefined,
   }));
 }
 

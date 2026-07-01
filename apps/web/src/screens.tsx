@@ -27,7 +27,7 @@ import {
   type PerfRow,
 } from "./lib/derive";
 import { MONTHS } from "./lib/format";
-import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip } from "./components";
+import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip, NeedsReviewBadge } from "./components";
 import { IconBolt, IconChevronRight, IconSearch, IconMail, IconDownload, IconPlus, IconShield, IconCheck } from "./lib/icons";
 
 const CARD = "card card-pad";
@@ -127,6 +127,7 @@ export function Dashboard(ctx: Ctx) {
               <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
                 <CompanyAvatar name={a.company} size={28} radius={8} font={12} />
                 <span style={{ font: "600 12.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.company}</span>
+                {a.needsReview && <NeedsReviewBadge compact />}
               </div>
               <span style={{ font: "500 12.5px var(--sans)", color: "#5f5a51", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.role}</span>
               <StatusPill status={a.status} sm />
@@ -215,6 +216,7 @@ export function Applications(ctx: Ctx) {
               {newIds.has(a.id) && (
                 <span style={{ font: "700 8px var(--mono)", letterSpacing: ".08em", color: "#1f7a52", background: "rgba(47,146,102,.16)", padding: "2px 5px", borderRadius: 4, flex: "0 0 auto" }}>NEW</span>
               )}
+              {a.needsReview && <NeedsReviewBadge />}
             </div>
             <span style={{ font: "500 13px var(--sans)", color: "#4f4a42", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.role}</span>
             <StatusPill status={a.status} />

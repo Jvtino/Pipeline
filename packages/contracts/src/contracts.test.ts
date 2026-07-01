@@ -40,4 +40,13 @@ describe("@pipeline/contracts", () => {
     expect(applicationSchema.safeParse({ ...base, confidence: 0.42 }).success).toBe(true);
     expect(applicationSchema.safeParse({ ...base, confidence: 1.5 }).success).toBe(false); // out of 0..1
   });
+
+  it("accepts optional enrichment (value-or-null fields) and rejects a wrong type", () => {
+    const base = {
+      id: "a", threadId: "t", company: "Acme", companyDomain: "acme.com", role: "Engineer",
+      status: "applied", firstSeen: "2026-01-01", lastActivity: "2026-01-02", snippet: "s",
+    };
+    expect(applicationSchema.safeParse({ ...base, enrichment: { compensation: "$120k", recruiterEmail: null } }).success).toBe(true);
+    expect(applicationSchema.safeParse({ ...base, enrichment: { compensation: 123 } }).success).toBe(false);
+  });
 });

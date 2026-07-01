@@ -9,3 +9,11 @@
 packages:
   - "packages/*"
   - "apps/*"
+
+# Build-script approval (pnpm 10 reads this here, not from package.json).
+# esbuild needs its postinstall (Vite/Vitest); electron is only for the desktop
+# build, so we skip its (large) binary download without a scary "ignored build".
+onlyBuiltDependencies:
+  - esbuild
+ignoredBuiltDependencies:
+  - electron

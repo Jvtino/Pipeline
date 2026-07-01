@@ -28,8 +28,5 @@
     "extraResources": ["LICENSE", "THIRD-PARTY-NOTICES.md", "THIRD-PARTY-LICENSES.md"],
     "mac": { "target": "dmg", "category": "public.app-category.productivity", "icon": "build/icon.icns" },
     "win": { "target": "nsis" }
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
   }
 }

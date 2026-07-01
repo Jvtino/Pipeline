@@ -58,6 +58,34 @@ export function StatusPill({ status, sm }: { status: UiStatus; sm?: boolean }) {
   );
 }
 
+/* ---- needs-review badge --------------------------------------------------- */
+/** Subtle "unconfirmed" affordance for low-confidence classifier results. The
+ *  card is still shown; this just invites a one-tap review (open → Move stage). */
+export function NeedsReviewBadge({ compact }: { compact?: boolean }) {
+  return (
+    <span
+      title="The classifier is unsure about this one — open it to confirm or fix the stage."
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        flex: "0 0 auto",
+        font: `700 ${compact ? 7.5 : 8}px var(--mono)`,
+        letterSpacing: ".08em",
+        textTransform: "uppercase",
+        color: "#9a6a16",
+        background: "rgba(192,138,42,.16)",
+        padding: compact ? "2px 5px" : "2px 6px",
+        borderRadius: 5,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#c08a2a" }} />
+      {compact ? "?" : "Unconfirmed"}
+    </span>
+  );
+}
+
 /* ---- avatars -------------------------------------------------------------- */
 export function CompanyAvatar({ name, size = 32, radius = 9, font = 13 }: { name: string; size?: number; radius?: number; font?: number }) {
   const t = tintFor(name);

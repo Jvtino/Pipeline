@@ -40,6 +40,16 @@ describe("flattenBoard — needsReview seam", () => {
       manual: [{ id: "m-1", company: "Acme", role: "Engineer", status: "applied" as const, dateLabel: "May 1", source: "Company site", createdIso: "2026-05-01" }],
     };
     const rows = flattenBoard(null, overlay, now);
-    expect(rows.find((r) => r.id === "m-1")!.needsReview).toBe(false);
+    const row = rows.find((r) => r.id === "m-1")!;
+    expect(row.needsReview).toBe(false);
+    expect(row.enrichment).toBeNull(); // manual apps carry no extracted enrichment
+  });
+
+  it("passes extracted enrichment through to the UI row (null when absent)", () => {
+    const enrichment = { compensation: "$120k", location: "Remote", recruiterEmail: "jo@acme.com" };
+    const board = boardFromApplications([app({ threadId: "e", enrichment }), app({ threadId: "plain" })], "test");
+    const byId = Object.fromEntries(flattenBoard(board, defaultOverlay(), now).map((r) => [r.id, r.enrichment]));
+    expect(byId["e"]).toEqual(enrichment);
+    expect(byId["plain"]).toBeNull();
   });
 });

@@ -15,6 +15,7 @@ export function defaultOverlay(): Overlay {
     contacts: [],
     docs: [],
     doneTasks: {},
+    taskLanes: {},
     nextDone: {},
     meta: {},
     settings: { autoSync: "30 min", syncOnOpen: true },
@@ -39,6 +40,7 @@ export function loadOverlay(): Overlay {
       contacts: parsed.contacts ?? base.contacts,
       docs: parsed.docs ?? base.docs,
       doneTasks: parsed.doneTasks ?? base.doneTasks,
+      taskLanes: parsed.taskLanes ?? base.taskLanes,
       nextDone: parsed.nextDone ?? base.nextDone,
       meta: parsed.meta ?? base.meta,
     };

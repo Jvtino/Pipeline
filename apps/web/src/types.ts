@@ -104,6 +104,7 @@ export interface Overlay {
   contacts: ContactEntry[];
   docs: DocEntry[];
   doneTasks: Record<string, boolean>;
+  taskLanes: Record<string, "todo" | "doing" | "done">; // kanban lane per derived task id; missing → falls back to doneTasks (legacy)
   nextDone: Record<string, boolean>;
   meta: Record<string, AppMeta>; // per-application tracking fields, keyed by app id
   settings: OverlaySettings;

@@ -32,8 +32,14 @@ export function registerAuthRoutes(app: FastifyInstance, d: AuthRouteDeps): void
   app.get("/auth/me", async (req, reply) => {
     const u = (req as RequestWithUser).user;
     if (!u) return reply.code(401).send({ error: "not authenticated" });
+    // The session cookie is signed and valid, but the user row can be gone — e.g.
+    // the local PGlite DB was reset while the browser kept its cookie. Report that
+    // as unauthenticated so the client re-runs its login (recreating the user +
+    // demo seed); otherwise the first user-scoped write — saving a mail connection
+    // — fails the users foreign key ("...is not present in table users").
     const dbUser = await getUser(d.db, u.id);
-    return { user: { ...u, plan: dbUser?.plan ?? "free" } };
+    if (!dbUser) return reply.code(401).send({ error: "not authenticated" });
+    return { user: { ...u, plan: dbUser.plan ?? "free" } };
   });
 
   // Dev-only plan toggle (so the demo can show Pro features without a real

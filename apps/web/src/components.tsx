@@ -12,7 +12,6 @@ import {
   Logo,
   IconDashboard,
   IconApplications,
-  IconCompanies,
   IconContacts,
   IconCalendar,
   IconTasks,
@@ -35,7 +34,6 @@ import {
 export const NAV: { key: Screen; label: string; Icon: typeof IconDashboard }[] = [
   { key: "dashboard", label: "Dashboard", Icon: IconDashboard },
   { key: "applications", label: "Applications", Icon: IconApplications },
-  { key: "companies", label: "Companies", Icon: IconCompanies },
   { key: "contacts", label: "Contacts", Icon: IconContacts },
   { key: "calendar", label: "Calendar", Icon: IconCalendar },
   { key: "tasks", label: "Tasks", Icon: IconTasks },

@@ -8,7 +8,6 @@ import type { Enrichment } from "@pipeline/contracts";
 export type Screen =
   | "dashboard"
   | "applications"
-  | "companies"
   | "contacts"
   | "calendar"
   | "tasks"

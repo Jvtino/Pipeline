@@ -5,6 +5,7 @@
   "main": "main.js",
   "author": "Haci Ahmet Ilhan",
   "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "start": "electron .",
     "test": "node --test",

@@ -7,6 +7,8 @@
 # Ctrl-C to stop.
 
 set -u
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0  # let corepack fetch the pinned pnpm silently (no Y/n prompt)
+export ELECTRON_SKIP_BINARY_DOWNLOAD=1    # the web/API app never needs the Electron binary
 
 say() { print -P "%F{cyan}$1%f"; }
 die() { print -P "%F{red}$1%f"; print "Press any key to close…"; read -k1; exit 1; }
@@ -32,9 +34,24 @@ else
   print -P "%F{yellow}⚠️  Couldn't update (offline?) — running the version you already have.%f"
 fi
 
-# --- install + build (esbuild builds; electron is skipped — see pnpm-workspace.yaml) ---
+# --- install + build ---
+# pnpm is pinned (package.json "packageManager") so corepack uses a known-good
+# version. If a stricter pnpm still exits non-zero purely because it SKIPPED the
+# optional esbuild/electron build scripts, that's harmless for the web app — we
+# continue. Any other failure triggers one clean reinstall, then gives up.
 say "📦 Installing dependencies…"
-ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install || die "❌ Install failed. Copy the error above and send it over."
+LOG="${TMPDIR:-/tmp}/pipeline-install.log"
+pnpm install 2>&1 | tee "$LOG"
+if [[ ${pipestatus[1]} -ne 0 ]]; then
+  if grep -q "ERR_PNPM_IGNORED_BUILDS" "$LOG"; then
+    print -P "%F{yellow}↳ pnpm skipped optional build scripts (esbuild/electron) — harmless here, continuing.%f"
+  else
+    say "↳ Install hiccup — retrying with a clean install…"
+    rm -rf node_modules packages/*/node_modules apps/*/node_modules
+    pnpm install 2>&1 | tee "$LOG"
+    [[ ${pipestatus[1]} -eq 0 ]] || die "❌ Install failed. Copy the error above and send it over."
+  fi
+fi
 say "🔨 Building shared packages…"
 pnpm --filter @pipeline/contracts build && pnpm --filter @pipeline/classify build || die "❌ Build failed."
 

@@ -57,6 +57,21 @@ describe("api server (authenticated)", () => {
     }
   });
 
+  it("POST /api/resync requires auth and is a safe no-op with no mailbox (keeps the demo board)", async () => {
+    const app = await buildServer();
+    try {
+      expect((await app.inject({ method: "POST", url: "/api/resync" })).statusCode).toBe(401);
+      const cookie = await login(app);
+      const res = await app.inject({ method: "POST", url: "/api/resync", headers: { cookie } });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ removed: 0, connections: 0, results: [] });
+      // the seeded demo board is untouched when there's nothing to rebuild from
+      expect((await app.inject({ method: "GET", url: "/api/applications", headers: { cookie } })).json().counts.total).toBe(9);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("GET /api/connections reports connected mailboxes (0 for a fresh user, 401 unauthenticated)", async () => {
     const app = await buildServer();
     try {

@@ -1020,7 +1020,7 @@ export function Templates(ctx: Ctx) {
    SETTINGS
    ========================================================================== */
 export function Settings(ctx: Ctx) {
-  const { overlay, setSetting, exportCsv, deleteAll, disconnect, email } = ctx;
+  const { overlay, setSetting, exportCsv, deleteAll, disconnect, email, onRebuild } = ctx;
   return (
     <div style={{ maxWidth: 720 }}>
       <div className="card" style={{ padding: 20, marginBottom: 14 }}>
@@ -1067,6 +1067,13 @@ export function Settings(ctx: Ctx) {
           <button className={`toggle${overlay.settings.syncOnOpen ? " on" : ""}`} aria-pressed={overlay.settings.syncOnOpen} onClick={() => setSetting({ syncOnOpen: !overlay.settings.syncOnOpen })}>
             <span className="knob" />
           </button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", marginTop: 16, paddingTop: 15, borderTop: "1px solid rgba(34,31,26,.07)" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ font: "600 13px var(--sans)" }}>Rebuild from mailbox</div>
+            <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", marginTop: 2 }}>Clear synced applications and re-scan your inbox from scratch — use this if non-application mail slipped onto your board.</div>
+          </div>
+          <button className="btn" onClick={onRebuild} style={{ color: "#3f4a44" }}>Rebuild board</button>
         </div>
       </div>
 

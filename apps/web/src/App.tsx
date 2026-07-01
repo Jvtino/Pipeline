@@ -10,7 +10,7 @@ import type { Board } from "@pipeline/contracts";
 import type { Overlay, Plan, Screen, OverlaySettings, ViewState, AppMeta } from "./types";
 import type { UiStatus } from "./lib/status";
 import { STATUS } from "./lib/status";
-import { ensureSession, getMe, getBoard, runSync, getConnections, postJson } from "./api";
+import { ensureSession, getMe, getBoard, runSync, resync, getConnections, postJson } from "./api";
 import { loadOverlay, saveOverlay, defaultOverlay } from "./lib/overlay";
 import { flattenBoard } from "./lib/derive";
 import { shortDate, syncedLabel } from "./lib/format";
@@ -184,6 +184,31 @@ export function App() {
     }
   }, [syncing, apps, flash, flagNew]);
 
+  // Clear synced applications and re-scan the mailbox from scratch — recovery for
+  // a board polluted by a previous bad sync. Manual + annotated apps are kept.
+  const onRebuild = useCallback(async () => {
+    if (syncing) return;
+    if (!window.confirm("Rebuild your board from your mailbox? This clears synced applications and re-scans your inbox from scratch. Manual entries and anything you've annotated are kept.")) return;
+    setSyncing(true);
+    try {
+      const res = await resync();
+      setBoard(await getBoard());
+      setConnCount(res.connections);
+      setLastSync(Date.now());
+      if (res.connections) {
+        setNav("applications");
+        setAppTab("all");
+        flash(`Rebuilt your board — cleared ${res.removed} stale item(s) and re-scanned ${res.connections} mailbox(es).`);
+      } else {
+        flash("No mailbox connected yet — connect one in Settings.");
+      }
+    } catch {
+      flash("Rebuild failed. Is a mailbox connected?");
+    } finally {
+      setSyncing(false);
+    }
+  }, [syncing, flash]);
+
   const setStatus = useCallback((id: string, s: UiStatus) => {
     setOverlay((o) => ({ ...o, overrides: { ...o.overrides, [id]: s } }));
     flash(`Moved to ${STATUS[s].label}`);
@@ -290,6 +315,7 @@ export function App() {
     openDetail,
     onNewApp,
     onSync,
+    onRebuild,
     setStatus,
     setMeta,
     markNextDone,

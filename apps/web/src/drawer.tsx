@@ -1,7 +1,7 @@
 // Application detail drawer — right-docked, slides in over a scrim. Tabs:
 // Overview (next step + move stage + progress timeline + details), Notes,
 // Contacts, Files. Notes/contacts/files read & write the client overlay.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Ctx } from "./ctx";
 import type { UiApplication, WorkType } from "./types";
 import { STATUS, MOVE_STAGES, type UiStatus } from "./lib/status";
@@ -35,7 +35,7 @@ function timelineFor(a: UiApplication): TLEvent[] {
   }
 }
 
-export function DetailDrawer({ app, ctx, onClose }: { app: UiApplication; ctx: Ctx; onClose: () => void }) {
+export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; ctx: Ctx; onClose: () => void; from?: DOMRect | null }) {
   const [tab, setTab] = useState<"overview" | "notes" | "contacts" | "files">("overview");
   const [noteDraft, setNoteDraft] = useState("");
   const [enter, setEnter] = useState(false);
@@ -44,11 +44,35 @@ export function DetailDrawer({ app, ctx, onClose }: { app: UiApplication; ctx: C
   const [cTitle, setCTitle] = useState("");
   const [cEmail, setCEmail] = useState("");
   const raf = useRef(0);
+  const closing = useRef(false); // expand mode: a reverse-morph is in flight
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  // In expand mode (opened from a card) we collapse back into the source rect
+  // before unmounting; the right-docked drawer just unmounts. Backdrop + close
+  // button + Escape all route through here.
+  const beginClose = () => {
+    if (from) { closing.current = true; setEnter(false); }
+    else closeRef.current();
+  };
+
+  const EASE = "cubic-bezier(.32,.72,0,1)"; // iOS panel easing (matches the company card)
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
 
   useEffect(() => {
-    raf.current = requestAnimationFrame(() => setEnter(true));
-    return () => cancelAnimationFrame(raf.current);
-  }, []);
+    // paint the start (square) geometry for one frame, then transition open
+    raf.current = requestAnimationFrame(() => { raf.current = requestAnimationFrame(() => setEnter(true)); });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (from) { closing.current = true; setEnter(false); e.stopImmediatePropagation(); } // don't also close the company panel behind us
+      else closeRef.current();
+    };
+    // capture phase so we win over the company panel's own Escape handler
+    const opts: AddEventListenerOptions | undefined = from ? { capture: true } : undefined;
+    window.addEventListener("keydown", onKey, opts);
+    return () => { cancelAnimationFrame(raf.current); window.removeEventListener("keydown", onKey, opts); };
+  }, [from]);
 
   const s = STATUS[app.status];
   const notes = ctx.overlay.notes[app.id] ?? [];
@@ -74,18 +98,16 @@ export function DetailDrawer({ app, ctx, onClose }: { app: UiApplication; ctx: C
     setCEmail("");
   };
 
-  return (
+  const content = (
     <>
-      <div className={`scrim pl-fade${enter ? " enter" : ""}`} style={{ zIndex: 35, background: "rgba(34,31,26,.3)" }} onClick={onClose} />
-      <div className={`drawer pl-drawer${enter ? " enter" : ""}`} style={{ zIndex: 36 }}>
-        <div className="drawer-head">
+      <div className="drawer-head">
           <CompanyAvatar name={app.company} size={46} radius={13} font={18} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ font: "700 16.5px var(--sans)", letterSpacing: "-.01em" }}>{app.company}</div>
             <div style={{ font: "500 13px var(--sans)", color: "#7a7468", marginTop: 1 }}>{app.role}</div>
           </div>
           <StatusPill status={app.status} />
-          <button className="iconbtn" style={{ width: 32, height: 32, border: "none", background: "transparent", color: "var(--muted-2)" }} onClick={onClose} aria-label="Close">
+          <button className="iconbtn" style={{ width: 32, height: 32, border: "none", background: "transparent", color: "var(--muted-2)" }} onClick={beginClose} aria-label="Close">
             <IconX size={17} />
           </button>
         </div>
@@ -286,6 +308,51 @@ export function DetailDrawer({ app, ctx, onClose }: { app: UiApplication; ctx: C
             </div>
           )}
         </div>
+    </>
+  );
+
+  // Opened from a card (Applications) → Apple-style expand: the tapped row
+  // morphs into a centered panel over a dimmed backdrop, and collapses back
+  // into the row on close. Matches the company square's open animation.
+  if (from) {
+    const W = Math.min(560, vw - 40);
+    const H = Math.min(760, vh - 56);
+    const geo: CSSProperties = enter
+      ? { top: Math.max(24, (vh - H) / 2), left: (vw - W) / 2, width: W, height: H, borderRadius: 22 }
+      : { top: from.top, left: from.left, width: from.width, height: from.height, borderRadius: 12 };
+    return (
+      <>
+        <div onClick={beginClose} style={{ position: "fixed", inset: 0, zIndex: 47, background: "rgba(34,31,26,.34)", opacity: enter ? 1 : 0, transition: `opacity .44s ${EASE}` }} />
+        <div
+          onTransitionEnd={(e) => { if (closing.current && e.propertyName === "width") closeRef.current(); }}
+          style={{
+            position: "fixed",
+            zIndex: 48,
+            background: "var(--drawer)",
+            border: "1px solid rgba(34,31,26,.08)",
+            overflow: "hidden",
+            boxShadow: enter ? "0 40px 90px rgba(34,31,26,.30)" : "0 2px 8px rgba(34,31,26,.10)",
+            transition: `top .46s ${EASE}, left .46s ${EASE}, width .46s ${EASE}, height .46s ${EASE}, border-radius .46s ${EASE}, box-shadow .46s ${EASE}`,
+            willChange: "top,left,width,height",
+            display: "flex",
+            flexDirection: "column",
+            ...geo,
+          }}
+        >
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", opacity: enter ? 1 : 0, transition: `opacity .28s ease ${enter ? ".14s" : "0s"}` }}>
+            {content}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Default (Dashboard, Calendar, …) → the familiar right-docked drawer.
+  return (
+    <>
+      <div className={`scrim pl-fade${enter ? " enter" : ""}`} style={{ zIndex: 35, background: "rgba(34,31,26,.3)" }} onClick={beginClose} />
+      <div className={`drawer pl-drawer${enter ? " enter" : ""}`} style={{ zIndex: 36 }}>
+        {content}
       </div>
     </>
   );

@@ -32,6 +32,15 @@ pnpm --filter @pipeline/classify build
 pnpm --filter @pipeline/classify test   # unit + parity gate
 ```
 
+## Try the brain on one email
+
+See status + confidence + reasons + enrichment for a single message (offline, no server):
+
+```bash
+pnpm --filter @pipeline/classify try     # built-in sample
+pnpm --filter @pipeline/classify try -- --subject "..." --body "..." --domain greenhouse.io --from "Acme <x@greenhouse.io>"
+```
+
 ## Growing the corpus from a real mistake (offline, no deps)
 
 When the brain gets one wrong, capture it so a test locks in the fix. Prints the JSON to paste by default; add `--write` to append it (note: `--write` reformats the file to standard 2-space JSON — use the default dry-run to keep the compact style):

@@ -17,7 +17,10 @@ import type { Status, Thread, Message, ResolvedCompany } from "@pipeline/contrac
 
 export { STATUS_RANK } from "@pipeline/contracts";
 export type { Status, Thread, Message, ResolvedCompany } from "@pipeline/contracts";
-export { statusForThread, threadToApplication, threadsToApplications } from "./aggregate";
+export { statusForThread, threadToApplication, threadsToApplications, resolveCompanySmart, classifyThread, cleanRole } from "./aggregate";
+export type { Classification, CompanyField, RoleField } from "./aggregate";
+export { extractInterview, extractCompensation, extractLocation, extractRecruiterContact } from "./extract";
+export type { InterviewInfo, CompensationInfo, LocationInfo, LocationKind, RecruiterContact } from "./extract";
 
 /* ============================================================================
    STATUS CLASSIFIER

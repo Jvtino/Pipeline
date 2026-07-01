@@ -18,7 +18,7 @@ export interface Ctx {
 
   // navigation / overlays
   goto: (s: Screen) => void;
-  openDetail: (id: string) => void;
+  openDetail: (id: string, from?: DOMRect | null) => void; // from set → detail expands from that rect (Apple-style)
   onNewApp: () => void;
   onSync: () => void;
   onRebuild: () => void; // clear synced apps + re-scan the mailbox from scratch

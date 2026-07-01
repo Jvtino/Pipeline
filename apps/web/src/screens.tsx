@@ -288,7 +288,7 @@ export function Applications(ctx: Ctx) {
           card={open.card}
           from={open.rect}
           onClose={() => setOpen(null)}
-          onOpenApp={(id) => { setOpen(null); openDetail(id); }}
+          onOpenApp={(id, rect) => openDetail(id, rect)}
         />
       )}
     </>
@@ -299,7 +299,7 @@ export function Applications(ctx: Ctx) {
  *  centered panel listing its positions, over a dimmed backdrop, using the iOS
  *  easing curve. Closing reverses back into the square. Each position opens the
  *  existing detail drawer — this is what ties Companies ↔ Applications together. */
-function CompanyExpand({ card, from, onClose, onOpenApp }: { card: CompanyCardData; from: DOMRect; onClose: () => void; onOpenApp: (id: string) => void }) {
+function CompanyExpand({ card, from, onClose, onOpenApp }: { card: CompanyCardData; from: DOMRect; onClose: () => void; onOpenApp: (id: string, rect: DOMRect) => void }) {
   const [enter, setEnter] = useState(false);
   const closing = useRef(false);
   const raf = useRef(0);
@@ -359,7 +359,7 @@ function CompanyExpand({ card, from, onClose, onOpenApp }: { card: CompanyCardDa
             <div
               key={a.id}
               className="hover-row"
-              onClick={() => onOpenApp(a.id)}
+              onClick={(e) => onOpenApp(a.id, e.currentTarget.getBoundingClientRect())}
               style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 12px", borderRadius: 12, cursor: "pointer" }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>

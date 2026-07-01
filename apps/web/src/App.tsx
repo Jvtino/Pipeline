@@ -60,6 +60,7 @@ export function App() {
   const [q, setQ] = useState("");
   const [appTab, setAppTab] = useState<UiStatus | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailFrom, setDetailFrom] = useState<DOMRect | null>(null); // when set, the detail expands from this rect (Apple-style); null → right-docked drawer
   const [modalOpen, setModalOpen] = useState(false);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
 
@@ -145,7 +146,10 @@ export function App() {
     setSelectedId(null);
     setModalOpen(false);
   }, []);
-  const openDetail = useCallback((id: string) => setSelectedId(id), []);
+  const openDetail = useCallback((id: string, from?: DOMRect | null) => {
+    setDetailFrom(from ?? null);
+    setSelectedId(id);
+  }, []);
   const onNewApp = useCallback(() => setModalOpen(true), []);
 
   const flagNew = useCallback((ids: string[]) => {
@@ -364,7 +368,7 @@ export function App() {
           <StateError onRetry={() => { setViewState("loading"); refresh().then(() => setViewState("ready")).catch(() => setViewState("error")); }} onCheck={() => { setViewState("ready"); setNav("settings"); }} />
         )}
 
-        {selected && <DetailDrawer app={selected} ctx={ctx} onClose={() => setSelectedId(null)} />}
+        {selected && <DetailDrawer app={selected} ctx={ctx} from={detailFrom} onClose={() => setSelectedId(null)} />}
         {modalOpen && <NewApplicationModal onClose={() => setModalOpen(false)} onSave={saveNewApp} />}
         {toast && <Toast msg={toast.msg} />}
       </main>

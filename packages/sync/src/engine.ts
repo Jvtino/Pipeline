@@ -31,9 +31,11 @@ export async function runSync(
 ): Promise<SyncResult> {
   const prev = (await getCursor(db, params.connectionId)) ?? undefined;
   const { threads, cursor } = await params.source.fetch({ cursor: prev });
-  // Keep only genuine job-application threads. Sources that pre-filter (Gmail's
-  // search query) pass through; sources that don't (Graph's inbox delta hands us
-  // the WHOLE inbox) are gated here so non-job mail never reaches the board.
+  // Keep only genuine job-application threads. Both providers now PRE-FILTER at
+  // fetch (Gmail's search query, Graph's $search keyword query) — mirroring the
+  // desktop app — so this shared gate is a backstop: it drops anything non-job the
+  // keyword search still surfaces (job-board digests, bare "position"/"offer"
+  // promos) before it reaches the board.
   const relevant = threads.filter(looksLikeJobApplication);
   const apps = threadsToApplications(relevant);
   if (apps.length) await upsertApplications(db, params.userId, apps);

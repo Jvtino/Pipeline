@@ -291,6 +291,7 @@ export function companyCards(apps: UiApplication[]): CompanyCardData[] {
 export interface DerivedTask {
   id: string;
   appId: string | null;
+  company: string;
   label: string;
   coLine: string;
   due: string;
@@ -303,17 +304,17 @@ export function deriveTasks(apps: UiApplication[], nowMs: number): DerivedTask[]
   for (const a of apps) {
     const co = a.company;
     if (a.status === "offer") {
-      tasks.push({ id: `t-offer-${a.id}`, appId: a.id, label: `Respond to the ${co} offer`, coLine: co, due: "This week", group: "This week" });
+      tasks.push({ id: `t-offer-${a.id}`, appId: a.id, company: co, label: `Respond to the ${co} offer`, coLine: co, due: "This week", group: "This week" });
     } else if (a.status === "interview") {
-      tasks.push({ id: `t-int-${a.id}`, appId: a.id, label: `Prep for the ${co} interview`, coLine: co, due: "Soon", group: "This week" });
+      tasks.push({ id: `t-int-${a.id}`, appId: a.id, company: co, label: `Prep for the ${co} interview`, coLine: co, due: "Soon", group: "This week" });
     } else if (a.status === "screening") {
-      tasks.push({ id: `t-scr-${a.id}`, appId: a.id, label: `Recruiter call with ${co}`, coLine: co, due: "This week", group: "This week" });
+      tasks.push({ id: `t-scr-${a.id}`, appId: a.id, company: co, label: `Recruiter call with ${co}`, coLine: co, due: "This week", group: "This week" });
     } else if (a.status === "no_response") {
       const ms = a.lastActivityIso ? parseIso(a.lastActivityIso) : NaN;
       const days = Number.isNaN(ms) ? null : daysBetween(nowMs, ms);
-      tasks.push({ id: `t-fu-${a.id}`, appId: a.id, label: `Follow up with ${co}`, coLine: days ? `${co} · quiet ${days} days` : co, due: "Today", group: "Today" });
+      tasks.push({ id: `t-fu-${a.id}`, appId: a.id, company: co, label: `Follow up with ${co}`, coLine: days ? `${co} · quiet ${days} days` : co, due: "Today", group: "Today" });
     } else if (a.status === "wishlist") {
-      tasks.push({ id: `t-wish-${a.id}`, appId: a.id, label: `Apply to ${co}`, coLine: co, due: "Later", group: "Later" });
+      tasks.push({ id: `t-wish-${a.id}`, appId: a.id, company: co, label: `Apply to ${co}`, coLine: co, due: "Later", group: "Later" });
     }
   }
   return tasks;

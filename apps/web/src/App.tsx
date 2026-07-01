@@ -230,8 +230,8 @@ export function App() {
     setOverlay((o) => ({ ...o, notes: { ...o.notes, [id]: [{ body, when: "just now" }, ...(o.notes[id] ?? [])] } }));
   }, [setOverlay]);
 
-  const toggleTask = useCallback((id: string) => {
-    setOverlay((o) => ({ ...o, doneTasks: { ...o.doneTasks, [id]: !o.doneTasks[id] } }));
+  const setTaskLane = useCallback((id: string, lane: "todo" | "doing" | "done") => {
+    setOverlay((o) => ({ ...o, taskLanes: { ...o.taskLanes, [id]: lane } }));
   }, [setOverlay]);
 
   const setSetting = useCallback((patch: Partial<OverlaySettings>) => {
@@ -323,7 +323,7 @@ export function App() {
     setMeta,
     markNextDone,
     addNote,
-    toggleTask,
+    setTaskLane,
     setSetting,
     addContact,
     addDoc,

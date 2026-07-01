@@ -1,7 +1,7 @@
 // The ten content screens of the redesign. Each reads the shared Ctx (derived
 // from the real Board + overlay) and renders the warm-light design. Per-screen
 // layout uses design-system classes from styles.css plus a few inline grids.
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import type { Ctx } from "./ctx";
 import type { UiApplication } from "./types";
 import { STATUS, STATUS_ORDER, NEW_APP_STATUSES, type UiStatus } from "./lib/status";
@@ -26,6 +26,7 @@ import {
   responseByWeek,
   type PerfRow,
   type CompanyCardData,
+  type DerivedTask,
 } from "./lib/derive";
 import { MONTHS } from "./lib/format";
 import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip, NeedsReviewBadge } from "./components";
@@ -466,38 +467,98 @@ export function Calendar(ctx: Ctx) {
 /* ============================================================================
    TASKS
    ========================================================================== */
+type TaskLane = "todo" | "doing" | "done";
+const TASK_LANES: { key: TaskLane; label: string; empty: string }[] = [
+  { key: "todo", label: "To do", empty: "Drag tasks here" },
+  { key: "doing", label: "Doing", empty: "What you’re working on" },
+  { key: "done", label: "Done", empty: "Nothing done yet" },
+];
+const TASK_GROUP_RANK: Record<DerivedTask["group"], number> = { Today: 0, "This week": 1, Later: 2 };
+// tint the little due chip by urgency
+const DUE_TINT: Record<string, { fg: string; bg: string }> = {
+  Today: { fg: "#9a5a16", bg: "rgba(192,138,42,.15)" },
+  Soon: { fg: "#9a5a16", bg: "rgba(192,138,42,.15)" },
+  "This week": { fg: "#5f5a51", bg: "rgba(34,31,26,.06)" },
+  Later: { fg: "#8a8478", bg: "rgba(34,31,26,.05)" },
+};
+
+/** Tasks as a drag-across board. Derived to-dos start in "To do"; drag a card
+ *  into "Doing" / "Done" (the lane is persisted per task in the overlay). A plain
+ *  click opens the underlying application with the same expand animation as the
+ *  Applications cards. */
 export function Tasks(ctx: Ctx) {
-  const tasks = deriveTasks(ctx.apps, ctx.nowMs);
-  const groups: ("Today" | "This week" | "Later")[] = ["Today", "This week", "Later"];
-  const hasAny = tasks.length > 0;
-  if (!hasAny) return <EmptyInline title="You’re all caught up" sub="No tasks right now — new ones appear automatically as interviews and follow-ups come due." />;
+  const { apps, nowMs, overlay, setTaskLane, openDetail } = ctx;
+  const tasks = deriveTasks(apps, nowMs);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overLane, setOverLane] = useState<TaskLane | null>(null);
+  const dragged = useRef(false); // distinguishes a real drag from a click
+
+  if (tasks.length === 0) {
+    return <EmptyInline title="You’re all caught up" sub="No tasks right now — new ones appear automatically as interviews and follow-ups come due." />;
+  }
+
+  const laneOf = (t: DerivedTask): TaskLane => overlay.taskLanes[t.id] ?? (overlay.doneTasks[t.id] ? "done" : "todo");
+  const byLane: Record<TaskLane, DerivedTask[]> = { todo: [], doing: [], done: [] };
+  for (const t of [...tasks].sort((a, b) => TASK_GROUP_RANK[a.group] - TASK_GROUP_RANK[b.group])) byLane[laneOf(t)].push(t);
+
+  const drop = (lane: TaskLane, e: DragEvent) => {
+    let id = "";
+    try { id = e.dataTransfer.getData("text/plain"); } catch { /* some browsers restrict reads mid-drag */ }
+    id = id || dragId || "";
+    if (id) setTaskLane(id, lane);
+    setDragId(null);
+    setOverLane(null);
+  };
+
   return (
-    <div style={{ maxWidth: 720 }}>
-      {groups.map((g) => {
-        const items = tasks.filter((t) => t.group === g);
-        if (items.length === 0) return null;
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, alignItems: "start" }}>
+      {TASK_LANES.map(({ key, label, empty }) => {
+        const items = byLane[key];
+        const isOver = overLane === key;
         return (
-          <div key={g} style={{ marginBottom: 22 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 11 }}>
-              <span className="eyebrow">{g}</span>
+          <div
+            key={key}
+            onDragOver={(e) => { e.preventDefault(); if (overLane !== key) setOverLane(key); }}
+            onDrop={(e) => { e.preventDefault(); drop(key, e); }}
+            style={{ background: isOver ? "rgba(47,146,102,.06)" : "transparent", border: `1px dashed ${isOver ? "rgba(47,146,102,.5)" : "transparent"}`, borderRadius: 14, padding: 5, minHeight: 130, transition: "background .15s ease, border-color .15s ease" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "2px 6px 12px" }}>
+              <span className="eyebrow">{label}</span>
               <CountChip>{items.length}</CountChip>
-              <span style={{ flex: 1, height: 1, background: "rgba(34,31,26,.07)" }} />
             </div>
-            {items.map((it) => {
-              const done = !!ctx.overlay.doneTasks[it.id];
-              return (
-                <button key={it.id} onClick={() => ctx.toggleTask(it.id)} className="hover-border" style={{ display: "flex", alignItems: "center", gap: 13, width: "100%", textAlign: "left", background: "var(--card)", border: "1px solid var(--card-border)", borderRadius: 12, padding: "13px 15px", cursor: "pointer", marginBottom: 9, boxShadow: "var(--card-shadow)" }}>
-                  <span style={{ width: 21, height: 21, borderRadius: 6, flex: "0 0 auto", display: "grid", placeItems: "center", background: done ? "#2f9266" : "transparent", border: `2px solid ${done ? "#2f9266" : "#c3bbac"}` }}>
-                    {done && <IconCheck size={12} color="#fff" stroke={3} />}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ font: "600 13.5px var(--sans)", color: done ? "#a89e8c" : "#2a2620", textDecoration: done ? "line-through" : "none" }}>{it.label}</div>
-                    <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", marginTop: 2 }}>{it.coLine || "Personal"}</div>
+            {items.length === 0 ? (
+              <div style={{ padding: "24px 12px", textAlign: "center", font: "500 12px var(--sans)", color: "var(--faint)", border: "1px dashed rgba(34,31,26,.13)", borderRadius: 12 }}>{empty}</div>
+            ) : (
+              items.map((t) => {
+                const done = key === "done";
+                const tint = DUE_TINT[t.due] ?? { fg: "#8a8478", bg: "rgba(34,31,26,.05)" };
+                return (
+                  <div
+                    key={t.id}
+                    draggable
+                    onMouseDown={() => { dragged.current = false; }}
+                    onDragStart={(e) => { setDragId(t.id); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", t.id); } catch { /* noop */ } }}
+                    onDrag={() => { dragged.current = true; }}
+                    onDragEnd={() => { setDragId(null); setOverLane(null); }}
+                    onClick={(e) => { if (!dragged.current && t.appId) openDetail(t.appId, e.currentTarget.getBoundingClientRect()); }}
+                    className="hover-border"
+                    title={t.appId ? "Open application" : undefined}
+                    style={{ display: "flex", alignItems: "center", gap: 11, background: "var(--card)", border: "1px solid var(--card-border)", borderRadius: 12, padding: "11px 12px", marginBottom: 9, boxShadow: "var(--card-shadow)", cursor: "grab", opacity: dragId === t.id ? 0.45 : 1, transition: "opacity .15s ease" }}
+                  >
+                    <CompanyAvatar name={t.company} size={34} radius={10} font={13} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ font: "600 13px var(--sans)", color: done ? "#a89e8c" : "#2a2620", textDecoration: done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.label}</div>
+                      <div style={{ font: "500 11px var(--sans)", color: "var(--muted-2)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.coLine}</div>
+                    </div>
+                    {done ? (
+                      <IconCheck size={15} color="#2f9266" stroke={3} />
+                    ) : (
+                      <span style={{ font: "600 9.5px var(--mono)", letterSpacing: ".04em", textTransform: "uppercase", color: tint.fg, background: tint.bg, padding: "3px 7px", borderRadius: 999, flex: "0 0 auto", whiteSpace: "nowrap" }}>{t.due}</span>
+                    )}
                   </div>
-                  <span style={{ font: "600 11.5px var(--mono)", color: "var(--muted-2)", whiteSpace: "nowrap", flex: "0 0 auto" }}>{it.due}</span>
-                </button>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         );
       })}

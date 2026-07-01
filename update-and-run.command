@@ -55,6 +55,21 @@ fi
 say "🔨 Building shared packages…"
 pnpm --filter @pipeline/contracts build && pnpm --filter @pipeline/classify build || die "❌ Build failed."
 
+# --- load your mailbox OAuth keys from .env (written by connect-google/outlook.command) ---
+# Export ONLY the OAuth vars — deliberately NOT DATABASE_URL / PUBLIC_URL / etc.,
+# so a leftover .env placeholder can't knock the app out of local (persistent) mode.
+if [[ -f .env ]]; then
+  loaded=""
+  for k in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET MS_CLIENT_ID MS_TENANT; do
+    v="$(grep -E "^${k}=" .env | tail -1 | cut -d= -f2-)"
+    if [[ -n "$v" ]]; then export "$k=$v"; loaded="$loaded $k"; fi
+  done
+  [[ -n "$loaded" ]] && say "🔑 Loaded mailbox keys from .env:$loaded" \
+    || print -P "%F{yellow}ℹ️  No mailbox keys in .env yet — double-click connect-google.command or connect-outlook.command to add one.%f"
+else
+  print -P "%F{yellow}ℹ️  No .env yet — to connect real mail, double-click connect-google.command / connect-outlook.command first.%f"
+fi
+
 # --- run: API in the background, web in the foreground, browser auto-opens ---
 say "🚀 Starting Pipeline — API on :3001, web on :5173…"
 pnpm --filter @pipeline/api dev &

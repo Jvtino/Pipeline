@@ -29,6 +29,8 @@ export interface Ctx {
   markNextDone: (id: string) => void;
   addNote: (id: string, body: string) => void;
   setTaskLane: (id: string, lane: "todo" | "doing" | "done") => void;
+  clearTasks: (ids: string[]) => void; // dismiss derived tasks from the board
+  restoreTasks: () => void; // un-dismiss all cleared tasks
   setSetting: (patch: Partial<OverlaySettings>) => void;
   addContact: (c: { name: string; title: string; email: string; company: string }) => void;
   addDoc: (file: File) => void;

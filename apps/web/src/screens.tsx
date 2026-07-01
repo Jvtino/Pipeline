@@ -487,7 +487,7 @@ const DUE_TINT: Record<string, { fg: string; bg: string }> = {
  *  click opens the underlying application with the same expand animation as the
  *  Applications cards. */
 export function Tasks(ctx: Ctx) {
-  const { apps, nowMs, overlay, setTaskLane, openDetail } = ctx;
+  const { apps, nowMs, overlay, setTaskLane, clearTasks, restoreTasks, openDetail } = ctx;
   const tasks = deriveTasks(apps, nowMs);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overLane, setOverLane] = useState<TaskLane | null>(null);
@@ -497,9 +497,12 @@ export function Tasks(ctx: Ctx) {
     return <EmptyInline title="You’re all caught up" sub="No tasks right now — new ones appear automatically as interviews and follow-ups come due." />;
   }
 
+  const visible = tasks.filter((t) => !overlay.clearedTasks[t.id]);
+  const clearedCount = tasks.length - visible.length;
+
   const laneOf = (t: DerivedTask): TaskLane => overlay.taskLanes[t.id] ?? (overlay.doneTasks[t.id] ? "done" : "todo");
   const byLane: Record<TaskLane, DerivedTask[]> = { todo: [], doing: [], done: [] };
-  for (const t of [...tasks].sort((a, b) => TASK_GROUP_RANK[a.group] - TASK_GROUP_RANK[b.group])) byLane[laneOf(t)].push(t);
+  for (const t of [...visible].sort((a, b) => TASK_GROUP_RANK[a.group] - TASK_GROUP_RANK[b.group])) byLane[laneOf(t)].push(t);
 
   const drop = (lane: TaskLane, e: DragEvent) => {
     let id = "";
@@ -511,8 +514,26 @@ export function Tasks(ctx: Ctx) {
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, alignItems: "start" }}>
-      {TASK_LANES.map(({ key, label, empty }) => {
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <span style={{ font: "500 12px var(--sans)", color: "var(--muted-2)" }}>{visible.length} task{visible.length === 1 ? "" : "s"}</span>
+        <span style={{ flex: 1 }} />
+        {clearedCount > 0 && (
+          <button onClick={restoreTasks} className="btn" style={{ padding: "8px 13px", fontSize: 12.5 }}>Restore {clearedCount} cleared</button>
+        )}
+        {visible.length > 0 && (
+          <button onClick={() => clearTasks(visible.map((t) => t.id))} className="btn" style={{ padding: "8px 13px", fontSize: 12.5, color: "#b0553f" }}>Clear all</button>
+        )}
+      </div>
+
+      {visible.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "52px 20px" }}>
+          <div style={{ font: "600 14.5px var(--sans)", color: "#3f3a33" }}>All cleared</div>
+          <div style={{ font: "500 12.5px var(--sans)", color: "var(--muted-2)", marginTop: 4 }}>You’ve cleared every task. Use “Restore” above to bring them back.</div>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, alignItems: "start" }}>
+          {TASK_LANES.map(({ key, label, empty }) => {
         const items = byLane[key];
         const isOver = overLane === key;
         return (
@@ -555,14 +576,25 @@ export function Tasks(ctx: Ctx) {
                     ) : (
                       <span style={{ font: "600 9.5px var(--mono)", letterSpacing: ".04em", textTransform: "uppercase", color: tint.fg, background: tint.bg, padding: "3px 7px", borderRadius: 999, flex: "0 0 auto", whiteSpace: "nowrap" }}>{t.due}</span>
                     )}
+                    <span
+                      className="task-x"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); clearTasks([t.id]); }}
+                      title="Clear this task"
+                      style={{ display: "grid", placeItems: "center", width: 22, height: 22, borderRadius: 6, cursor: "pointer", flex: "0 0 auto" }}
+                    >
+                      <IconX size={12} />
+                    </span>
                   </div>
                 );
               })
             )}
           </div>
         );
-      })}
-    </div>
+          })}
+        </div>
+      )}
+    </>
   );
 }
 

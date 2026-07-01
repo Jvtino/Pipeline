@@ -474,6 +474,11 @@ input, select, button, textarea { font-family: inherit; }
 .pl-fade.enter { opacity: 1; }
 .pl-drawer { transform: translateX(26px); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .pl-drawer.enter { transform: none; }
+
+/* Tasks board: per-card clear (✕) affordance */
+.task-x { color: var(--faint-2); transition: color 0.12s ease, background 0.12s ease; }
+.task-x:hover { color: #b0553f; background: rgba(176, 85, 63, 0.12); }
+
 .pl-modal {
   opacity: 0; transform: translate(-50%, -46%);
   transition: opacity 0.2s ease, transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);

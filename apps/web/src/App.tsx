@@ -234,6 +234,18 @@ export function App() {
     setOverlay((o) => ({ ...o, taskLanes: { ...o.taskLanes, [id]: lane } }));
   }, [setOverlay]);
 
+  const clearTasks = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setOverlay((o) => {
+      const cleared = { ...o.clearedTasks };
+      for (const id of ids) cleared[id] = true;
+      return { ...o, clearedTasks: cleared };
+    });
+  }, [setOverlay]);
+  const restoreTasks = useCallback(() => {
+    setOverlay((o) => ({ ...o, clearedTasks: {} }));
+  }, [setOverlay]);
+
   const setSetting = useCallback((patch: Partial<OverlaySettings>) => {
     setOverlay((o) => ({ ...o, settings: { ...o.settings, ...patch } }));
   }, [setOverlay]);
@@ -324,6 +336,8 @@ export function App() {
     markNextDone,
     addNote,
     setTaskLane,
+    clearTasks,
+    restoreTasks,
     setSetting,
     addContact,
     addDoc,

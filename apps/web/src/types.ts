@@ -105,6 +105,7 @@ export interface Overlay {
   docs: DocEntry[];
   doneTasks: Record<string, boolean>;
   taskLanes: Record<string, "todo" | "doing" | "done">; // kanban lane per derived task id; missing → falls back to doneTasks (legacy)
+  clearedTasks: Record<string, boolean>; // derived tasks dismissed from the board (hidden until Restore)
   nextDone: Record<string, boolean>;
   meta: Record<string, AppMeta>; // per-application tracking fields, keyed by app id
   settings: OverlaySettings;

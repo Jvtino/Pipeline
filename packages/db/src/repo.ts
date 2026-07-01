@@ -110,6 +110,7 @@ export async function upsertApplications(db: Database, userId: string, apps: App
       lastActivity: a.lastActivity,
       snippet: a.snippet,
       manual: a.manual ?? false,
+      confidence: a.confidence ?? null,
     };
     await db
       .insert(applications)
@@ -125,6 +126,7 @@ export async function upsertApplications(db: Database, userId: string, apps: App
           lastActivity: a.lastActivity,
           snippet: a.snippet,
           manual: a.manual ?? false,
+          confidence: a.confidence ?? null,
           updatedAt: new Date(),
         },
       });
@@ -144,6 +146,7 @@ export async function getApplicationsForUser(db: Database, userId: string): Prom
     lastActivity: r.lastActivity,
     snippet: r.snippet,
     manual: r.manual,
+    confidence: r.confidence ?? undefined,
   }));
 }
 

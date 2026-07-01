@@ -92,6 +92,17 @@ describe("@pipeline/db", () => {
     expect(apps[0]!.status).toBe("offer");
   });
 
+  it("round-trips the optional classifier confidence (absent → undefined)", async () => {
+    await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
+    await upsertApplications(h.db, "u1", [
+      { ...appFixture("t-low", "Acme", "interview"), confidence: 0.35 },
+      appFixture("t-none", "Globex", "applied"), // no confidence set
+    ]);
+    const byThread = Object.fromEntries((await getApplicationsForUser(h.db, "u1")).map((a) => [a.threadId, a.confidence]));
+    expect(byThread["t-low"]).toBeCloseTo(0.35);
+    expect(byThread["t-none"]).toBeUndefined();
+  });
+
   it("notes + contacts are scoped to (user, application)", async () => {
     await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
     await upsertApplications(h.db, "u1", [appFixture("t1", "Acme", "applied")]);

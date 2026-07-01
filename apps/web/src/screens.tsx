@@ -162,19 +162,41 @@ export function Dashboard(ctx: Ctx) {
 /* ============================================================================
    APPLICATIONS
    ========================================================================== */
+// Sort/filter for the company-grouped Applications view.
+type CompanySort = "updated" | "applied" | "positions" | "furthest" | "name";
+type CompanyFilter = "all" | "active" | "offer" | "interview" | "needsReview";
+
+// How "far along" a status is, for the "Furthest along" sort.
+const PROGRESS_RANK: Record<UiStatus, number> = { offer: 5, interview: 4, screening: 3, applied: 2, no_response: 1, wishlist: 1, rejected: 0 };
+const maxIso = (xs: (string | null)[]): string => xs.reduce<string>((m, s) => (s && s > m ? s : m), "");
+const bestRank = (c: CompanyCardData): number => c.apps.reduce((m, a) => Math.max(m, PROGRESS_RANK[a.status] ?? 0), 0);
+
+const COMPANY_SORTERS: Record<CompanySort, (a: CompanyCardData, b: CompanyCardData) => number> = {
+  updated: (a, b) => maxIso(b.apps.map((x) => x.lastActivityIso)).localeCompare(maxIso(a.apps.map((x) => x.lastActivityIso))),
+  applied: (a, b) => maxIso(b.apps.map((x) => x.appliedIso)).localeCompare(maxIso(a.apps.map((x) => x.appliedIso))),
+  positions: (a, b) => b.apps.length - a.apps.length,
+  furthest: (a, b) => bestRank(b) - bestRank(a),
+  name: (a, b) => a.company.localeCompare(b.company),
+};
+
+function matchesCompanyFilter(c: CompanyCardData, f: CompanyFilter): boolean {
+  switch (f) {
+    case "active": return c.apps.some((a) => a.status === "applied" || a.status === "screening" || a.status === "interview" || a.status === "offer");
+    case "offer": return c.apps.some((a) => a.status === "offer");
+    case "interview": return c.apps.some((a) => a.status === "interview");
+    case "needsReview": return c.apps.some((a) => a.needsReview);
+    default: return true;
+  }
+}
+
+/** The unified Applications tab: the company-square grid (each square opens to its
+ *  positions — see CompanyExpand), with a "prioritize by" sort + a status filter. */
 export function Applications(ctx: Ctx) {
-  const { apps, q, appTab, setAppTab, openDetail, newIds, onNewApp, onSync } = ctx;
-  const counts = statusCounts(apps);
+  const { apps, q, openDetail, onNewApp, onSync } = ctx;
+  const [open, setOpen] = useState<{ card: CompanyCardData; rect: DOMRect } | null>(null);
+  const [sort, setSort] = useState<CompanySort>("updated");
+  const [filter, setFilter] = useState<CompanyFilter>("all");
   const query = q.trim().toLowerCase();
-  const rows = apps.filter(
-    (a) => (appTab === "all" || a.status === appTab) && (!query || a.company.toLowerCase().includes(query) || a.role.toLowerCase().includes(query)),
-  );
-  const tabs: { key: UiStatus | "all"; label: string; count: number }[] = [
-    { key: "all", label: "All", count: apps.length },
-    ...STATUS_ORDER.map((s) => ({ key: s, label: STATUS[s].label, count: counts[s] })),
-  ];
-  const grid = "1.5fr 1.6fr 1fr .9fr 1.2fr .9fr 30px";
-  const filtered = !!query || appTab !== "all";
 
   if (apps.length === 0) {
     return (
@@ -189,108 +211,84 @@ export function Applications(ctx: Ctx) {
     );
   }
 
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {tabs.map((t) => (
-          <button key={t.key} className={`pl-tab${appTab === t.key ? " active" : ""}`} onClick={() => setAppTab(t.key)}>
-            {t.label}
-            <span className="count">{t.count}</span>
-          </button>
-        ))}
-      </div>
-      <div className="card" style={{ overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: grid, gap: 14, padding: "13px 18px", background: "var(--table-head)", borderBottom: "1px solid var(--card-border)", font: "600 10.5px var(--mono)", letterSpacing: ".04em", textTransform: "uppercase", color: "#9b9082" }}>
-          <span>Company</span>
-          <span>Position</span>
-          <span>Status</span>
-          <span>Applied</span>
-          <span>Next Step</span>
-          <span>Source</span>
-          <span />
-        </div>
-        {rows.map((a) => (
-          <div key={a.id} className="hover-row" onClick={() => openDetail(a.id)} style={{ display: "grid", gridTemplateColumns: grid, gap: 14, alignItems: "center", padding: "13px 18px", borderBottom: "1px solid rgba(34,31,26,.05)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <CompanyAvatar name={a.company} />
-              <span style={{ font: "600 13px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.company}</span>
-              {newIds.has(a.id) && (
-                <span style={{ font: "700 8px var(--mono)", letterSpacing: ".08em", color: "#1f7a52", background: "rgba(47,146,102,.16)", padding: "2px 5px", borderRadius: 4, flex: "0 0 auto" }}>NEW</span>
-              )}
-              {a.needsReview && <NeedsReviewBadge />}
-            </div>
-            <span style={{ font: "500 13px var(--sans)", color: "#4f4a42", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.role}</span>
-            <StatusPill status={a.status} />
-            <span style={{ font: "500 12px var(--mono)", color: "var(--muted)" }}>{a.dateLabel}</span>
-            <span style={{ font: "500 12.5px var(--sans)", color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nextStep}</span>
-            <span style={{ font: "500 12px var(--sans)", color: "var(--muted-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.source}</span>
-            <span style={{ display: "grid", placeItems: "center", color: "var(--faint-2)" }}>›</span>
-          </div>
-        ))}
-        {rows.length === 0 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "46px 20px" }}>
-            <div style={{ width: 46, height: 46, borderRadius: 13, background: "#efe9df", display: "grid", placeItems: "center", marginBottom: 13 }}>
-              <IconSearch size={21} color="#b3a37e" stroke={1.8} />
-            </div>
-            <div style={{ font: "600 14.5px var(--sans)", color: "#3f3a33" }}>{filtered ? "No applications match this view" : "No applications yet"}</div>
-            <div style={{ font: "500 12.5px var(--sans)", color: "var(--muted-2)", marginTop: 4 }}>{filtered ? "Try a different status or clear your search." : "Run a sync or add one to get started."}</div>
-          </div>
-        )}
-        <div style={{ display: "flex", alignItems: "center", padding: "13px 18px" }}>
-          <span style={{ font: "500 12px var(--sans)", color: "var(--muted-2)" }}>
-            Showing {rows.length} of {apps.length} applications
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
+  let cards = companyCards(apps);
+  if (query) cards = cards.filter((c) => c.company.toLowerCase().includes(query) || c.apps.some((a) => a.role.toLowerCase().includes(query)));
+  cards = cards.filter((c) => matchesCompanyFilter(c, filter));
+  cards = [...cards].sort(COMPANY_SORTERS[sort]);
+  const totalApps = cards.reduce((n, c) => n + c.apps.length, 0);
 
-/* ============================================================================
-   COMPANIES
-   ========================================================================== */
-export function Companies(ctx: Ctx) {
-  const cards = companyCards(ctx.apps);
-  const [open, setOpen] = useState<{ card: CompanyCardData; rect: DOMRect } | null>(null);
-  if (cards.length === 0) return <EmptyInline title="No companies yet" sub="Companies appear here as applications come in." />;
+  const selStyle: CSSProperties = { padding: "8px 11px", fontSize: 12.5 };
   return (
     <>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
-        {cards.map((c) => {
-          const top = STATUS[c.topStatus];
-          return (
-            <div
-              key={c.company}
-              className="card hover-border"
-              style={{ padding: 16, cursor: "pointer" }}
-              onClick={(e) => setOpen({ card: c, rect: e.currentTarget.getBoundingClientRect() })}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-                <CompanyLogo name={c.company} domain={c.domain} size={42} radius={12} font={17} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ font: "650 14.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.company}</div>
-                  <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)" }}>{c.sub}</div>
-                </div>
-              </div>
-              <div style={{ height: 1, background: "rgba(34,31,26,.07)", margin: "13px 0" }} />
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 9px", borderRadius: 999, font: "600 10.5px var(--mono)", color: top.fg, background: top.bg }}>{top.label}</span>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {c.dots.slice(0, 8).map((d, i) => (
-                    <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: STATUS[d].dot }} />
-                  ))}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <span style={{ font: "600 10.5px var(--mono)", letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>Prioritize</span>
+        <select className="select" value={sort} onChange={(e) => setSort(e.target.value as CompanySort)} style={selStyle}>
+          <option value="updated">Last updated</option>
+          <option value="applied">Last applied</option>
+          <option value="positions">Most positions</option>
+          <option value="furthest">Furthest along</option>
+          <option value="name">Company A–Z</option>
+        </select>
+        <select className="select" value={filter} onChange={(e) => setFilter(e.target.value as CompanyFilter)} style={selStyle}>
+          <option value="all">All companies</option>
+          <option value="active">Active pipeline</option>
+          <option value="offer">Has an offer</option>
+          <option value="interview">Interviewing</option>
+          <option value="needsReview">Needs review</option>
+        </select>
+        <span style={{ flex: 1 }} />
+        <span style={{ font: "500 12px var(--sans)", color: "var(--muted-2)" }}>
+          {cards.length} {cards.length === 1 ? "company" : "companies"} · {totalApps} application{totalApps === 1 ? "" : "s"}
+        </span>
       </div>
+
+      {cards.length === 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "56px 20px" }}>
+          <div style={{ width: 46, height: 46, borderRadius: 13, background: "#efe9df", display: "grid", placeItems: "center", marginBottom: 13 }}>
+            <IconSearch size={21} color="#b3a37e" stroke={1.8} />
+          </div>
+          <div style={{ font: "600 14.5px var(--sans)", color: "#3f3a33" }}>Nothing matches this view</div>
+          <div style={{ font: "500 12.5px var(--sans)", color: "var(--muted-2)", marginTop: 4 }}>Try a different filter or clear your search.</div>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
+          {cards.map((c) => {
+            const top = STATUS[c.topStatus];
+            return (
+              <div
+                key={c.company}
+                className="card hover-border"
+                style={{ padding: 16, cursor: "pointer" }}
+                onClick={(e) => setOpen({ card: c, rect: e.currentTarget.getBoundingClientRect() })}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+                  <CompanyLogo name={c.company} domain={c.domain} size={42} radius={12} font={17} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ font: "650 14.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.company}</div>
+                    <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)" }}>{c.sub}</div>
+                  </div>
+                </div>
+                <div style={{ height: 1, background: "rgba(34,31,26,.07)", margin: "13px 0" }} />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 9px", borderRadius: 999, font: "600 10.5px var(--mono)", color: top.fg, background: top.bg }}>{top.label}</span>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {c.dots.slice(0, 8).map((d, i) => (
+                      <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: STATUS[d].dot }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {open && (
         <CompanyExpand
           card={open.card}
           from={open.rect}
           onClose={() => setOpen(null)}
-          onOpenApp={(id) => { setOpen(null); ctx.openDetail(id); }}
+          onOpenApp={(id) => { setOpen(null); openDetail(id); }}
         />
       )}
     </>

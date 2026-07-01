@@ -16,7 +16,7 @@ import { flattenBoard } from "./lib/derive";
 import { shortDate, syncedLabel } from "./lib/format";
 import { Sidebar, Header, Toast, StateLoading, StateError, screenTitle } from "./components";
 import type { Ctx } from "./ctx";
-import { Dashboard, Applications, Companies, Contacts, Calendar, Tasks, Statistics, Documents, Templates, Settings } from "./screens";
+import { Dashboard, Applications, Contacts, Calendar, Tasks, Statistics, Documents, Templates, Settings } from "./screens";
 import { DetailDrawer } from "./drawer";
 import { NewApplicationModal, type NewAppForm } from "./modals";
 import { Onboarding } from "./onboarding";
@@ -41,7 +41,6 @@ const uid = (prefix: string): string => `${prefix}-${Date.now()}-${(_idSeq += 1)
 const SCREENS: Record<Screen, (ctx: Ctx) => JSX.Element> = {
   dashboard: Dashboard,
   applications: Applications,
-  companies: Companies,
   contacts: Contacts,
   calendar: Calendar,
   tasks: Tasks,

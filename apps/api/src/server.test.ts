@@ -57,6 +57,19 @@ describe("api server (authenticated)", () => {
     }
   });
 
+  it("GET /api/connections reports connected mailboxes (0 for a fresh user, 401 unauthenticated)", async () => {
+    const app = await buildServer();
+    try {
+      expect((await app.inject({ method: "GET", url: "/api/connections" })).statusCode).toBe(401);
+      const cookie = await login(app);
+      const res = await app.inject({ method: "GET", url: "/api/connections", headers: { cookie } });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ count: 0, mailboxes: [] });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("dev upgrade flips the plan and unlocks Pro routes", async () => {
     const app = await buildServer();
     try {

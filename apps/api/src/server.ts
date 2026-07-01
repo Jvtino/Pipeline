@@ -6,7 +6,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { boardSchema } from "@pipeline/contracts";
-import { getBoardForUser, setUserPlan } from "@pipeline/db";
+import { getBoardForUser, setUserPlan, getMailConnections } from "@pipeline/db";
 import { issueLicense } from "@pipeline/license";
 import type { HttpTransport } from "@pipeline/providers";
 import { initStore, seedDemoForUser, resolveMasterKey } from "./store";
@@ -87,6 +87,15 @@ export async function buildServer(opts: ServerOptions = {}) {
     const user = requireUser(req, reply);
     if (!user) return reply;
     return syncAllConnections({ db: store.db, masterKey, userId: user.id, configs, transport: opts.transport });
+  });
+
+  // Connected mailboxes (metadata only — no secrets). Powers the header's
+  // "Connected: N E-mails" chip.
+  app.get("/api/connections", async (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return reply;
+    const mailboxes = await getMailConnections(store.db, user.id);
+    return { count: mailboxes.length, mailboxes: mailboxes.map((m) => ({ provider: m.provider, email: m.email })) };
   });
 
   // Pro-tier routes (analytics, reminders, export, notes/contacts) — all gated.

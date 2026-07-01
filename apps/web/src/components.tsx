@@ -218,7 +218,7 @@ export function Header({
   title,
   q,
   onSearch,
-  email,
+  connectedCount,
   syncLabel,
   syncing,
   onSync,
@@ -227,12 +227,14 @@ export function Header({
   title: string;
   q: string;
   onSearch: (v: string) => void;
-  email: string;
+  connectedCount: number;
   syncLabel: string;
   syncing: boolean;
   onSync: () => void;
   onNewApp: () => void;
 }) {
+  const connectedLabel =
+    connectedCount > 0 ? `Connected: ${connectedCount} E-mail${connectedCount === 1 ? "" : "s"}` : "No mailbox connected";
   return (
     <header className="header">
       <div className="screen-title">{title}</div>
@@ -241,14 +243,18 @@ export function Header({
         <IconSearch size={15} color="#b3ab9e" />
         <input value={q} onChange={(e) => onSearch(e.target.value)} placeholder="Search applications, companies…" />
       </div>
-      <div className="mailbox-chip">
-        <span className="mailbox-dot" />
-        <span className="mailbox-email">{email}</span>
+      {/* The mailbox chip is now the sync control: click it to check for new applications. */}
+      <button
+        className={`mailbox-chip${syncing ? " syncing" : ""}`}
+        onClick={onSync}
+        disabled={syncing}
+        title="Sync now — check for new applications"
+        aria-label="Sync now — check for new applications"
+      >
+        <span className={`mailbox-dot${connectedCount > 0 ? "" : " off"}`} />
+        <span className="mailbox-label">{connectedLabel}</span>
         <span className="mailbox-sync">· {syncLabel}</span>
-      </div>
-      <button className="btn" onClick={onSync} disabled={syncing}>
-        <IconRefresh size={15} className={syncing ? "spin" : undefined} />
-        {syncing ? "Syncing…" : "Run sync"}
+        <IconRefresh size={13} className={syncing ? "spin" : "mailbox-refresh"} />
       </button>
       <button className="btn btn-primary" onClick={onNewApp}>
         <IconPlus size={15} />

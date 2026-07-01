@@ -10,7 +10,7 @@ import type { Board } from "@pipeline/contracts";
 import type { Overlay, Plan, Screen, OverlaySettings, ViewState, AppMeta } from "./types";
 import type { UiStatus } from "./lib/status";
 import { STATUS } from "./lib/status";
-import { ensureSession, getMe, getBoard, runSync, postJson } from "./api";
+import { ensureSession, getMe, getBoard, runSync, getConnections, postJson } from "./api";
 import { loadOverlay, saveOverlay, defaultOverlay } from "./lib/overlay";
 import { flattenBoard } from "./lib/derive";
 import { shortDate, syncedLabel } from "./lib/format";
@@ -67,6 +67,7 @@ export function App() {
   const [viewState, setViewState] = useState<ViewState>("loading");
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<number | null>(null);
+  const [connCount, setConnCount] = useState(0);
   // Toast carries a nonce so flashing the *same* message twice still produces a
   // fresh state identity — otherwise React bails on the equal update and the
   // [toast]-keyed auto-dismiss effect wouldn't re-arm the timer.
@@ -88,6 +89,11 @@ export function App() {
     await ensureSession();
     setMe(await getMe());
     setBoard(await getBoard());
+    try {
+      setConnCount((await getConnections()).count);
+    } catch {
+      /* non-fatal — chip just shows 0 */
+    }
     setLastSync(Date.now());
   }, []);
 
@@ -161,6 +167,7 @@ export function App() {
       const res = await runSync();
       const nextBoard = await getBoard();
       setBoard(nextBoard);
+      setConnCount(res.connections);
       setLastSync(Date.now());
       // Flag rows that appeared as a result of the sync.
       const found = nextBoard.groups.flatMap((g) => g.applications.map((a) => a.threadId)).filter((id) => !before.has(id));
@@ -318,7 +325,7 @@ export function App() {
           title={screenTitle(nav)}
           q={q}
           onSearch={setQ}
-          email={email}
+          connectedCount={connCount}
           syncLabel={syncing ? "syncing…" : syncedLabel(lastSync)}
           syncing={syncing}
           onSync={onSync}

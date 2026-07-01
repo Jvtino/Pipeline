@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { boardFromApplications } from "@pipeline/contracts";
 import type { Application } from "@pipeline/contracts";
-import { flattenBoard } from "./derive";
+import { flattenBoard, companyCards } from "./derive";
 import { defaultOverlay } from "./overlay";
 
 const app = (over: Partial<Application> & { threadId: string }): Application => ({
@@ -51,5 +51,21 @@ describe("flattenBoard — needsReview seam", () => {
     const byId = Object.fromEntries(flattenBoard(board, defaultOverlay(), now).map((r) => [r.id, r.enrichment]));
     expect(byId["e"]).toEqual(enrichment);
     expect(byId["plain"]).toBeNull();
+  });
+
+  it("companyCards groups a company's positions into .apps (drives the expandable card)", () => {
+    const board = boardFromApplications(
+      [
+        app({ threadId: "a1", company: "Acme", role: "Engineer" }),
+        app({ threadId: "a2", company: "Acme", role: "Designer" }),
+        app({ threadId: "g1", company: "Globex", role: "Analyst" }),
+      ],
+      "test",
+    );
+    const cards = companyCards(flattenBoard(board, defaultOverlay(), now));
+    const acme = cards.find((c) => c.company === "Acme")!;
+    expect(acme.apps.map((a) => a.role).sort()).toEqual(["Designer", "Engineer"]);
+    expect(acme.sub).toBe("2 roles");
+    expect(cards.find((c) => c.company === "Globex")!.apps).toHaveLength(1);
   });
 });

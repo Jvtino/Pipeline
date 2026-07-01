@@ -264,6 +264,7 @@ export interface CompanyCardData {
   sub: string;
   topStatus: UiStatus;
   dots: UiStatus[];
+  apps: UiApplication[]; // this company's positions (newest first) — powers the expandable card
 }
 
 export function companyCards(apps: UiApplication[]): CompanyCardData[] {
@@ -282,6 +283,7 @@ export function companyCards(apps: UiApplication[]): CompanyCardData[] {
       sub: `${roles.length} role${roles.length > 1 ? "s" : ""}`,
       topStatus: first.status,
       dots: roles.map((r) => r.status),
+      apps: roles,
     };
   });
 }

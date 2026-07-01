@@ -1,7 +1,7 @@
 // The ten content screens of the redesign. Each reads the shared Ctx (derived
 // from the real Board + overlay) and renders the warm-light design. Per-screen
 // layout uses design-system classes from styles.css plus a few inline grids.
-import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Ctx } from "./ctx";
 import type { UiApplication } from "./types";
 import { STATUS, STATUS_ORDER, NEW_APP_STATUSES, type UiStatus } from "./lib/status";
@@ -25,10 +25,11 @@ import {
   salaryStats,
   responseByWeek,
   type PerfRow,
+  type CompanyCardData,
 } from "./lib/derive";
 import { MONTHS } from "./lib/format";
 import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip, NeedsReviewBadge } from "./components";
-import { IconBolt, IconChevronRight, IconSearch, IconMail, IconDownload, IconPlus, IconShield, IconCheck } from "./lib/icons";
+import { IconBolt, IconChevronRight, IconSearch, IconMail, IconDownload, IconPlus, IconShield, IconCheck, IconX } from "./lib/icons";
 
 const CARD = "card card-pad";
 
@@ -250,33 +251,133 @@ export function Applications(ctx: Ctx) {
    ========================================================================== */
 export function Companies(ctx: Ctx) {
   const cards = companyCards(ctx.apps);
+  const [open, setOpen] = useState<{ card: CompanyCardData; rect: DOMRect } | null>(null);
   if (cards.length === 0) return <EmptyInline title="No companies yet" sub="Companies appear here as applications come in." />;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
-      {cards.map((c) => {
-        const top = STATUS[c.topStatus];
-        return (
-          <div key={c.company} className="card hover-border" style={{ padding: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-              <CompanyLogo name={c.company} domain={c.domain} size={42} radius={12} font={17} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ font: "650 14.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.company}</div>
-                <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)" }}>{c.sub}</div>
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
+        {cards.map((c) => {
+          const top = STATUS[c.topStatus];
+          return (
+            <div
+              key={c.company}
+              className="card hover-border"
+              style={{ padding: 16, cursor: "pointer" }}
+              onClick={(e) => setOpen({ card: c, rect: e.currentTarget.getBoundingClientRect() })}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+                <CompanyLogo name={c.company} domain={c.domain} size={42} radius={12} font={17} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ font: "650 14.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.company}</div>
+                  <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)" }}>{c.sub}</div>
+                </div>
+              </div>
+              <div style={{ height: 1, background: "rgba(34,31,26,.07)", margin: "13px 0" }} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 9px", borderRadius: 999, font: "600 10.5px var(--mono)", color: top.fg, background: top.bg }}>{top.label}</span>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {c.dots.slice(0, 8).map((d, i) => (
+                    <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: STATUS[d].dot }} />
+                  ))}
+                </div>
               </div>
             </div>
-            <div style={{ height: 1, background: "rgba(34,31,26,.07)", margin: "13px 0" }} />
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 9px", borderRadius: 999, font: "600 10.5px var(--mono)", color: top.fg, background: top.bg }}>{top.label}</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                {c.dots.map((d, i) => (
-                  <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: STATUS[d].dot }} />
-                ))}
-              </div>
-            </div>
+          );
+        })}
+      </div>
+      {open && (
+        <CompanyExpand
+          card={open.card}
+          from={open.rect}
+          onClose={() => setOpen(null)}
+          onOpenApp={(id) => { setOpen(null); ctx.openDetail(id); }}
+        />
+      )}
+    </>
+  );
+}
+
+/** Apple-style "open from the square": the tapped company card morphs into a
+ *  centered panel listing its positions, over a dimmed backdrop, using the iOS
+ *  easing curve. Closing reverses back into the square. Each position opens the
+ *  existing detail drawer — this is what ties Companies ↔ Applications together. */
+function CompanyExpand({ card, from, onClose, onOpenApp }: { card: CompanyCardData; from: DOMRect; onClose: () => void; onOpenApp: (id: string) => void }) {
+  const [enter, setEnter] = useState(false);
+  const closing = useRef(false);
+  const raf = useRef(0);
+  const beginClose = () => { closing.current = true; setEnter(false); };
+
+  useEffect(() => {
+    // Paint the start (square) geometry for one frame, then transition open.
+    raf.current = requestAnimationFrame(() => { raf.current = requestAnimationFrame(() => setEnter(true)); });
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") beginClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(raf.current); window.removeEventListener("keydown", onKey); };
+  }, []);
+
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const W = Math.min(560, vw - 40);
+  const H = Math.min(560, vh - 80);
+  const EASE = "cubic-bezier(.32,.72,0,1)";
+  const geo: CSSProperties = enter
+    ? { top: Math.max(24, (vh - H) / 2), left: (vw - W) / 2, width: W, height: H, borderRadius: 22 }
+    : { top: from.top, left: from.left, width: from.width, height: from.height, borderRadius: 12 };
+
+  return (
+    <>
+      <div
+        onClick={beginClose}
+        style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(34,31,26,.34)", opacity: enter ? 1 : 0, transition: `opacity .44s ${EASE}` }}
+      />
+      <div
+        onTransitionEnd={(e) => { if (closing.current && e.propertyName === "width") onClose(); }}
+        style={{
+          position: "fixed",
+          zIndex: 46,
+          background: "#fffdf8",
+          border: "1px solid rgba(34,31,26,.08)",
+          overflow: "hidden",
+          boxShadow: enter ? "0 40px 90px rgba(34,31,26,.30)" : "0 2px 8px rgba(34,31,26,.10)",
+          transition: `top .46s ${EASE}, left .46s ${EASE}, width .46s ${EASE}, height .46s ${EASE}, border-radius .46s ${EASE}, box-shadow .46s ${EASE}`,
+          willChange: "top,left,width,height",
+          display: "flex",
+          flexDirection: "column",
+          ...geo,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 18px", borderBottom: "1px solid rgba(34,31,26,.07)", flex: "0 0 auto" }}>
+          <CompanyLogo name={card.company} domain={card.domain} size={42} radius={12} font={17} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ font: "700 16.5px var(--sans)", letterSpacing: "-.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.company}</div>
+            <div style={{ font: "500 12px var(--sans)", color: "var(--muted-2)", marginTop: 1 }}>{card.sub}</div>
           </div>
-        );
-      })}
-    </div>
+          <button onClick={beginClose} aria-label="Close" className="iconbtn" style={{ width: 32, height: 32, border: "none", background: "transparent", color: "var(--muted-2)", cursor: "pointer" }}>
+            <IconX size={17} />
+          </button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px 12px", opacity: enter ? 1 : 0, transition: `opacity .28s ease ${enter ? ".14s" : "0s"}` }}>
+          {card.apps.map((a) => (
+            <div
+              key={a.id}
+              className="hover-row"
+              onClick={() => onOpenApp(a.id)}
+              style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 12px", borderRadius: 12, cursor: "pointer" }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <span style={{ font: "600 13.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.role}</span>
+                  {a.needsReview && <NeedsReviewBadge compact />}
+                </div>
+                <div style={{ font: "500 11.5px var(--mono)", color: "var(--muted-2)", marginTop: 3 }}>{a.dateLabel} · {a.source}</div>
+              </div>
+              <StatusPill status={a.status} sm />
+              <span style={{ color: "var(--faint-2)", flex: "0 0 auto" }}>›</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
 

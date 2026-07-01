@@ -53,7 +53,11 @@ if [[ ${pipestatus[1]} -ne 0 ]]; then
   fi
 fi
 say "🔨 Building shared packages…"
-pnpm --filter @pipeline/contracts build && pnpm --filter @pipeline/classify build || die "❌ Build failed."
+# Build ALL workspace packages (pnpm resolves the dependency order). The API imports
+# @pipeline/db, crypto, license, providers and sync too — not just contracts/classify —
+# and each resolves to its compiled dist/. A partial build leaves the API unable to
+# start: its :3001 refuses connections and the web app's /auth + /api proxy calls fail.
+pnpm --filter "./packages/*" build || die "❌ Build failed."
 
 # --- load your mailbox OAuth keys from .env (written by connect-google/outlook.command) ---
 # Export ONLY the OAuth vars — deliberately NOT DATABASE_URL / PUBLIC_URL / etc.,

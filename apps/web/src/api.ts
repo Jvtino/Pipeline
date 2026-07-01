@@ -46,3 +46,13 @@ export function getBoard(): Promise<Board> {
 export function runSync(): Promise<{ connections: number }> {
   return postJson<{ connections: number }>("/api/sync");
 }
+
+export interface Connections {
+  count: number;
+  mailboxes: { provider: string; email: string }[];
+}
+
+/** How many mailboxes are connected (metadata only) — for the header chip. */
+export function getConnections(): Promise<Connections> {
+  return getJson<Connections>("/api/connections");
+}

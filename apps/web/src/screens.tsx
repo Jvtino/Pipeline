@@ -380,45 +380,75 @@ function CompanyExpand({ card, from, onClose, onOpenApp }: { card: CompanyCardDa
    ========================================================================== */
 export function Contacts(ctx: Ctx) {
   const list = useMemo(() => mergeContacts(deriveContacts(ctx.apps), ctx.overlay.contacts), [ctx.apps, ctx.overlay.contacts]);
+  // One collapsible group per company (same pattern as the Documents tab).
+  const groups = useMemo(() => {
+    const m = new Map<string, typeof list>();
+    for (const k of list) {
+      const arr = m.get(k.company);
+      if (arr) arr.push(k);
+      else m.set(k.company, [k]);
+    }
+    return [...m.entries()];
+  }, [list]);
+  const [openCos, setOpenCos] = useState<Set<string> | null>(null);
+  const expanded = openCos ?? new Set(groups.length <= 2 ? groups.map(([c]) => c) : []);
+  const toggle = (company: string) => {
+    const next = new Set(expanded);
+    if (next.has(company)) next.delete(company);
+    else next.add(company);
+    setOpenCos(next);
+  };
   if (list.length === 0) {
     return <EmptyInline title="No contacts yet" sub="Contacts appear here automatically as Pipeline finds recruiters in your synced mail — or add the people you’re talking to from any application’s Contacts tab." />;
   }
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
-      {list.map((k) => (
-        <div
-          key={k.id}
-          className="card hover-border"
-          style={{ padding: 17, cursor: k.appId ? "pointer" : "default" }}
-          onClick={k.appId ? () => ctx.openDetail(k.appId!) : undefined}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <PersonAvatar name={k.name} company={k.company} />
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ font: "650 14.5px var(--sans)" }}>{k.name}</div>
-              <div style={{ font: "500 12px var(--sans)", color: "var(--muted-2)" }}>{k.title || "—"}</div>
+    <div style={{ maxWidth: 840, display: "flex", flexDirection: "column", gap: 10 }}>
+      {groups.map(([company, people]) => {
+        const open = expanded.has(company);
+        return (
+          <div key={company} className="card" style={{ overflow: "hidden" }}>
+            <div
+              className="hover-row"
+              onClick={() => toggle(company)}
+              style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", cursor: "pointer", userSelect: "none" }}
+            >
+              <CompanyAvatar name={company} size={30} radius={9} font={12} />
+              <span style={{ font: "650 13.5px var(--sans)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{company}</span>
+              <span style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", flex: "0 0 auto" }}>{people.length} contact{people.length === 1 ? "" : "s"}</span>
+              <IconChevronRight size={14} color="#c5bdb0" style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s", flex: "0 0 auto" }} />
             </div>
-            {k.source === "email" && (
-              <span style={{ flex: "0 0 auto", padding: "3px 8px", borderRadius: 7, background: "rgba(47,146,102,.12)", font: "600 10px var(--sans)", color: "#1f7a52" }}>from email</span>
-            )}
+            {open &&
+              people.map((k) => (
+                <div
+                  key={k.id}
+                  className="hover-row"
+                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 18px 12px 60px", borderTop: "1px solid rgba(34,31,26,.05)", cursor: k.appId ? "pointer" : "default" }}
+                  onClick={k.appId ? () => ctx.openDetail(k.appId!) : undefined}
+                >
+                  <PersonAvatar name={k.name} company={k.company} size={36} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      <span style={{ font: "650 13px var(--sans)" }}>{k.name}</span>
+                      {k.source === "email" && (
+                        <span style={{ padding: "2px 7px", borderRadius: 6, background: "rgba(47,146,102,.12)", font: "600 9.5px var(--sans)", color: "#1f7a52" }}>from email</span>
+                      )}
+                    </div>
+                    <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", marginTop: 1 }}>{k.title || "—"}</div>
+                  </div>
+                  {k.phone && (
+                    <a href={`tel:${k.phone.replace(/[^+\d]/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ font: "500 12px var(--sans)", color: "#7e88a0", textDecoration: "none", flex: "0 0 auto" }}>☎ {k.phone}</a>
+                  )}
+                  {k.email && (
+                    <a href={`mailto:${k.email}`} onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex", alignItems: "center", gap: 6, font: "500 12px var(--sans)", color: "#7e88a0", textDecoration: "none", flex: "0 0 auto" }}>
+                      <IconMail size={13} color="#9aa3b5" />
+                      {k.email}
+                    </a>
+                  )}
+                </div>
+              ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, paddingTop: 13, borderTop: "1px solid rgba(34,31,26,.07)" }}>
-            <CompanyAvatar name={k.company} size={24} radius={7} font={10} />
-            <span style={{ font: "600 12px var(--sans)", color: "#5f5a51", flex: 1 }}>{k.company}</span>
-          </div>
-          {k.email && (
-            <div style={{ font: "500 12px var(--sans)", color: "#7e88a0", marginTop: 11, display: "flex", alignItems: "center", gap: 7 }}>
-              <IconMail size={13} color="#9aa3b5" />
-              <a href={`mailto:${k.email}`} onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "none" }}>{k.email}</a>
-            </div>
-          )}
-          {k.phone && (
-            <div style={{ font: "500 12px var(--sans)", color: "#7e88a0", marginTop: 7 }}>
-              <a href={`tel:${k.phone.replace(/[^+\d]/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "none" }}>☎ {k.phone}</a>
-            </div>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

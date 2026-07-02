@@ -189,6 +189,7 @@ const BODY_PATS = [
   /\b(?:applying to|apply to|application (?:to|with)|your application (?:to|with)|applied (?:to|for the .*? at)|thank you for (?:your interest in|applying to)|interested in (?:joining|working at))\s+([A-Z][A-Za-z0-9&.'\- ]{1,40})/,
   /\bat\s+([A-Z][A-Za-z0-9&.'\- ]{1,40}?)\s+(?:has been|have|on indeed|team|appreciates|received your)/,
   /\b(?:viewed|reviewed) by (?:the (?:hiring )?(?:team|recruiter|manager|employer)(?: at)? )?([A-Z][A-Za-z0-9&.'\- ]{1,40})/,
+  /\b(?:application|cv|resume) (?:was |has been )?(?:sent|forwarded|submitted) to\s+([A-Z][A-Za-z0-9&.'\- ]{1,40})/,
 ];
 function companyFromBody(body) {
   const b = String(body || "");

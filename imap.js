@@ -6,6 +6,9 @@
 let ImapFlow, simpleParser;
 try { ({ ImapFlow } = require("imapflow")); } catch (e) { /* installed via npm install */ }
 try { ({ simpleParser } = require("mailparser")); } catch (e) { /* installed via npm install */ }
+// The brain — needed to keep thread identity honest for shared ATS platforms
+// (Workday, LinkedIn, …): domain+subject alone bundles different employers.
+const { isAtsDomain, resolveCompany, companyFromDomain } = require("./classify.js");
 
 const HOST_PRESETS = {
   "gmail.com": "imap.gmail.com", "googlemail.com": "imap.gmail.com",
@@ -51,18 +54,33 @@ function bodyText(parsed) {
 }
 function mapParsedToThreads(parsedList) {
   const groups = new Map();
+  let seq = 0;
   for (const p of parsedList || []) {
     const fromAddr = (p.from && p.from.value && p.from.value[0] && p.from.value[0].address) || "";
     const fromText = (p.from && p.from.text) || fromAddr || "unknown";
     const subject = p.subject || "(no subject)";
-    const key = domainOf(fromAddr) + "|" + normSubject(subject);
+    const domain = domainOf(fromAddr);
+    const body = bodyText(p);
+    let key = domain + "|" + normSubject(subject);
+    // Shared ATS platforms: many employers mail from ONE domain, often with the
+    // same boilerplate subject — domain+subject would bundle them into one
+    // application. Extend the key with the mail's own recovered employer; when
+    // no employer is recoverable, never merge (each mail stays its own thread)
+    // rather than silently mixing companies.
+    if (isAtsDomain(domain)) {
+      const mini = { threadId: "k", domain, subject, messages: [{ date: isoDate(p.date), from: fromText, body }] };
+      const company = resolveCompany(mini).company;
+      key += company && company !== companyFromDomain(domain)
+        ? "|" + company.toLowerCase()
+        : "|" + (p.messageId || "m" + seq++);
+    }
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push({
       date: isoDate(p.date),
       from: fromText,
-      domain: domainOf(fromAddr),
+      domain,
       subject,
-      body: bodyText(p),
+      body,
     });
   }
   const threads = [];

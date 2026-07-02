@@ -5,7 +5,7 @@
 // does a backfill; every sync after is a delta.
 import { threadsToApplications, looksLikeJobApplication } from "@pipeline/classify";
 import type { Thread } from "@pipeline/contracts";
-import { upsertApplications, saveCursor, getCursor, type Database } from "@pipeline/db";
+import { upsertApplications, upsertThreadMessages, saveCursor, getCursor, type Database } from "@pipeline/db";
 
 export interface FetchResult {
   threads: Thread[];
@@ -38,7 +38,11 @@ export async function runSync(
   // promos) before it reaches the board.
   const relevant = threads.filter(looksLikeJobApplication);
   const apps = threadsToApplications(relevant);
-  if (apps.length) await upsertApplications(db, params.userId, apps);
+  if (apps.length) {
+    await upsertApplications(db, params.userId, apps);
+    // Per-message previews (Email tab) — after the application rows they FK to.
+    await upsertThreadMessages(db, params.userId, relevant.filter((t) => t.messages.length > 0));
+  }
   await saveCursor(db, params.connectionId, cursor);
   return { cursor, fetched: threads.length, relevant: relevant.length, upserted: apps.length };
 }

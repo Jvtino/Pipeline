@@ -86,6 +86,37 @@ describe("api server (authenticated)", () => {
     }
   });
 
+  it("GET /api/applications/:threadId/messages is auth-gated, ownership-scoped, and empty-safe", async () => {
+    const app = await buildServer();
+    try {
+      expect((await app.inject({ method: "GET", url: "/api/applications/t1/messages" })).statusCode).toBe(401);
+      const cookie = await login(app);
+      // A thread the user does not own → 404, no data leak.
+      expect((await app.inject({ method: "GET", url: "/api/applications/not-yours/messages", headers: { cookie } })).statusCode).toBe(404);
+      // An owned application with no stored messages (demo rows) → 200 + empty list.
+      const board = (await app.inject({ method: "GET", url: "/api/applications", headers: { cookie } })).json();
+      const threadId = board.groups[0].applications[0].threadId as string;
+      const res = await app.inject({ method: "GET", url: `/api/applications/${encodeURIComponent(threadId)}/messages`, headers: { cookie } });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ messages: [] });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("GET /api/documents is auth-gated and empty for a fresh user", async () => {
+    const app = await buildServer();
+    try {
+      expect((await app.inject({ method: "GET", url: "/api/documents" })).statusCode).toBe(401);
+      const cookie = await login(app);
+      const res = await app.inject({ method: "GET", url: "/api/documents", headers: { cookie } });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ documents: [] });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("DELETE /api/connections/:id requires auth and 404s for a connection you don't own", async () => {
     const app = await buildServer();
     try {

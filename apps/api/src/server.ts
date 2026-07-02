@@ -6,7 +6,16 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { boardSchema } from "@pipeline/contracts";
-import { getBoardForUser, setUserPlan, getMailConnections, rebuildSyncedApplications, deleteMailConnection } from "@pipeline/db";
+import {
+  getBoardForUser,
+  setUserPlan,
+  getMailConnections,
+  rebuildSyncedApplications,
+  deleteMailConnection,
+  applicationBelongsTo,
+  listThreadMessages,
+  listUserAttachments,
+} from "@pipeline/db";
 import { issueLicense } from "@pipeline/license";
 import type { HttpTransport } from "@pipeline/providers";
 import { initStore, seedDemoForUser, resolveMasterKey } from "./store";
@@ -117,6 +126,27 @@ export async function buildServer(opts: ServerOptions = {}) {
     if (!user) return reply;
     const mailboxes = await getMailConnections(store.db, user.id);
     return { count: mailboxes.length, mailboxes: mailboxes.map((m) => ({ id: m.id, provider: m.provider, email: m.email })) };
+  });
+
+  // A thread's stored message previews (drawer Email tab). Plain auth, not the
+  // Pro gate — this is the user's own derived data at the same privacy level as
+  // the board's snippet (<=600-char previews + attachment metadata, never raw).
+  app.get("/api/applications/:threadId/messages", async (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return reply;
+    const threadId = (req.params as { threadId?: string }).threadId ?? "";
+    if (!(await applicationBelongsTo(store.db, user.id, `${user.id}:${threadId}`)))
+      return reply.code(404).send({ error: "application not found" });
+    const messages = await listThreadMessages(store.db, user.id, threadId);
+    return { messages: messages.map((m) => ({ date: m.date, from: m.from, bodyPreview: m.bodyPreview, attachments: m.attachments ?? [] })) };
+  });
+
+  // Every synced attachment (METADATA only) across the user's applications —
+  // powers the Documents tab's "from your emails" section.
+  app.get("/api/documents", async (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return reply;
+    return { documents: await listUserAttachments(store.db, user.id) };
   });
 
   // Disconnect a mailbox for real: delete the connection row (the encrypted

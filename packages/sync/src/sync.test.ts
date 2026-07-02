@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createDb, upsertUser, saveMailConnection, getBoardForUser, getCursor, type DbHandle } from "@pipeline/db";
+import { createDb, upsertUser, saveMailConnection, getBoardForUser, getCursor, listThreadMessages, type DbHandle } from "@pipeline/db";
 import { generateMasterKey } from "@pipeline/crypto";
 import type { Thread } from "@pipeline/contracts";
 import { runSync, type MailSource, type FetchResult } from "./index";
@@ -72,6 +72,11 @@ describe("incremental sync engine", () => {
     expect(board.counts.interview).toBe(1); // status advanced applied → interview
 
     expect(source.seen).toEqual([undefined, "h1"]); // first backfill, then delta from the saved cursor
+
+    // Per-message previews were persisted alongside the application rows,
+    // idempotently across the two rounds (round 2 re-sent message 1).
+    const msgs = await listThreadMessages(h.db, "u1", "t-acme");
+    expect(msgs.map((m) => m.bodyPreview)).toEqual(["thank you for applying", "we'd like to schedule an interview"]);
   });
 
   it("an empty delta still advances the cursor and changes nothing", async () => {

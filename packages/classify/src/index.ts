@@ -43,13 +43,15 @@ const INTERVIEW_RE =
 const APPLIED_RE =
   /\b(thank(?:s| you) for (?:applying|your application|submitting|your interest)|appreciate your (?:interest|application)|application (?:has been |was )?(?:received|submitted|registered)|received your application|we(?:'?ve| have) received your|successfully (?:submitted|applied|received)|your application (?:is|has been|was) (?:received|submitted|under review|being reviewed|in)|(?:currently |now )?(?:under|in) review|reviewing your application|will (?:review|be in touch|get back)|in our (?:system|database)|has been received)\b/;
 
-// Reschedule / cancellation logistics — an interview being MOVED, not ended.
-// Without this, "Unfortunately, we need to reschedule your interview" reads as a
-// rejection (lone "unfortunately" is decisive and wins the tie-break). Scored a
-// notch ABOVE a lone soft rejection cue; a real rejection in the same mail still
-// wins through its own decisive phrase ("position has been filled", …).
+// Reschedule logistics — an interview being MOVED, not ended. Without this,
+// "Unfortunately, we need to reschedule your interview" reads as a rejection
+// (lone "unfortunately" is decisive and wins the tie-break). Scored a notch
+// ABOVE a lone soft rejection cue; a real rejection in the same mail still wins
+// through its own decisive phrase ("position has been filled", …). Bare
+// CANCELLATION is deliberately excluded: it isn't progress, and when it comes
+// with a closure phrase the rejection must win.
 const RESCHEDULE_RE =
-  /\b(?:reschedul(?:e|ing|ed)|find (?:another|a new) time|(?:another|an alternative|a new) time for (?:our|your|the)|conflict (?:has )?c[ao]me up|no longer works for (?:us|me)|does .{0,30} work instead|(?:updated|revised) (?:calendar )?invite|cancel (?:our|your|the|tomorrow'?s) (?:interview|meeting|call))\b/;
+  /\b(?:reschedul(?:e|ing|ed)|find (?:another|a new) time|(?:another|an alternative|a new) time for (?:our|your|the)|conflict (?:has )?c[ao]me up|no longer works for (?:us|me)|does .{0,30} work instead|(?:updated|revised) (?:calendar )?invite)\b/;
 // Refusing to reschedule is not rescheduling ("we will not be rescheduling").
 const NEG_RESCHEDULE_RE = /\b(?:not|won'?t|will not|unable to|cannot|can'?t)(?: be)? reschedul/;
 

@@ -43,6 +43,16 @@ const INTERVIEW_RE =
 const APPLIED_RE =
   /\b(thank(?:s| you) for (?:applying|your application|submitting|your interest)|appreciate your (?:interest|application)|application (?:has been |was )?(?:received|submitted|registered)|received your application|we(?:'?ve| have) received your|successfully (?:submitted|applied|received)|your application (?:is|has been|was) (?:received|submitted|under review|being reviewed|in)|(?:currently |now )?(?:under|in) review|reviewing your application|will (?:review|be in touch|get back)|in our (?:system|database)|has been received)\b/;
 
+// Reschedule / cancellation logistics — an interview being MOVED, not ended.
+// Without this, "Unfortunately, we need to reschedule your interview" reads as a
+// rejection (lone "unfortunately" is decisive and wins the tie-break). Scored a
+// notch ABOVE a lone soft rejection cue; a real rejection in the same mail still
+// wins through its own decisive phrase ("position has been filled", …).
+const RESCHEDULE_RE =
+  /\b(?:reschedul(?:e|ing|ed)|find (?:another|a new) time|(?:another|an alternative|a new) time for (?:our|your|the)|conflict (?:has )?c[ao]me up|no longer works for (?:us|me)|does .{0,30} work instead|(?:updated|revised) (?:calendar )?invite|cancel (?:our|your|the|tomorrow'?s) (?:interview|meeting|call))\b/;
+// Refusing to reschedule is not rescheduling ("we will not be rescheduling").
+const NEG_RESCHEDULE_RE = /\b(?:not|won'?t|will not|unable to|cannot|can'?t)(?: be)? reschedul/;
+
 /* Turkish job-mail phrasings — high-precision renderings of the standard
    ATS/LinkedIn/kurumsal templates ("maalesef … olumsuz", "başvurunuz alınmıştır",
    "mülakata davet", "iş teklifi"). Substring-matched: \b is unreliable next to
@@ -78,6 +88,7 @@ export function scoreStatus(text: string | null | undefined): Record<Status, num
   if (negOffer) score.rejected += 10; // "unable to offer you the role" = rejection
   if (INTERVIEW_RE.test(t)) score.interview += 8;
   if (APPLIED_RE.test(t)) score.applied += 5;
+  if (RESCHEDULE_RE.test(t) && !NEG_RESCHEDULE_RE.test(t)) score.interview += 10;
 
   // Turkish templates — same weights as their English counterparts.
   if (TR_OFFER_RE.test(t)) score.offer += 10;

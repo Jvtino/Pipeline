@@ -17,6 +17,10 @@ export interface InterviewInfo {
 // Dedicated scheduling links only (a generic ATS URL is not a booking link).
 const BOOKING_RE =
   /\b(?:https?:\/\/)?(?:[\w-]+\.)*(?:calendly\.com|cal\.com|savvycal\.com|chilipiper\.com|meetings\.hubspot\.com|doodle\.com|when2meet\.com|calendar\.app\.google|book\.morgen\.so)\/[^\s<>()"']+/i;
+// Video-meeting links (Zoom/Meet/Teams/Webex) — the interview's join link. A
+// booking link wins when both appear (it's the action the candidate must take).
+const MEETING_LINK_RE =
+  /\b(?:https?:\/\/)?(?:[\w-]+\.)*(?:zoom\.us\/(?:j|my|w)\/|meet\.google\.com\/|teams\.microsoft\.com\/l\/|teams\.live\.com\/meet\/|webex\.com\/(?:meet|join)\/)[^\s<>()"']+/i;
 
 // Explicit date/time shapes, tried in order; each requires a concrete time or a
 // month+day (a bare weekday like "Monday" is too vague and is intentionally missed).
@@ -39,7 +43,7 @@ const DATETIME_RES: RegExp[] = [
 
 export function extractInterview(text: string | null | undefined): InterviewInfo | null {
   const t = String(text || "");
-  const link = t.match(BOOKING_RE);
+  const link = t.match(BOOKING_RE) ?? t.match(MEETING_LINK_RE);
   let dt: string | null = null;
   for (const re of DATETIME_RES) {
     const m = t.match(re);

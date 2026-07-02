@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install --filter \"@pipeline/web...\"",
+  "buildCommand": "pnpm --filter \"@pipeline/web...\" build",
+  "outputDirectory": "apps/web/dist",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://pipeline-api.onrender.com/api/:path*" },
+    { "source": "/auth/:path*", "destination": "https://pipeline-api.onrender.com/auth/:path*" },
+    { "source": "/:path*", "destination": "/index.html" }
+  ]
+}

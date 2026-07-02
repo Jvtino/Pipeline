@@ -161,3 +161,55 @@ test("imap.mapParsedToThreads handles missing sender/subject/date", () => {
   assert.equal(t[0].subject, "(no subject)");
   assert.match(t[0].messages[0].date, /^\d{4}-\d{2}-\d{2}$/);
 });
+
+// Shared-ATS mail must never thread on domain+subject alone (two employers,
+// one platform, identical boilerplate subject = distinct applications), and
+// each ATS thread must carry the id it had BEFORE that fix so the app can
+// re-key manual status overrides (MIGRATION_PLAN.md).
+test("imap.mapParsedToThreads separates ATS tenants and exposes legacyThreadId", () => {
+  const mail = (addr, body) => ({
+    from: { value: [{ address: addr }], text: `Workday <${addr}>` },
+    subject: "Application Update", date: "2026-06-01", body, text: body,
+  });
+  const threads = imap.mapParsedToThreads([
+    mail("initech@myworkday.com", "Initech has an update on your application."),
+    mail("hooli@myworkday.com", "Hooli has an update on your application."),
+  ]);
+  assert.equal(threads.length, 2); // NOT bundled into one "Myworkday" thread
+  threads.forEach(assertThreadShape);
+  // Both descend from the same pre-fix id — exactly the ambiguity the
+  // renderer's override repair refuses to guess about.
+  assert.equal(typeof threads[0].legacyThreadId, "string");
+  assert.equal(threads[0].legacyThreadId, threads[1].legacyThreadId);
+  assert.notEqual(threads[0].threadId, threads[1].threadId);
+  assert.ok(threads.every((t) => t.threadId !== t.legacyThreadId));
+});
+
+test("imap.mapParsedToThreads: legacyThreadId equals the historical derivation", () => {
+  const threads = imap.mapParsedToThreads([
+    { from: { value: [{ address: "careers@acme.com" }], text: "Acme <careers@acme.com>" },
+      subject: "Your application for Engineer", date: "2026-06-01", text: "thanks for applying" },
+  ]);
+  assert.equal(threads.length, 1);
+  // the exact id the pre-fix scheme produced for this thread's domain|subject key
+  const legacy = "imap-" + Buffer.from("acme.com|your application for engineer")
+    .toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
+  assert.equal(threads[0].legacyThreadId, legacy);
+  assert.notEqual(threads[0].threadId, legacy);
+});
+
+// Regression: the old ids truncated to ~the first 12 bytes of domain|subject,
+// so any two same-domain threads collided (one id, overrides bleeding across
+// unrelated applications). The hashed ids must be distinct.
+test("imap.mapParsedToThreads: same-domain different-subject threads get distinct ids", () => {
+  const threads = imap.mapParsedToThreads([
+    { from: { value: [{ address: "careers@acme.com" }], text: "Acme <careers@acme.com>" },
+      subject: "Your application for Engineer", date: "2026-06-01", text: "thanks" },
+    { from: { value: [{ address: "careers@acme.com" }], text: "Acme <careers@acme.com>" },
+      subject: "Your interview details", date: "2026-06-02", text: "details inside" },
+  ]);
+  assert.equal(threads.length, 2);
+  assert.notEqual(threads[0].threadId, threads[1].threadId);
+  // ...whereas the OLD derivation collided on these two (why the fix exists):
+  assert.equal(threads[0].legacyThreadId, threads[1].legacyThreadId);
+});

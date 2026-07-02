@@ -55,16 +55,26 @@ const RE_FWD_RE = /^\s*(?:re|fwd|fw)\s*:\s*/i;
 // A trailing ", Remote" / " Hybrid" arrangement tag (bare country codes excluded —
 // too ambiguous as a standalone trailing word; those are only stripped in parens).
 const TRAILING_NOISE_RE =
-  /[,\s]+(?:remote|hybrid|on-?site|wfh|contract|contractor|full[- ]?time|part[- ]?time|temporary|temp|intern(?:ship)?|permanent|freelance)\s*$/i;
+  /[,\s]+(?:remote|hybrid|on-?site|wfh|contract|contractor|full[- ]?time|part[- ]?time|temporary|temp|intern(?:ship)?|permanent|freelance|position|role|opening|opportunity|vacancy)\s*$/i;
 
 // Strip ONLY parentheticals whose every token is arrangement noise, e.g. "(Remote)"
-// or "(Remote, US)". Keeps a meaningful parenthetical such as "(Platform)".
+// or "(Remote, US)", plus the European gender tags "(m/f/d)" / "(w/m/x)" — two or
+// more single-letter tokens. Keeps a meaningful parenthetical such as "(Platform)"
+// or a single-letter one like "(C)".
 function stripNoiseParens(s: string): string {
   return s.replace(/\s*[([]\s*([^()[\]]*?)\s*[)\]]/g, (m, inner: string) => {
     const tokens = inner.split(/[,/]/).map((t) => t.trim()).filter(Boolean);
-    return tokens.length > 0 && tokens.every((t) => ROLE_NOISE_WORD.test(t)) ? " " : m;
+    if (tokens.length === 0) return m;
+    if (tokens.every((t) => ROLE_NOISE_WORD.test(t))) return " ";
+    if (tokens.length >= 2 && tokens.every((t) => /^[a-z]$/i.test(t))) return " ";
+    return m;
   });
 }
+
+// Leading subject segments that are mail boilerplate, never the job title —
+// "Interview Confirmation - Software Engineer II" must yield the SECOND segment.
+const BOILERPLATE_SEGMENT_RE =
+  /^(?:interview (?:confirmation|invitation|invite|request|scheduled?)|application (?:received|submitted|confirmation|update|status)|your application|thank you(?: for applying)?|next steps?|action required|update|reminder|confirmation|congratulations|welcome|important(?: update)?)$/i;
 
 /**
  * Polish a raw role string into a clean job title. `company`, when known, lets us
@@ -78,9 +88,10 @@ export function cleanRole(role: string | null | undefined, company?: string | nu
   s = stripNoiseParens(s);
   s = s.replace(REQ_ID_RE, " ").replace(HASH_ID_RE, " ").replace(/\s{2,}/g, " ").trim();
 
-  // The title is the leading dash/pipe-separated segment; drop trailing segments
-  // that match the known employer.
+  // The title is the leading dash/pipe-separated segment; skip leading segments
+  // that are mail boilerplate, drop trailing segments that match the known employer.
   const parts = s.split(/\s*[—–|]\s*|\s+-\s+/).map((p) => p.trim()).filter(Boolean);
+  while (parts.length > 1 && BOILERPLATE_SEGMENT_RE.test(parts[0]!)) parts.shift();
   const co = (company ?? "").trim().toLowerCase();
   if (co) {
     while (parts.length > 1) {
@@ -108,6 +119,12 @@ const APPLY_URL_RES: RegExp[] = [
   /jobs\.lever\.co\/([a-z0-9][a-z0-9-]{1,40})/i,
   /\b([a-z0-9][a-z0-9-]{1,40})\.(?:applytojob|breezy|recruitee|teamtailor|bamboohr|ashbyhq|workable|jobvite)\.(?:com|hr|io)/i,
   /\b([a-z0-9][a-z0-9-]{1,40})\.smartrecruiters\.com/i,
+  /\b([a-z0-9][a-z0-9-]{1,40})\.(?:wd\d+\.)?myworkdaysite\.com/i,
+  /\b(?:careers?-|jobs?-)?([a-z0-9][a-z0-9-]{1,40}?)\.icims\.com/i,
+  /jobs\.smartrecruiters\.com\/([A-Za-z0-9][\w-]{1,40})/i,
+  /\b([a-z0-9][a-z0-9-]{1,40})\.(?:successfactors|sapsf)\.(?:com|eu)/i,
+  /\b([a-z0-9][a-z0-9-]{1,40})\.taleo\.net/i,
+  /\b([a-z0-9][a-z0-9-]{1,40})\.(?:jobs\.)?personio\.(?:de|com)/i,
 ];
 
 // Sub-domain / slug labels that are the platform's own, never a company.
@@ -122,8 +139,12 @@ const GENERIC_HOST_LABEL = new Set([
 
 function companyFromApplyUrl(text: string): string | null {
   for (const re of APPLY_URL_RES) {
-    const m = re.exec(text);
-    if (m && m[1]) {
+    // Walk EVERY occurrence: the first hit is often the platform's own mailbox
+    // host ("talent.icims.com" in the from) while the tenant URL comes later.
+    const g = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
+    let m: RegExpExecArray | null;
+    while ((m = g.exec(text)) !== null) {
+      if (!m[1]) continue;
       const slug = m[1].toLowerCase();
       if (GENERIC_HOST_LABEL.has(slug)) continue;
       const c = acceptCompany(titleCase(slug));
@@ -134,7 +155,7 @@ function companyFromApplyUrl(text: string): string | null {
 }
 
 // Single subject-noise words that must never be taken as a company name.
-const SUBJECT_NOISE_RE = /^(update|status|reminder|confirmation|notification|alert|re|fwd|fw|action|important|hello|hi|welcome|congratulations|next steps?)$/i;
+const SUBJECT_NOISE_RE = /^(update|status|reminder|confirmation|notification|alert|re|fwd|fw|action|important|hello|hi|welcome|congratulations|next steps?|https?|www|link)$/i;
 
 // Subject/body shapes the base resolver doesn't cover: company at the START
 // ("Acme — Application Received"), "applying to <Company>", "interest in <Company>",
@@ -156,7 +177,7 @@ function firstCompanyMatch(res: RegExp[], text: string): string | null {
   for (const re of res) {
     const m = re.exec(text);
     if (m && m[1]) {
-      const raw = m[1].replace(/\b(for|as|the|role|position|team|and|we|has|have|is|to|on|careers?)\b.*$/i, "");
+      const raw = m[1].replace(/\b(for|as|the|role|position|team|and|we|has|have|is|to|on|was|were|will|are|been|being|would|could|should|does|did|do|you|your|our|via|regarding|careers?)\b.*$/i, "");
       const c = acceptCompany(raw);
       if (c && !SUBJECT_NOISE_RE.test(c)) return c;
     }
@@ -238,6 +259,9 @@ export function threadToApplication(thread: Thread): Application {
     snippet: (last?.body ?? "").slice(0, 600),
     confidence: c.confidence,
     enrichment: enrichmentFrom(c),
+    // Only set when true (additive, like `manual`): a shared-platform identity
+    // must never become a grouping key downstream.
+    ...(c.company.isPlatformFallback ? { platformFallback: true } : {}),
   };
 }
 

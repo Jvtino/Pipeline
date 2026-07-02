@@ -62,6 +62,7 @@ export const applications = pgTable(
     manual: boolean("manual").notNull().default(false),
     confidence: real("confidence"), // classifier confidence 0..1; nullable (additive)
     enrichment: text("enrichment"), // extracted facts as a JSON string; nullable (additive)
+    platformFallback: boolean("platform_fallback"), // company is only the shared ATS name; nullable (additive)
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

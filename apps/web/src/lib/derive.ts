@@ -68,6 +68,15 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
       const ov = overlay.overrides[a.threadId];
       if (ov) status = ov;
 
+      // Finer interview sub-state, derived from extracted enrichment (the
+      // taxonomy's "Interview Confirmed" vs "Scheduling Pending" distinction —
+      // display-only, the core status stays one of the four).
+      let nextStep = nextStepFor(status, daysSince);
+      if (status === "interview" && a.enrichment) {
+        if (a.enrichment.interviewDateTime) nextStep = `Interview confirmed · ${a.enrichment.interviewDateTime}`;
+        else if (a.enrichment.interviewLink) nextStep = "Scheduling pending — pick a time";
+      }
+
       apps.push({
         id: a.threadId,
         threadId: a.threadId,
@@ -79,10 +88,11 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
         lastActivityIso: a.lastActivity,
         dateLabel: shortDate(a.firstSeen),
         source: sourceFromDomain(a.companyDomain),
-        nextStep: nextStepFor(status, daysSince),
+        nextStep,
         snippet: a.snippet,
         manual: a.manual ?? false,
         needsReview: a.confidence != null && a.confidence < REVIEW_CONFIDENCE,
+        platformFallback: a.platformFallback ?? false,
         enrichment: a.enrichment ?? null,
         ...metaFor(a.threadId),
       });
@@ -108,6 +118,7 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
       snippet: "",
       manual: true,
       needsReview: false, // user-entered → nothing to confirm
+      platformFallback: false,
       enrichment: null,
       ...metaFor(m.id),
     });
@@ -270,7 +281,9 @@ export interface CompanyCardData {
 export function companyCards(apps: UiApplication[]): CompanyCardData[] {
   const map = new Map<string, UiApplication[]>();
   for (const a of apps) {
-    const key = a.company.toLowerCase();
+    // A platform-fallback "company" is a shared ATS name, not an identity —
+    // each such record stays its own card instead of bundling employers.
+    const key = a.platformFallback ? ` ${a.id}` : a.company.toLowerCase();
     const arr = map.get(key) ?? [];
     arr.push(a);
     map.set(key, arr);

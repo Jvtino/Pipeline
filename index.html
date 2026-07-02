@@ -672,8 +672,13 @@ function buildApplications(threads){
 function groupByCompany(apps){
   const map = new Map();
   for (const a of apps){
-    if (!map.has(a.company)) map.set(a.company, { company:a.company, domain:a.domain, apps:[] });
-    map.get(a.company).apps.push(a);
+    // When the employer couldn't be recovered, `domain` is still the shared ATS
+    // platform's domain (resolveCompany only guesses a company domain on success).
+    // A shared platform identity must never merge records — distinct companies
+    // flow through one platform — so each fallback record stays its own card.
+    const key = (!a.manual && isAtsDomain(a.domain)) ? " " + a.id : a.company;
+    if (!map.has(key)) map.set(key, { company:a.company, domain:a.domain, apps:[] });
+    map.get(key).apps.push(a);
   }
   const groups = [...map.values()];
   for (const g of groups){
@@ -1343,6 +1348,41 @@ $("#overlay").addEventListener("click", e => {
   if (d){ window.pipelineAPI.disconnect(d.dataset.disconnect).then(()=> renderAccountList()); return; }
 });
 
+/* One-time repair after the IMAP thread-identity fixes (see MIGRATION_PLAN.md):
+   threadIds changed for ALL IMAP threads — the old ids truncated to ~the sender
+   domain (so same-domain threads collided and overrides bled across them), and
+   shared-ATS threads additionally split per employer. Each fetched thread
+   carries the id it had under the old scheme (legacyThreadId); an orphaned
+   override is re-keyed only when EXACTLY ONE current thread descends from its
+   old id. When several do (the formerly-collided/bundled cases) we cannot know
+   which application the user meant — the override is dropped and counted, never
+   guessed. Runs on every sync and persists immediately, so it's a no-op once
+   nothing is orphaned. */
+function repairOrphanedOverrides(threads){
+  if (!state.statusOverrides || !state.statusOverrides.size) return 0;
+  const current = new Set(threads.map(t => t.threadId));
+  const byLegacy = new Map();
+  for (const t of threads){
+    if (!t.legacyThreadId) continue;
+    if (!byLegacy.has(t.legacyThreadId)) byLegacy.set(t.legacyThreadId, []);
+    byLegacy.get(t.legacyThreadId).push(t.threadId);
+  }
+  let moved = 0, dropped = 0;
+  for (const [oldId, ov] of [...state.statusOverrides]){
+    if (current.has(oldId)) continue;             // still a live thread id
+    const heirs = byLegacy.get(oldId);
+    if (!heirs) continue;                         // not in this fetch window — leave it alone
+    state.statusOverrides.delete(oldId);
+    if (heirs.length === 1 && !state.statusOverrides.has(heirs[0])){
+      state.statusOverrides.set(heirs[0], ov); moved++;
+    } else {
+      dropped++;                                  // ambiguous: several companies shared the old id
+    }
+  }
+  if (moved || dropped) saveMap("pipeline.statusOverrides", state.statusOverrides);
+  return dropped;
+}
+
 /* ---- sync ----
    Pull fresh mail on open, when the tab is reopened/refocused, and on demand.
    The current view (filters, pins, expansions) is preserved across a sync;
@@ -1358,10 +1398,11 @@ async function sync(){
   if (!state.apps.length){
     $("#board").innerHTML = `<div class="empty"><div class="bigspin"></div><div>Syncing your inbox…</div></div>`;
   }
-  let account = null, fetchError = null;
+  let account = null, fetchError = null, droppedOverrides = 0;
   try {
     const threads = await LiveProvider.fetch();           // real mailbox
     account = LiveProvider.account;
+    droppedOverrides = repairOrphanedOverrides(threads);
     state.rawThreads = threads;
     rebuildApps();                                         // merges in manual positions
   } catch (e) {
@@ -1380,6 +1421,8 @@ async function sync(){
   $("#syncLabel").textContent = account ? `Live · ${account} · synced ${when}`
     : fetchError ? `⚠ Sync failed · showing demo`
     : `Demo data · synced ${when}`;
+  // Shown at most once: the repair persists immediately, so the next sync drops nothing.
+  if (droppedOverrides) $("#syncLabel").textContent += ` · ⚠ ${droppedOverrides} manual status change${droppedOverrides === 1 ? "" : "s"} couldn't be carried over`;
   $("#acct").title = fetchError ? ("Live sync failed: " + fetchError) : "Sync now";
   render();
 }

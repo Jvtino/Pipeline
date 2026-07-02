@@ -20,15 +20,36 @@
 // rank = how "advanced"/decisive a status is (used when blending subject + body)
 const STATUS_RANK = { applied: 1, interview: 2, offer: 3, rejected: 3 };
 
-const OFFER_RE = /\b(pleased to offer|happy to offer|delighted to offer|excited to offer|we(?:'?d| would) like to offer|extend(?:ing)? (?:to )?you (?:an|our|a formal) offer|extend(?:ing)? an offer|offer of employment|formal (?:job )?offer|verbal offer|offer letter|we(?:'?re| are) (?:thrilled|excited|pleased|delighted) to extend|congratulations[^.]{0,40}\b(offer|join|aboard|team)\b|welcome (?:to the team|aboard)|your (?:start date|compensation package|signing bonus))\b/;
+const OFFER_RE = /\b(pleased to offer|happy to offer|delighted to offer|excited to offer|we(?:'?d| would) like to offer|extend(?:ing)? (?:to )?you (?:an|our|a formal) offer|extend(?:ing)? an offer|offer of employment|formal (?:job )?offer|verbal offer|offer letter|employment agreement|appointment letter|official offer|written offer|offer package|acceptance deadline|review and sign|attached offer|offer (?:letter )?(?:is )?attached|(?:contingent|conditional) offer|(?:preparing|drafting) (?:your|an|the) offer|offer is (?:in|pending) approval|moving to (?:the )?offer stage|new hire paperwork|onboarding (?:documents|portal|paperwork|process)|benefits enrollment|i-9|w-4|we(?:'?re| are) (?:thrilled|excited|pleased|delighted) to extend|congratulations[^.]{0,40}\b(offer|join|aboard|team)\b|welcome (?:to the team|aboard)|your (?:start date|compensation package|signing bonus))\b/;
 // rejection that contains the word "offer" in a NEGATED form ("unable to offer", "cannot offer you")
 const NEG_OFFER_RE = /\b(cannot|can'?t|could ?n'?t|unable to|not able to|won'?t be able to|will not be able to|regret(?:tably)?[^.]{0,20})\b[^.]{0,25}\boffer\b/;
 
-const REJECT_RE = /\b(unfortunately|we regret|regret to inform|after (?:careful|much) (?:consideration|thought)|we(?:'?ve| have) decided (?:not to|to (?:move|proceed|go) )|(?:not|won'?t) be (?:moving|proceeding|progressing) (?:forward|ahead|further)|will not be (?:moving|proceeding|progressing)|mov(?:e|ing) forward with other|other (?:candidates|applicants)|pursu(?:e|ing) other (?:candidates|applicants)|not (?:be )?(?:selected|shortlisted|successful|progressing|chosen)|position (?:has been|is now) filled|role (?:has been|is now) filled|filled (?:the|this) (?:position|role)|no longer (?:moving|being considered|under consideration)|not (?:to )?(?:proceed|progress) (?:with|further)|different direction|unsuccessful (?:on this occasion|at this time|this time)|wish you (?:the best|well|success|luck)|keep your (?:details|resume|cv) on file|decided to go (?:with|in)|not a (?:fit|match) (?:at this|for this)|won'?t be (?:taking|progressing) your application)\b/;
+const REJECT_RE = /\b(unfortunately|we regret|regret to inform|with (?:great |deep |sincere )?regret|we(?:'?ve| have) decided (?:not to|against)|we(?:'?ve| have) decided to (?:move|proceed|go)(?: forward| ahead)? with (?:(?:an)?other|a different)|(?:not|won'?t) be (?:moving|proceeding|progressing) (?:forward|ahead|further)|will not be (?:moving|proceeding|progressing)|mov(?:e|ing) forward with other|other (?:candidates|applicants)|pursu(?:e|ing) other (?:candidates|applicants)|(?:chose(?:n)?|selected|pursu(?:e|ed|ing)) another (?:candidate|applicant)|not (?:be )?(?:selected|shortlisted|successful|progressing|chosen)|not (?:been )?retained|declined your application|application (?:was|has been) declined|removed from consideration|(?:role|position) is no longer available|(?:position|role) has been (?:cancelled|canceled|closed)|unable to proceed|will not proceed|hiring needs have changed|more closely (?:match|align)|position (?:has been|is now) filled|role (?:has been|is now) filled|filled (?:the|this) (?:position|role)|no longer (?:moving|being considered|under consideration)|not (?:to )?(?:proceed|progress) (?:with|further)|different direction|unsuccessful (?:on this occasion|at this time|this time)|wish you (?:the best|well|success|luck)|keep your (?:details|resume|cv) on file|decided to go (?:with|in)|not a (?:fit|match) (?:at this|for this)|won'?t be (?:taking|progressing) your application)\b/;
 
-const INTERVIEW_RE = /\b(phone (?:screen|interview|call)|technical (?:screen|interview|phone)|video (?:screen|interview|call)|first (?:round|interview)|final (?:round|interview|stage)|next (?:round|step|steps|stage)|coding (?:challenge|assessment|test|exercise|interview)|(?:online|technical|skills?|hackerrank|codility) assessment|take[- ]?home|invite(?:d|s)? you (?:to|for)|(?:would|we(?:'?d| would)) (?:like|love) to (?:schedule|set up|arrange|invite|meet|speak|chat|connect|talk|have)|schedule (?:a|an|some|your) (?:call|interview|meeting|screen|chat|conversation|time)|set up (?:a|an|some) (?:call|interview|meeting|time|chat)|book (?:a|some) time|find a time|(?:share|provide|confirm|send|let us know) (?:your )?availability|(?:are you|when are you) available|move (?:you )?(?:forward|to the next|ahead)|advanc(?:e|ing) (?:your|to)|progress(?:ing)? (?:your|to the next)|speak (?:with|to) (?:you|the)|meet (?:with )?(?:the|our) (?:team|hiring|manager)|hiring manager|meet the team|on-?site|panel interview|interview (?:invitation|invite|request)|calendly|book (?:a )?(?:slot|call))\b/;
+const INTERVIEW_RE = /\b(phone (?:screen|interview|call)|technical (?:screen|interview|phone)|video (?:screen|interview|call)|first (?:round|interview)|final (?:round|interview|stage)|next (?:round|step|steps|stage)|coding (?:challenge|assessment|test|exercise|interview)|(?:online|technical|skills?|hackerrank|codility) assessment|take[- ]?home|invite(?:d|s)? you (?:to|for)|(?:would|we(?:'?d| would)) (?:like|love) to (?:schedule|set up|arrange|invite|meet|speak|chat|connect|talk|have)|schedule (?:a|an|some|your) (?:call|interview|meeting|screen|chat|conversation|time)|set up (?:a|an|some) (?:call|interview|meeting|time|chat)|book (?:a|some) time|find a time|(?:share|provide|confirm|send|let us know) (?:your )?availability|(?:are you|when are you) available|move (?:you )?(?:forward|to the next|ahead)|advanc(?:e|ing) (?:your|to)|progress(?:ing)? (?:your|to the next)|speak (?:with|to) (?:you|the)|meet (?:with )?(?:the|our) (?:team|hiring|manager)|hiring manager|meet the team|on-?site|panel interview|interview (?:invitation|invite|request)|calendly|book (?:a )?(?:slot|call)|calendar invite|invite has been sent|joining details|zoom link|google meet|microsoft teams|teams (?:link|meeting)|dial-?in|conference link|self-?schedul(?:e|ing)|scheduling link|(?:recruiter|talent) screen)\b/;
 
 const APPLIED_RE = /\b(thank(?:s| you) for (?:applying|your application|submitting|your interest)|appreciate your (?:interest|application)|application (?:has been |was )?(?:received|submitted|registered)|received your application|we(?:'?ve| have) received your|successfully (?:submitted|applied|received)|your application (?:is|has been|was) (?:received|submitted|under review|being reviewed|in)|(?:currently |now )?(?:under|in) review|reviewing your application|will (?:review|be in touch|get back)|in our (?:system|database)|has been received)\b/;
+
+// Reschedule logistics — an interview being MOVED, not ended. Without this,
+// "Unfortunately, we need to reschedule your interview" reads as a rejection
+// (lone "unfortunately" is decisive and wins the tie-break). Scored a notch
+// ABOVE a lone soft rejection cue; a real rejection in the same mail still wins
+// through its own decisive phrase ("position has been filled", …). Bare
+// CANCELLATION is deliberately excluded: it isn't progress, and when it comes
+// with a closure phrase the rejection must win.
+const RESCHEDULE_RE = /\b(?:reschedul(?:e|ing|ed)|find (?:another|a new) time|(?:another|an alternative|a new) time for (?:our|your|the)|conflict (?:has )?c[ao]me up|no longer works for (?:us|me)|does .{0,30} work instead|(?:updated|revised) (?:calendar )?invite)\b/;
+// Refusing to reschedule is not rescheduling ("we will not be rescheduling").
+const NEG_RESCHEDULE_RE = /\b(?:not|won'?t|will not|unable to|cannot|can'?t)(?: be)? reschedul/;
+
+/* Turkish job-mail phrasings — high-precision renderings of the standard
+   ATS/LinkedIn/kurumsal templates ("maalesef … olumsuz", "başvurunuz alınmıştır",
+   "mülakata davet", "iş teklifi"). Substring-matched: \b is unreliable next to
+   non-ASCII letters in JS regex. Kept deliberately small; negation handling and
+   broader coverage wait for real misclassified mail in the corpus. */
+const TR_REJECT_RE = /(maalesef|ne yazık ki|olumsuz (?:bir karar|sonuçlan|değerlendir)|olumlu sonuçlanmad|başka bir aday)/;
+const TR_INTERVIEW_RE = /(mülakat|görüşmeye davet|telefon görüşmesi|değerlendirme merkezi)/;
+const TR_APPLIED_RE = /(başvurunuz (?:başarıyla )?(?:alınmış|alındı|iletil)|başvurunuzu aldık|değerlendirmeye alınmış|başvurunuz için teşekkür)/;
+const TR_OFFER_RE = /(i̇?ş teklifi|teklif mektubu)/;
 
 function detectStatus(text) {
   const t = " " + String(text || "").toLowerCase().replace(/\s+/g, " ") + " ";
@@ -40,10 +61,23 @@ function detectStatus(text) {
   if (negOffer) score.rejected += 10;          // "unable to offer you the role" = rejection
   if (INTERVIEW_RE.test(t)) score.interview += 8;
   if (APPLIED_RE.test(t)) score.applied += 5;
+  if (RESCHEDULE_RE.test(t) && !NEG_RESCHEDULE_RE.test(t)) score.interview += 10;
+
+  // Turkish templates — same weights as their English counterparts.
+  if (TR_OFFER_RE.test(t)) score.offer += 10;
+  if (TR_REJECT_RE.test(t)) score.rejected += 10;
+  if (TR_INTERVIEW_RE.test(t)) score.interview += 8;
+  if (TR_APPLIED_RE.test(t)) score.applied += 5;
 
   // weak single-word cues — only decide when no stronger phrase fired
   if (/\b(interview|assessment|availability|next steps)\b/.test(t)) score.interview += 2;
-  if (/\b(rejected|declined|not selected)\b/.test(t)) score.rejected += 2;
+  if (/\b(rejected|declined|not selected|competitive applicant pool|difficult decision)\b/.test(t)) score.rejected += 2;
+  // "after careful consideration" is a rejection PREAMBLE, not a decision — real
+  // rejections carry a decisive phrase of their own, while interview invitations
+  // also open with it ("After careful consideration, we'd like to invite you…").
+  if (/\bafter (?:careful|much|thorough) (?:consideration|thought|review|deliberation)\b/.test(t)) score.rejected += 2;
+  // Background screening is usually POST-offer, but sometimes pre-offer — weak cue only.
+  if (/\b(background (?:check|screening)|pre-employment screening)\b/.test(t)) score.offer += 2;
   if (/\b(congratulations|congrats)\b/.test(t)) score.offer += 1;
 
   // pick the highest; precedence offer > rejected > interview > applied on ties
@@ -134,9 +168,30 @@ function acceptCompany(s) {
 function companyFromSenderName(fromName) {
   let s = String(fromName || "").replace(/<[^>]*>/g, " ").trim();   // drop the <email> part
   if (!s) return null;
+  if (/@/.test(s)) return null;                                     // bare address, no display name — never a company
   const m = s.match(/^(.+?)\s*[\(\[|]?\s*\bvia\s+\w+/i);            // "Acme via Greenhouse"
   if (m) s = m[1];
   return acceptCompany(s);
+}
+
+// 1b) Tenant slug in the from-address LOCAL PART — Workday-family platforms
+// address mail per employer ("initech@myworkday.com"), so the local part IS the
+// company identity even when the display name is just "Workday". Restricted to
+// that family: broad platforms (LinkedIn, Indeed, …) use functional mailboxes
+// ("jobs-noreply@") that must never be read as an employer.
+const TENANT_LOCAL_ROOTS = new Set(["workday", "myworkday", "myworkdayjobs", "myworkdaysite", "workdayjobs"]);
+const GENERIC_LOCAL_RE = /^(?:no-?reply|do-?not-?reply|noreply|donotreply|notifications?|notify|mailer(?:-daemon)?|postmaster|jobs?|careers?|talent|recruiting|recruitment|hr|info|hello|support|admin|apply|applications?|system|messages?|mail|team|updates?|alerts?|news(?:letter)?|invitations?|security|workday)$/i;
+
+function companyFromAtsLocalPart(from) {
+  const m = String(from || "").match(/([A-Za-z0-9][A-Za-z0-9._+-]*)@([A-Za-z0-9.-]+)/);
+  if (!m) return null;
+  if (!TENANT_LOCAL_ROOTS.has(rootName(m[2]))) return null;
+  const local = m[1].toLowerCase().replace(/\+.*$/, "");
+  if (GENERIC_LOCAL_RE.test(local) || /\d{4,}/.test(local)) return null; // mailbox role or an id, not a name
+  const words = local.replace(/[._-]+/g, " ").trim();
+  if (!words) return null;
+  const pretty = words.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return acceptCompany(pretty);
 }
 
 // 2) Subject — handles LinkedIn ("…sent to Acme"), "…at Acme", "…to Acme",
@@ -147,6 +202,9 @@ const SUBJECT_PATS = [
   /\bat\s+([A-Z][A-Za-z0-9&.'\- ]+?)(?:\s*[-–—(|]|\s+via\b|[.!]|\s*$)/,
   /\b(?:to|with)\s+([A-Z][A-Za-z0-9&.'\- ]+?)(?:\s+for\b|\s*[-–—(|]|[.!]|\s*$)/,
   /\binterest in (?:working (?:at|for) |joining )?([A-Z][A-Za-z0-9&.'\- ]+?)(?:\s*[-–—(|.!]|\s+(?:for|as|has|team)\b|\s*$)/,
+  /\b(?:viewed|reviewed) by\s+([A-Z][A-Za-z0-9&.'\- ]+?)(?:\s*[-–—(|]|[.!]|\s*$)/,
+  // LinkedIn Turkish: "Başvurunuz Acme şirketine gönderildi / iletildi"
+  /başvurunuz\s+(.{1,40}?)\s+(?:şirketine|firmasına)\s+(?:gönderildi|iletildi)/i,
 ];
 function extractCompanyFromSubject(subject) {
   const s = String(subject || "");
@@ -162,6 +220,8 @@ function extractCompanyFromSubject(subject) {
 const BODY_PATS = [
   /\b(?:applying to|apply to|application (?:to|with)|your application (?:to|with)|applied (?:to|for the .*? at)|thank you for (?:your interest in|applying to)|interested in (?:joining|working at))\s+([A-Z][A-Za-z0-9&.'\- ]{1,40})/,
   /\bat\s+([A-Z][A-Za-z0-9&.'\- ]{1,40}?)\s+(?:has been|have|on indeed|team|appreciates|received your)/,
+  /\b(?:viewed|reviewed) by (?:the (?:hiring )?(?:team|recruiter|manager|employer)(?: at)? )?([A-Z][A-Za-z0-9&.'\- ]{1,40})/,
+  /\b(?:application|cv|resume) (?:was |has been )?(?:sent|forwarded|submitted) to\s+([A-Z][A-Za-z0-9&.'\- ]{1,40})/,
 ];
 function companyFromBody(body) {
   const b = String(body || "");
@@ -169,7 +229,7 @@ function companyFromBody(body) {
     const m = b.match(re);
     if (m) {
       // cut trailing clause words the greedy match may have grabbed
-      const raw = m[1].replace(/\b(for|as|the|role|position|team|and|we|has|have|is|to|on)\b.*$/i, "");
+      const raw = m[1].replace(/\b(for|as|the|role|position|team|and|we|has|have|is|to|on|was|were|will|are|been|being|would|could|should|does|did|do|you|your|our|via|regarding)\b.*$/i, "");
       const c = acceptCompany(raw);
       if (c) return c;
     }
@@ -192,6 +252,7 @@ function resolveCompany(th) {
   let company = null;
   for (const m of msgs) { company = companyFromSenderName(m.from); if (company) break; }
   if (!company) company = extractCompanyFromSubject(th.subject);
+  if (!company) for (const m of msgs) { company = companyFromAtsLocalPart(m.from); if (company) break; }
   if (!company) for (const m of msgs) { company = companyFromBody(m.body); if (company) break; }
   if (company) return { company, domain: guessCompanyDomain(company) };
   // Couldn't identify the employer — fall back to the platform name (rare now).
@@ -213,7 +274,7 @@ function extractRole(subject) {
   const s = String(subject || "");
   for (const re of ROLE_PATS) { const m = s.match(re); if (m && m[1]) return tidy(m[1]); }
   // "Indeed Application: Data Analyst" / "Application - Software Engineer"
-  const mApp = s.match(/\bapplication\s*[:\-–—]\s*(.+?)(?:\s+(?:at|with|on)\b.*)?$/i);
+  const mApp = s.match(/\bapplication(?:\s+(?:received|submitted|confirmation|update))?\s*[:\-–—]\s*(.+?)(?:\s+(?:at|with|on)\b.*)?$/i);
   if (mApp && mApp[1]) return tidy(mApp[1]);
   const m2 = s.match(/(.+?) at .+/i);
   if (m2) return tidy(m2[1]);
@@ -230,7 +291,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     STATUS_RANK, detectStatus,
     rootName, companyFromDomain, isAtsDomain, cleanCompanyName,
-    companyFromSenderName, extractCompanyFromSubject, companyFromBody,
+    companyFromSenderName, companyFromAtsLocalPart, extractCompanyFromSubject, companyFromBody,
     resolveCompany, guessCompanyDomain, extractRole, tidy,
   };
 }

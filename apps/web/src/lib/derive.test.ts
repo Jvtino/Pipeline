@@ -53,6 +53,23 @@ describe("flattenBoard — needsReview seam", () => {
     expect(byId["plain"]).toBeNull();
   });
 
+  it("derives interview sub-state labels from enrichment (confirmed vs scheduling pending)", () => {
+    const board = boardFromApplications(
+      [
+        app({ threadId: "conf", status: "interview", enrichment: { interviewDateTime: "Tuesday, June 12 at 3:00pm PT" } }),
+        app({ threadId: "pend", status: "interview", enrichment: { interviewLink: "https://calendly.com/acme/30min" } }),
+        app({ threadId: "bare", status: "interview" }),
+        app({ threadId: "notint", status: "applied", enrichment: { interviewLink: "https://calendly.com/x" } }),
+      ],
+      "test",
+    );
+    const step = Object.fromEntries(flattenBoard(board, defaultOverlay(), now).map((r) => [r.id, r.nextStep]));
+    expect(step["conf"]).toBe("Interview confirmed · Tuesday, June 12 at 3:00pm PT");
+    expect(step["pend"]).toBe("Scheduling pending — pick a time");
+    expect(step["bare"]).toBe("Prepare for the interview"); // no enrichment → generic label
+    expect(step["notint"]).toBe("Awaiting reply"); // sub-state only applies to interview cards
+  });
+
   it("companyCards groups a company's positions into .apps (drives the expandable card)", () => {
     const board = boardFromApplications(
       [

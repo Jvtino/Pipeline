@@ -1,5 +1,6 @@
 {
   "_comment": "Golden corpus for the classifier. Seeded from the legacy test/classify.test.js. Drives BOTH the TS unit tests (expected outputs) and the parity test (legacy classify.js must agree with @pipeline/classify on every case). Grow this file with every real-world misclassification — see plan §14.",
+  "_comment_lang": "Cases may carry a `lang` tag (default 'en') for the eval's per-language breakdown. The 'tr' cases are ASSUMED-representative renderings of well-known Turkish ATS/LinkedIn templates, NOT captured user mail — replace/extend them with real misclassified emails as they appear.",
   "status": [
     { "text": "Thank you for applying to the Backend Engineer role. We've received your application.", "expected": "applied" },
     { "text": "Your application has been received and is currently under review.", "expected": "applied" },
@@ -9,9 +10,19 @@
     { "text": "The next step is a technical assessment / coding challenge. Here's the link.", "expected": "interview" },
     { "text": "Our hiring manager would like to set up a call. Are you available Thursday?", "expected": "interview" },
     { "text": "We're moving you forward to the next round — please book a time via Calendly.", "expected": "interview" },
+    { "text": "A calendar invite has been sent with the joining details.", "expected": "interview" },
+    { "text": "Please join using the Zoom link below.", "expected": "interview" },
+    { "text": "Please self-schedule using the link below.", "expected": "interview" },
+    { "text": "The Microsoft Teams dial-in details are below.", "expected": "interview" },
     { "text": "We are pleased to offer you the position of Data Scientist at Acme.", "expected": "offer" },
     { "text": "Congratulations! We'd like to extend an offer of employment. Your start date is Monday.", "expected": "offer" },
     { "text": "Please find your offer letter attached. Welcome to the team!", "expected": "offer" },
+    { "text": "Please review and sign the attached employment agreement via DocuSign.", "expected": "offer" },
+    { "text": "Your official offer is attached. The acceptance deadline is Friday.", "expected": "offer" },
+    { "text": "We are preparing an offer for you and will send it this week.", "expected": "offer" },
+    { "text": "Complete your onboarding documents and I-9 before your first day.", "expected": "offer" },
+    { "text": "Please find your contingent offer attached.", "expected": "offer" },
+    { "text": "As a final step, please complete the background check authorization via Checkr.", "expected": "offer" },
     { "text": "Unfortunately, after careful consideration we've decided to move forward with other candidates.", "expected": "rejected" },
     { "text": "We regret to inform you that you have not been selected for this role.", "expected": "rejected" },
     { "text": "The position has been filled. We wish you the best in your search.", "expected": "rejected" },
@@ -19,6 +30,31 @@
     { "text": "Thank you for applying. Unfortunately the role has been filled.", "expected": "rejected" },
     { "text": "After your interview, we have decided to go in a different direction.", "expected": "rejected" },
     { "text": "We are unable to offer you the position at this time.", "expected": "rejected" },
+    { "text": "We were impressed with your background; however, we have chosen another candidate for this role.", "expected": "rejected" },
+    { "text": "We decided to pursue another candidate whose experience more closely matches our needs.", "expected": "rejected" },
+    { "text": "It is with regret that we must inform you that your application was not retained.", "expected": "rejected" },
+    { "text": "After careful consideration, we would like to invite you to an interview next week.", "expected": "interview" },
+    { "text": "After careful consideration, we have decided to move forward with your application to the interview stage.", "expected": "interview" },
+    { "text": "After careful consideration, we have decided not to move forward with your application.", "expected": "rejected" },
+    { "text": "We have decided to proceed with a different candidate.", "expected": "rejected" },
+    { "text": "Due to a highly competitive applicant pool, we are unable to proceed with your application.", "expected": "rejected" },
+    { "text": "The role is no longer available.", "expected": "rejected" },
+    { "text": "The position has been cancelled.", "expected": "rejected" },
+    { "text": "You have been removed from consideration for this role.", "expected": "rejected" },
+    { "text": "We have declined your application.", "expected": "rejected" },
+    { "text": "It was a difficult decision, but we selected candidates whose experience more closely aligns with our needs.", "expected": "rejected" },
+    { "text": "We received many qualified applications and are still reviewing yours.", "expected": null },
+    { "text": "Unfortunately, we need to reschedule your interview. Does Thursday work instead?", "expected": "interview" },
+    { "text": "A conflict came up and we need to find another time for our meeting.", "expected": "interview" },
+    { "text": "We will not be rescheduling; the position has been filled.", "expected": "rejected" },
+    { "text": "Unfortunately we must cancel your interview; the position has been filled.", "expected": "rejected" },
+    { "text": "Maalesef başvurunuzla ilgili olumsuz bir karar aldık.", "expected": "rejected", "lang": "tr" },
+    { "text": "Ne yazık ki bu pozisyon için başka bir aday ile ilerleme kararı aldık.", "expected": "rejected", "lang": "tr" },
+    { "text": "Değerlendirme sonucunda başvurunuz olumsuz sonuçlanmıştır.", "expected": "rejected", "lang": "tr" },
+    { "text": "Başvurunuz alınmıştır ve değerlendirmeye alınmıştır.", "expected": "applied", "lang": "tr" },
+    { "text": "Başvurunuz için teşekkür ederiz. En kısa sürede size dönüş yapacağız.", "expected": "applied", "lang": "tr" },
+    { "text": "Sizi mülakata davet etmek istiyoruz. Uygun olduğunuz zamanları paylaşır mısınız?", "expected": "interview", "lang": "tr" },
+    { "text": "Size iş teklifi sunmaktan mutluluk duyuyoruz. Teklif mektubunuz ektedir.", "expected": "offer", "lang": "tr" },
     { "text": "Here's our company newsletter for June.", "expected": null },
     { "text": "Your package has shipped and will arrive tomorrow.", "expected": null },
     { "text": "Your application was viewed by the recruiter.", "expected": null },
@@ -45,7 +81,19 @@
     { "domain": "greenhouse.io", "from": "Acme via Greenhouse <x@greenhouse.io>", "subject": "Update", "body": "", "expected": "Acme" },
     { "domain": "greenhouse.io", "from": "Globex via Greenhouse <y@greenhouse.io>", "subject": "Update", "body": "", "expected": "Globex" },
     { "domain": "greenhouse.io", "from": "Acme, Inc. via Greenhouse <x@greenhouse.io>", "subject": "Update", "body": "", "expected": "Acme" },
-    { "domain": "greenhouse.io", "from": "Acme Talent Acquisition <y@greenhouse.io>", "subject": "Update", "body": "", "expected": "Acme" }
+    { "domain": "greenhouse.io", "from": "Acme Talent Acquisition <y@greenhouse.io>", "subject": "Update", "body": "", "expected": "Acme" },
+    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was viewed by Acme Corp", "body": "", "expected": "Acme Corp" },
+    { "domain": "myworkday.com", "from": "Workday <initech@myworkday.com>", "subject": "Application Update", "body": "There is an update on your application. Sign in to the portal to view it.", "expected": "Initech" },
+    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Update on your application", "body": "Your application to Acme Corp was viewed by the hiring team.", "expected": "Acme Corp" },
+    { "domain": "greenhouse.io", "from": "no-reply@greenhouse.io", "subject": "Update", "body": "Your application to Globex has been received.", "expected": "Globex" },
+    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was sent", "body": "Your application was sent to Acme Corp.", "expected": "Acme Corp" },
+    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Başvurunuz Acme şirketine gönderildi", "body": "", "expected": "Acme", "lang": "tr" }
+  ],
+  "_comment_companySmart": "TS-only (resolveCompanySmart in aggregate.ts) — signals the parity-gated base resolver does not have (ATS apply/tenant URLs). Not read by the parity gate.",
+  "companySmart": [
+    { "domain": "icims.com", "from": "iCIMS Recruiting <noreply@talent.icims.com>", "subject": "Interview availability", "body": "Please book here: https://careers-acme.icims.com/jobs/123", "expected": "Acme" },
+    { "domain": "smartrecruiters.com", "from": "SmartRecruiters <no-reply@smartrecruiters.com>", "subject": "Thanks for applying", "body": "Visit https://jobs.smartrecruiters.com/Initech/743999 to check your status.", "expected": "Initech" },
+    { "domain": "myworkdaysite.com", "from": "Workday <noreply@myworkdaysite.com>", "subject": "Application received", "body": "Manage your application at https://globex.wd3.myworkdaysite.com/careers.", "expected": "Globex" }
   ],
   "companyFromDomain": [
     { "domain": "careers.acme.co.uk", "expected": "Acme" },
@@ -55,7 +103,8 @@
   "companyFromSenderName_null": [
     { "from": "Greenhouse <no-reply@greenhouse.io>" },
     { "from": "LinkedIn Job Alerts <x@linkedin.com>" },
-    { "from": "Indeed Apply <x@indeed.com>" }
+    { "from": "Indeed Apply <x@indeed.com>" },
+    { "from": "no-reply@greenhouse.io" }
   ],
   "role": [
     { "subject": "Your application for Senior Software Engineer at Acme Corp", "expected": "Senior Software Engineer" },
@@ -63,7 +112,9 @@
     { "subject": "Indeed Application: Data Analyst", "expected": "Data Analyst" },
     { "subject": "Your application was sent to Initech", "expected": "Application" },
     { "subject": "Thank you for your interest in Initech", "expected": "Application" },
-    { "subject": "Software Engineer", "expected": "Software Engineer" }
+    { "subject": "Software Engineer", "expected": "Software Engineer" },
+    { "subject": "Application received – Data Scientist", "expected": "Data Scientist" },
+    { "subject": "Application submitted: Backend Engineer", "expected": "Backend Engineer" }
   ],
   "_comment_roleClean": "TS-only (cleanRole in aggregate.ts). Not read by the parity gate. Polishes extractRole output; `company` (optional) lets a trailing employer be stripped safely.",
   "roleClean": [
@@ -75,7 +126,11 @@
     { "raw": "Engineer (Platform)", "clean": "Engineer (Platform)" },
     { "raw": "Senior Software Engineer", "company": "Acme", "clean": "Senior Software Engineer" },
     { "raw": "Application", "clean": "Application" },
-    { "raw": "Req #778", "clean": "Req #778" }
+    { "raw": "Req #778", "clean": "Req #778" },
+    { "raw": "Interview Confirmation - Software Engineer II - R-12345", "company": "Acme", "clean": "Software Engineer II" },
+    { "raw": "Java Developer (m/f/d) - Acme", "company": "Acme", "clean": "Java Developer" },
+    { "raw": "Staff Product Manager position", "clean": "Staff Product Manager" },
+    { "raw": "Application Update - Data Engineer", "clean": "Data Engineer" }
   ],
   "_comment_enrich": "TS-only enrichment extractors (extract.ts). Not read by the parity gate. Every field is value-or-null; null cases are as important as positives.",
   "interview": [
@@ -83,7 +138,11 @@
     { "text": "Grab a time that works for you: https://calendly.com/recruiter/30min", "hasDateTime": false, "hasLink": true },
     { "text": "Let's meet Thursday at 2:30pm ET.", "hasDateTime": true, "hasLink": false },
     { "text": "We'll be interviewing candidates over the coming weeks and will be in touch.", "null": true },
-    { "text": "Thanks for taking the time to speak with us yesterday.", "null": true }
+    { "text": "Thanks for taking the time to speak with us yesterday.", "null": true },
+    { "text": "Your interview is scheduled for 12 June at 14:00 CET.", "hasDateTime": true, "hasLink": false },
+    { "text": "Interview confirmed: Thursday 15:30 (Istanbul time).", "hasDateTime": true, "hasLink": false },
+    { "text": "Join here: https://zoom.us/j/123456789 on Tuesday, June 12 at 3:00pm PT.", "hasDateTime": true, "link": "https://zoom.us/j/123456789" },
+    { "text": "Meeting link: https://meet.google.com/abc-defg-hij", "hasDateTime": false, "hasLink": true }
   ],
   "compensation": [
     { "text": "The base salary range for this role is $120,000–$150,000.", "expect": "$120,000–$150,000" },
@@ -91,7 +150,12 @@
     { "text": "This is a contract position at $60/hr.", "expect": "$60/hr" },
     { "text": "The salary is £90k per year.", "expect": "£90k per year" },
     { "text": "We offer a highly competitive salary and generous equity.", "null": true },
-    { "text": "Salary is commensurate with experience (DOE).", "null": true }
+    { "text": "Salary is commensurate with experience (DOE).", "null": true },
+    { "text": "The base salary for this role is up to $150k.", "expect": "up to $150k" },
+    { "text": "Compensation is between $120,000 and $150,000 per year.", "expect": "between $120,000 and $150,000 per year" },
+    { "text": "The salary is €70.000 per year.", "expect": "€70.000 per year" },
+    { "text": "We can offer 130k USD annually.", "expect": "130k USD" },
+    { "text": "The range is $140,000 to $170,000 plus equity.", "expect": "$140,000 to $170,000" }
   ],
   "location": [
     { "text": "This role is fully Remote (US).", "kind": "remote" },
@@ -106,6 +170,82 @@
     { "text": "Please reach out to Dana Kim, Talent Acquisition Partner, with any questions.", "name": "Dana Kim", "titleContains": "Talent Acquisition" },
     { "text": "Sent from Greenhouse on behalf of the team. Do not reply to this message.", "null": true },
     { "text": "Thanks,\nThe Hiring Team", "null": true },
-    { "text": "Questions? Contact us at no-reply@greenhouse.io", "null": true }
+    { "text": "Questions? Contact us at no-reply@greenhouse.io", "null": true },
+    { "text": "Please confirm your contact details: John Smith, john.smith@gmail.com, +1 555 0100.", "null": true },
+    { "text": "Best regards,\nAyşe Yılmaz\nSenior Technical Recruiter\nayse.yilmaz@acme.com", "name": "Ayşe Yılmaz", "titleContains": "Recruiter", "email": "ayse.yilmaz@acme.com" }
+  ],
+  "_comment_matching": "Matching/grouping layer (Known Issue A): threads reduced via threadsToApplications + boardFromApplications. Distinct employers sharing an ATS platform domain must stay DISTINCT groups — never bundle under the platform. expectCompanies (optional) is the exact group-name set, case-insensitive.",
+  "matching": [
+    {
+      "name": "greenhouse: two employers with sender names stay two groups",
+      "expectGroups": 2,
+      "expectCompanies": ["Acme Robotics", "Globex"],
+      "threads": [
+        { "threadId": "gh-1", "domain": "greenhouse.io", "subject": "Thank you for applying", "messages": [{ "date": "2026-06-01", "from": "Acme Robotics via Greenhouse <no-reply@greenhouse.io>", "body": "Thanks for applying to Acme Robotics." }] },
+        { "threadId": "gh-2", "domain": "greenhouse.io", "subject": "Thank you for applying", "messages": [{ "date": "2026-06-02", "from": "Globex via Greenhouse <no-reply@greenhouse.io>", "body": "Thanks for applying to Globex." }] }
+      ]
+    },
+    {
+      "name": "workday: employer in the tenant apply-URL stays distinct",
+      "expectGroups": 2,
+      "expectCompanies": ["Initech", "Hooli"],
+      "threads": [
+        { "threadId": "wd-url-1", "domain": "myworkday.com", "subject": "Application Update", "messages": [{ "date": "2026-06-01", "from": "Workday <noreply@myworkday.com>", "body": "There is an update. View it at https://initech.wd5.myworkdayjobs.com/en-US/careers." }] },
+        { "threadId": "wd-url-2", "domain": "myworkday.com", "subject": "Application Update", "messages": [{ "date": "2026-06-02", "from": "Workday <noreply@myworkday.com>", "body": "There is an update. View it at https://hooli.wd1.myworkdayjobs.com/en-US/jobs." }] }
+      ]
+    },
+    {
+      "name": "KNOWN ISSUE A — workday: employer only in the tenant local part must not bundle",
+      "expectGroups": 2,
+      "expectCompanies": ["Initech", "Hooli"],
+      "threads": [
+        { "threadId": "wd-lp-1", "domain": "myworkday.com", "subject": "Application Update", "messages": [{ "date": "2026-06-01", "from": "Workday <initech@myworkday.com>", "body": "There is an update on your application. Sign in to the portal to view it." }] },
+        { "threadId": "wd-lp-2", "domain": "myworkday.com", "subject": "Application Update", "messages": [{ "date": "2026-06-02", "from": "Workday <hooli@myworkday.com>", "body": "There is an update on your application. Sign in to the portal to view it." }] }
+      ]
+    },
+    {
+      "name": "KNOWN ISSUE A — linkedin: employer after 'viewed by' must not bundle",
+      "expectGroups": 2,
+      "expectCompanies": ["Acme Corp", "Umbrella Corp"],
+      "threads": [
+        { "threadId": "li-vb-1", "domain": "linkedin.com", "subject": "Your application was viewed by Acme Corp", "messages": [{ "date": "2026-06-01", "from": "LinkedIn <jobs-noreply@linkedin.com>", "body": "Your application was viewed by the hiring team at Acme Corp." }] },
+        { "threadId": "li-vb-2", "domain": "linkedin.com", "subject": "Your application was viewed by Umbrella Corp", "messages": [{ "date": "2026-06-02", "from": "LinkedIn <jobs-noreply@linkedin.com>", "body": "Your application was viewed by the hiring team at Umbrella Corp." }] }
+      ]
+    },
+    {
+      "name": "KNOWN ISSUE A — two unidentifiable platform threads must not silently merge",
+      "expectGroups": 2,
+      "threads": [
+        { "threadId": "li-anon-1", "domain": "linkedin.com", "subject": "Your application was viewed", "messages": [{ "date": "2026-06-01", "from": "LinkedIn <jobs-noreply@linkedin.com>", "body": "Your application was viewed. Keep an eye on your inbox." }] },
+        { "threadId": "li-anon-2", "domain": "linkedin.com", "subject": "Your application was viewed", "messages": [{ "date": "2026-06-02", "from": "LinkedIn <jobs-noreply@linkedin.com>", "body": "Your application was viewed. Keep an eye on your inbox." }] }
+      ]
+    }
+  ],
+  "_comment_imapThreading": "Desktop IMAP thread construction (root imap.js mapParsedToThreads). Keying threads on sender-domain+subject bundles different companies' boilerplate ATS mail into ONE thread (Known Issue A, matching layer). Each case: raw mails in, expected thread count out.",
+  "imapThreading": [
+    {
+      "name": "same company, ack + follow-up with Re: prefix → one thread",
+      "expectThreads": 1,
+      "mails": [
+        { "from": "Acme Careers <jobs@acme.com>", "subject": "Your application at Acme", "date": "2026-06-01", "body": "Thanks for applying to Acme." },
+        { "from": "Acme Careers <jobs@acme.com>", "subject": "Re: Your application at Acme", "date": "2026-06-05", "body": "We'd like to schedule a phone screen." }
+      ]
+    },
+    {
+      "name": "KNOWN ISSUE A — two workday tenants, identical boilerplate subject → two threads",
+      "expectThreads": 2,
+      "mails": [
+        { "from": "Workday <initech@myworkday.com>", "subject": "Application Update", "date": "2026-06-01", "body": "Initech has an update on your application." },
+        { "from": "Workday <hooli@myworkday.com>", "subject": "Application Update", "date": "2026-06-02", "body": "Hooli has an update on your application." }
+      ]
+    },
+    {
+      "name": "KNOWN ISSUE A — same no-reply sender, companies only in body → two threads",
+      "expectThreads": 2,
+      "mails": [
+        { "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was sent", "date": "2026-06-01", "body": "Your application was sent to Acme Corp." },
+        { "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was sent", "date": "2026-06-02", "body": "Your application was sent to Umbrella Corp." }
+      ]
+    }
   ]
 }

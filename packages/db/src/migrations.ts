@@ -54,6 +54,8 @@ CREATE INDEX IF NOT EXISTS idx_app_user ON applications (user_id);
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS confidence real;
 -- Extracted enrichment (interview/comp/location/recruiter) as a JSON string.
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS enrichment text;
+-- True when company is only the shared ATS platform's name (never a grouping key).
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS platform_fallback boolean;
 
 CREATE TABLE IF NOT EXISTS application_events (
   id              text PRIMARY KEY,

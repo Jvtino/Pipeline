@@ -208,6 +208,8 @@ describe("flattenBoard — needsReview seam", () => {
     const acme = cards.find((c) => c.company === "Acme")!;
     expect(acme.apps.map((a) => a.role).sort()).toEqual(["Designer", "Engineer"]);
     expect(acme.sub).toBe("2 roles");
-    expect(cards.find((c) => c.company === "Globex")!.apps).toHaveLength(1);
+    const globex = cards.find((c) => c.company === "Globex")!;
+    expect(globex.apps).toHaveLength(1);
+    expect(globex.sub).toBe("Analyst"); // single role → the role itself (client hint on staffing cards)
   });
 });

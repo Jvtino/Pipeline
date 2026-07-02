@@ -409,10 +409,13 @@ export function companyCards(apps: UiApplication[]): CompanyCardData[] {
   }
   return [...map.values()].map((roles) => {
     const first = roles[0] as UiApplication;
+    // A single-role card shows the role itself — for staffing agencies the
+    // client company is usually named right there ("AML Analyst — Citi").
+    const soleRole = roles.length === 1 && first.role && first.role !== "Application" ? first.role : null;
     return {
       company: first.company,
       domain: roles.find((r) => r.companyDomain)?.companyDomain ?? "",
-      sub: `${roles.length} role${roles.length > 1 ? "s" : ""}`,
+      sub: soleRole ?? `${roles.length} role${roles.length > 1 ? "s" : ""}`,
       topStatus: first.status,
       dots: roles.map((r) => r.status),
       apps: roles,

@@ -300,7 +300,7 @@ export function Applications(ctx: Ctx) {
                   <CompanyLogo name={c.company} domain={c.domain} size={42} radius={12} font={17} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ font: "650 14.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.company}</div>
-                    <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)" }}>{c.sub}</div>
+                    <div title={c.sub} style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.sub}</div>
                   </div>
                 </div>
                 <div style={{ height: 1, background: "rgba(34,31,26,.07)", margin: "13px 0" }} />

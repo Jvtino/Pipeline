@@ -118,4 +118,29 @@ export const contacts = pgTable(
   (t) => ({ byApp: index("idx_contacts_app").on(t.applicationId) }),
 );
 
-export const schema = { users, mailConnections, syncState, applications, applicationEvents, notes, contacts };
+/** Per-message previews (Email tab). Same privacy budget as `applications.snippet`:
+ *  a <=600-char preview + attachment METADATA (JSON), never raw mail or file content. */
+export const applicationMessages = pgTable(
+  "application_messages",
+  {
+    id: text("id").primaryKey(), // `${userId}:${threadId}:${msgKey}`
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    applicationId: text("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    date: text("date").notNull(),
+    fromAddr: text("from_addr").notNull(),
+    bodyPreview: text("body_preview").notNull(),
+    attachments: text("attachments"), // JSON [{name,contentType,size}] or NULL
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byApp: index("idx_appmsg_app").on(t.applicationId),
+    byUser: index("idx_appmsg_user").on(t.userId),
+  }),
+);
+
+export const schema = { users, mailConnections, syncState, applications, applicationEvents, notes, contacts, applicationMessages };

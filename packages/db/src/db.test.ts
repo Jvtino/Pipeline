@@ -20,6 +20,9 @@ import {
   deleteMailConnection,
   saveCursor,
   getCursor,
+  upsertThreadMessages,
+  listThreadMessages,
+  listUserAttachments,
 } from "./repo";
 
 const masterKey = () => Buffer.from(generateMasterKey(), "base64");
@@ -141,6 +144,43 @@ describe("@pipeline/db", () => {
     expect(contact.name).toBe("Jane");
     expect(await listContacts(h.db, "u1", appId)).toHaveLength(1);
     expect(await listContacts(h.db, "u2", appId)).toHaveLength(0);
+  });
+
+  it("per-message previews: idempotent upsert, ordered read, attachment enrichment, user scoping", async () => {
+    await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
+    await upsertApplications(h.db, "u1", [appFixture("t1", "Acme", "applied")]);
+    const thread = {
+      threadId: "t1",
+      domain: "acme.com",
+      subject: "Engineer",
+      messages: [
+        { id: "m2", date: "2026-02-01", from: "Recruiting <rec@acme.com>", body: "interview time?" },
+        { id: "m1", date: "2026-01-01", from: "Careers <careers@acme.com>", body: "thanks for applying" },
+        { date: "2026-01-15", from: "Careers <careers@acme.com>", body: "id-less legacy message" }, // hashed key
+      ],
+    };
+
+    await upsertThreadMessages(h.db, "u1", [thread]);
+    await upsertThreadMessages(h.db, "u1", [thread]); // idempotent — no duplicates
+    let msgs = await listThreadMessages(h.db, "u1", "t1");
+    expect(msgs).toHaveLength(3);
+    expect(msgs.map((m) => m.date)).toEqual(["2026-01-01", "2026-01-15", "2026-02-01"]); // date asc
+    expect(msgs.every((m) => m.attachments === null)).toBe(true);
+
+    // A re-fetch that adds attachment metadata enriches the stored row.
+    thread.messages[0] = { ...thread.messages[0]!, attachments: [{ name: "JD.pdf", contentType: "application/pdf", size: 1234 }] } as never;
+    await upsertThreadMessages(h.db, "u1", [thread]);
+    msgs = await listThreadMessages(h.db, "u1", "t1");
+    expect(msgs).toHaveLength(3);
+    expect(msgs[2]!.attachments).toEqual([{ name: "JD.pdf", contentType: "application/pdf", size: 1234 }]);
+
+    // The user-wide attachment list joins in company/role; other users see nothing.
+    const docs = await listUserAttachments(h.db, "u1");
+    expect(docs).toEqual([
+      { threadId: "t1", company: "Acme", role: "Engineer", date: "2026-02-01", name: "JD.pdf", contentType: "application/pdf", size: 1234 },
+    ]);
+    expect(await listThreadMessages(h.db, "u2", "t1")).toHaveLength(0);
+    expect(await listUserAttachments(h.db, "u2")).toHaveLength(0);
   });
 
   it("rebuild clears unannotated synced apps, keeps manual + annotated, and resets cursors", async () => {

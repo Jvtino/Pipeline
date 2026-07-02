@@ -1,11 +1,20 @@
 // Repository — the only place app code touches the tables. Encrypts mail secrets
 // on write, decrypts on read, and enforces per-user scoping on every query.
-import { and, eq, like, inArray } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
+import { and, asc, eq, like, inArray, isNotNull } from "drizzle-orm";
+import { createHash, randomUUID } from "node:crypto";
 import { encryptJson, decryptJson } from "@pipeline/crypto";
-import { boardFromApplications, type Application, type Board, type Status, type Enrichment } from "@pipeline/contracts";
+import {
+  boardFromApplications,
+  type Application,
+  type AttachmentMeta,
+  type Board,
+  type Enrichment,
+  type Message,
+  type Status,
+  type Thread,
+} from "@pipeline/contracts";
 import type { Database } from "./client";
-import { users, mailConnections, applications, syncState, notes, contacts } from "./schema";
+import { users, mailConnections, applications, applicationMessages, syncState, notes, contacts } from "./schema";
 
 export type Plan = "free" | "pro" | "teams";
 export type Provider = "google" | "microsoft" | "imap";
@@ -249,6 +258,103 @@ export async function listContacts(db: Database, userId: string, applicationId: 
     })
     .from(contacts)
     .where(and(eq(contacts.userId, userId), eq(contacts.applicationId, applicationId)));
+}
+
+// ── Per-message previews (Email tab) ─────────────────────────────────────────
+// Same privacy budget as applications.snippet: a <=600-char preview + attachment
+// METADATA — never the raw email or file content.
+
+export interface ThreadMessageRow {
+  threadId: string;
+  date: string;
+  from: string;
+  bodyPreview: string;
+  attachments: AttachmentMeta[] | null;
+}
+
+/** Stable per-message key: the provider id, else a content hash (id-less messages stay idempotent). */
+function msgKey(m: Message): string {
+  return m.id ?? createHash("sha256").update(`${m.date}|${m.from}|${m.body}`).digest("hex").slice(0, 16);
+}
+
+/**
+ * Idempotently upsert per-message previews for threads whose application row
+ * exists (the sync engine writes applications first). Append-only per message —
+ * a later re-search window must never delete messages stored by earlier rounds;
+ * a re-fetch that adds attachment metadata enriches the stored row.
+ */
+export async function upsertThreadMessages(db: Database, userId: string, threads: Thread[]): Promise<void> {
+  for (const t of threads) {
+    const applicationId = `${userId}:${t.threadId}`;
+    for (const m of t.messages) {
+      const id = `${applicationId}:${msgKey(m)}`;
+      const attachments = m.attachments?.length ? JSON.stringify(m.attachments) : null;
+      const bodyPreview = m.body.slice(0, 600);
+      await db
+        .insert(applicationMessages)
+        .values({ id, userId, applicationId, threadId: t.threadId, date: m.date, fromAddr: m.from, bodyPreview, attachments })
+        .onConflictDoUpdate({
+          target: applicationMessages.id,
+          set: { bodyPreview, ...(attachments ? { attachments } : {}) },
+        });
+    }
+  }
+}
+
+export async function listThreadMessages(db: Database, userId: string, threadId: string): Promise<ThreadMessageRow[]> {
+  const rows = await db
+    .select()
+    .from(applicationMessages)
+    .where(and(eq(applicationMessages.userId, userId), eq(applicationMessages.threadId, threadId)))
+    .orderBy(asc(applicationMessages.date), asc(applicationMessages.createdAt));
+  return rows.map((r) => ({
+    threadId: r.threadId,
+    date: r.date,
+    from: r.fromAddr,
+    bodyPreview: r.bodyPreview,
+    attachments: r.attachments ? (JSON.parse(r.attachments) as AttachmentMeta[]) : null,
+  }));
+}
+
+export interface UserAttachmentRow {
+  threadId: string;
+  company: string;
+  role: string;
+  date: string;
+  name: string;
+  contentType: string | null;
+  size: number | null;
+}
+
+/** Every synced attachment (metadata only) across the user's applications, newest first. */
+export async function listUserAttachments(db: Database, userId: string): Promise<UserAttachmentRow[]> {
+  const rows = await db
+    .select({
+      threadId: applicationMessages.threadId,
+      date: applicationMessages.date,
+      attachments: applicationMessages.attachments,
+      company: applications.company,
+      role: applications.role,
+    })
+    .from(applicationMessages)
+    .innerJoin(applications, eq(applicationMessages.applicationId, applications.id))
+    .where(and(eq(applicationMessages.userId, userId), isNotNull(applicationMessages.attachments)));
+  const out: UserAttachmentRow[] = [];
+  for (const r of rows) {
+    for (const a of JSON.parse(r.attachments!) as AttachmentMeta[]) {
+      out.push({
+        threadId: r.threadId,
+        company: r.company,
+        role: r.role,
+        date: r.date,
+        name: a.name,
+        contentType: a.contentType ?? null,
+        size: a.size ?? null,
+      });
+    }
+  }
+  out.sort((x, y) => y.date.localeCompare(x.date));
+  return out;
 }
 
 /** Count a user's applications (cheap existence/empty check). */

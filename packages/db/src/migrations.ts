@@ -84,4 +84,21 @@ CREATE TABLE IF NOT EXISTS contacts (
   created_at      timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_contacts_app ON contacts (application_id);
+
+-- Per-message previews behind the drawer's Email tab. Same privacy budget as
+-- applications.snippet: <=600-char preview + attachment METADATA, never the raw
+-- email or file content. FK to applications(id) so rebuilds/user-deletes cascade.
+CREATE TABLE IF NOT EXISTS application_messages (
+  id              text PRIMARY KEY,
+  user_id         text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  application_id  text NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  thread_id       text NOT NULL,
+  date            text NOT NULL,
+  from_addr       text NOT NULL,
+  body_preview    text NOT NULL,
+  attachments     text,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_appmsg_app ON application_messages (application_id);
+CREATE INDEX IF NOT EXISTS idx_appmsg_user ON application_messages (user_id);
 `;

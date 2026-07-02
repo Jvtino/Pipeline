@@ -10,7 +10,7 @@
 # ============================================================================
 
 REPO_URL="https://github.com/Jvtino/Pipeline.git"
-BRANCH="main"                               # the redesign ships on main
+BRANCH="main"
 APP_DIR="$HOME/Pipeline"
 WEB_URL="http://localhost:5173"
 DESK_APP="$HOME/Desktop/Pipeline.app"
@@ -53,7 +53,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 echo "node: $(node -v)  at $(command -v node)"
 
-# ---- Download on first run; otherwise FORCE-sync the branch -----------------
+# ---- Download on first run; otherwise UPDATE (force-sync to origin/main) ----
 if [ ! -d "$APP_DIR/.git" ]; then
   if [ -e "$APP_DIR" ]; then
     alert "A folder named Pipeline already exists in your home folder but isn't a Pipeline download. Rename or move it, then reopen Pipeline."
@@ -64,7 +64,6 @@ if [ ! -d "$APP_DIR/.git" ]; then
 fi
 cd "$APP_DIR" || { alert "Couldn't open $APP_DIR."; exit 1; }
 
-# Force this checkout ONTO the preview branch (the redesign isn't on main yet).
 if git fetch origin "$BRANCH" --quiet; then
   git checkout -q -B "$BRANCH" "origin/$BRANCH" 2>/dev/null || git checkout -q "$BRANCH" 2>/dev/null || true
   git reset --hard "origin/$BRANCH" --quiet 2>/dev/null

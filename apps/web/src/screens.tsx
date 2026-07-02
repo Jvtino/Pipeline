@@ -587,6 +587,7 @@ export function Calendar(ctx: Ctx) {
                         return (
                           <div key={`${b.key}-${e.id}`} onClick={() => ctx.openDetail(e.id)} className="pl-lift" style={{ marginTop: 6, padding: "5px 8px", borderRadius: 6, cursor: "pointer", font: "600 10.5px/1.3 var(--sans)", color: s.fg, background: s.bg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {e.company} · {b.label}
+                            {e.time ? ` · ${e.time}` : ""}
                           </div>
                         );
                       }),
@@ -613,6 +614,7 @@ export function Calendar(ctx: Ctx) {
                       <span style={{ width: 58, font: "600 11.5px var(--mono)", color: iso === todayIso ? "var(--primary)" : "var(--muted-2)", flex: "0 0 auto" }}>{shortDate(iso)}</span>
                       <span style={{ padding: "3px 9px", borderRadius: 7, font: "600 10.5px var(--sans)", color: s.fg, background: s.bg, flex: "0 0 auto" }}>{b.label}</span>
                       <span style={{ font: "600 13px var(--sans)", color: "#2a2620", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.company}</span>
+                      {e.time && <span style={{ font: "500 11.5px var(--mono)", color: "var(--muted-2)", flex: "0 0 auto" }}>{e.time}</span>}
                       <IconChevronRight size={14} color="#c5bdb0" />
                     </div>
                   );

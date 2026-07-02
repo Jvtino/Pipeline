@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { boardFromApplications } from "@pipeline/contracts";
 import type { Application } from "@pipeline/contracts";
-import { flattenBoard, companyCards, deriveContacts, mergeContacts, buildNotifications, calendarFor, parseInterviewDate } from "./derive";
+import { flattenBoard, companyCards, deriveContacts, mergeContacts, buildNotifications, calendarFor, parseInterviewDate, parseInterviewTime } from "./derive";
 import { defaultOverlay } from "./overlay";
 
 const app = (over: Partial<Application> & { threadId: string }): Application => ({
@@ -193,6 +193,12 @@ describe("flattenBoard — needsReview seam", () => {
     expect(parseInterviewDate("Jan 5", "2026-12-20")).toBe("2027-01-05"); // December mail, January interview → year rolls
     expect(parseInterviewDate("at 3:00pm PT", ref)).toBeNull(); // time only — no day to place it on
     expect(parseInterviewDate("", ref)).toBeNull();
+  });
+
+  it("parseInterviewTime pulls the time-of-day out of the free text", () => {
+    expect(parseInterviewTime("Tuesday, June 12 at 3:00pm PT")).toBe("3:00pm PT");
+    expect(parseInterviewTime("12 June at 14:00 CET")).toBe("14:00 CET");
+    expect(parseInterviewTime("June 12")).toBeNull();
   });
 
   it("companyCards groups a company's positions into .apps (drives the expandable card)", () => {

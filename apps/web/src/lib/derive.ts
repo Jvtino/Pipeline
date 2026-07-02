@@ -459,6 +459,14 @@ export type CalendarBucket = "applied" | "interview" | "rejected";
 export interface CalendarDayEntry {
   id: string;
   company: string;
+  time?: string; // interview entries: the time-of-day text when the email carried one
+}
+
+/** The time-of-day inside a free-text interview date ("3:00pm PT", "14:00 CET"). */
+export function parseInterviewTime(text: string | null | undefined): string | null {
+  const t = String(text ?? "");
+  const m = t.match(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)(?:\s*[A-Z]{2,4})?\b/i) ?? t.match(/\b(?:[01]?\d|2[0-3]):[0-5]\d(?:\s*[A-Z]{2,4})?\b/);
+  return m ? m[0].trim() : null;
 }
 export interface CalendarCell {
   day: number | null;
@@ -530,17 +538,17 @@ export function calendarEntryMap(apps: UiApplication[]): Map<string, CalendarCel
     const ms = parseIso(iso);
     return Number.isNaN(ms) ? null : new Date(ms).toISOString().slice(0, 10);
   };
-  const add = (date: string | null, bucket: CalendarBucket, a: UiApplication) => {
+  const add = (date: string | null, bucket: CalendarBucket, a: UiApplication, time?: string | null) => {
     if (!date) return;
     const counts = byDate.get(date) ?? emptyCounts();
-    counts[bucket].push({ id: a.id, company: a.company });
+    counts[bucket].push({ id: a.id, company: a.company, ...(time ? { time } : {}) });
     byDate.set(date, counts);
   };
   for (const a of apps) {
     add(dayOf(a.appliedIso), "applied", a);
     if (a.status === "interview" || a.status === "screening") {
       const parsed = parseInterviewDate(a.enrichment?.interviewDateTime, a.lastActivityIso);
-      add(parsed ?? dayOf(a.lastActivityIso), "interview", a);
+      add(parsed ?? dayOf(a.lastActivityIso), "interview", a, parseInterviewTime(a.enrichment?.interviewDateTime));
     }
     if (a.status === "rejected") add(dayOf(a.lastActivityIso), "rejected", a);
   }

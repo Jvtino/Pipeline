@@ -87,18 +87,21 @@
     { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Update on your application", "body": "Your application to Acme Corp was viewed by the hiring team.", "expected": "Acme Corp" },
     { "domain": "greenhouse.io", "from": "no-reply@greenhouse.io", "subject": "Update", "body": "Your application to Globex has been received.", "expected": "Globex" },
     { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was sent", "body": "Your application was sent to Acme Corp.", "expected": "Acme Corp" },
-    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Başvurunuz Acme şirketine gönderildi", "body": "", "expected": "Acme", "lang": "tr" }
+    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Başvurunuz Acme şirketine gönderildi", "body": "", "expected": "Acme", "lang": "tr" },
+    { "domain": "initech.fa.us2.oraclecloud.com", "from": "Initech Careers <no-reply@initech.fa.us2.oraclecloud.com>", "subject": "Thank you for applying to Initech - Software Engineer", "body": "Your application has been received.", "expected": "Initech" }
   ],
   "_comment_companySmart": "TS-only (resolveCompanySmart in aggregate.ts) — signals the parity-gated base resolver does not have (ATS apply/tenant URLs). Not read by the parity gate.",
   "companySmart": [
     { "domain": "icims.com", "from": "iCIMS Recruiting <noreply@talent.icims.com>", "subject": "Interview availability", "body": "Please book here: https://careers-acme.icims.com/jobs/123", "expected": "Acme" },
     { "domain": "smartrecruiters.com", "from": "SmartRecruiters <no-reply@smartrecruiters.com>", "subject": "Thanks for applying", "body": "Visit https://jobs.smartrecruiters.com/Initech/743999 to check your status.", "expected": "Initech" },
-    { "domain": "myworkdaysite.com", "from": "Workday <noreply@myworkdaysite.com>", "subject": "Application received", "body": "Manage your application at https://globex.wd3.myworkdaysite.com/careers.", "expected": "Globex" }
+    { "domain": "myworkdaysite.com", "from": "Workday <noreply@myworkdaysite.com>", "subject": "Application received", "body": "Manage your application at https://globex.wd3.myworkdaysite.com/careers.", "expected": "Globex" },
+    { "domain": "oraclecloud.com", "from": "Oracle Recruiting <no-reply@oraclecloud.com>", "subject": "Update on your candidacy", "body": "Review your status: https://acme.fa.us6.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/requisitions/preview/123", "expected": "Acme" }
   ],
   "companyFromDomain": [
     { "domain": "careers.acme.co.uk", "expected": "Acme" },
     { "domain": "jobs.acme.com.au", "expected": "Acme" },
-    { "domain": "mail.notion.so", "expected": "Notion" }
+    { "domain": "mail.notion.so", "expected": "Notion" },
+    { "domain": "oraclecloud.com", "expected": "Oraclecloud" }
   ],
   "companyFromSenderName_null": [
     { "from": "Greenhouse <no-reply@greenhouse.io>" },

@@ -125,6 +125,8 @@ const APPLY_URL_RES: RegExp[] = [
   /\b([a-z0-9][a-z0-9-]{1,40})\.(?:successfactors|sapsf)\.(?:com|eu)/i,
   /\b([a-z0-9][a-z0-9-]{1,40})\.taleo\.net/i,
   /\b([a-z0-9][a-z0-9-]{1,40})\.(?:jobs\.)?personio\.(?:de|com)/i,
+  // Oracle Recruiting Cloud tenant host: <tenant>.fa.<region>.oraclecloud.com
+  /\b([a-z0-9][a-z0-9-]{2,40})\.(?:fa|hcm)\.[a-z0-9-]+\.oraclecloud\.com/i,
 ];
 
 // Sub-domain / slug labels that are the platform's own, never a company.
@@ -135,6 +137,7 @@ const GENERIC_HOST_LABEL = new Set([
   "click", "track", "info", "hello", "team", "boards", "job-boards",
   "wd1", "wd2", "wd3", "wd4", "wd5", "wd103", "wd501",
   "greenhouse", "lever", "workday", "myworkday", "icims", "ashbyhq", "smartrecruiters", "workable", "jobvite", "indeed", "linkedin",
+  "fa", "hcm", "login", "oraclecloud",
 ]);
 
 function companyFromApplyUrl(text: string): string | null {

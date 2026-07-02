@@ -123,7 +123,7 @@ function companyFromDomain(domain) {
 // sender name / subject / body, NOT in the sender domain.
 const ATS_DOMAINS = new Set([
   "greenhouse", "greenhouse-mail", "lever", "workday", "myworkday", "myworkdaysite", "workdayjobs", "myworkdayjobs",
-  "linkedin", "jobvite", "icims", "taleo", "smartrecruiters", "ashbyhq",
+  "linkedin", "jobvite", "icims", "taleo", "oraclecloud", "smartrecruiters", "ashbyhq",
   "breezy", "recruitee", "workable", "bamboohr", "personio",
   "jazzhr", "successfactors", "dayforce", "rippling", "teamtailor",
   "comeet", "dover", "gem", "jobscore", "freshteam", "zohorecruit",
@@ -134,7 +134,8 @@ function isAtsDomain(domain) {
 }
 // Platform brand words that must never be returned as a company name.
 const PLATFORM_WORDS = new Set([...ATS_DOMAINS, "workday", "greenhouse", "lever", "linkedin",
-  "indeed", "glassdoor", "ashby", "smartrecruiters", "icims", "taleo", "jobvite", "myworkday"]);
+  "indeed", "glassdoor", "ashby", "smartrecruiters", "icims", "taleo", "jobvite", "myworkday",
+  "oracle"]); // "Oracle Recruiting" sender on oraclecloud.com mail is the platform, not the employer
 
 function tidy(s) { return String(s || "").replace(/\s+/g, " ").replace(/[\s,;:–—\-]+$/, "").trim(); }
 

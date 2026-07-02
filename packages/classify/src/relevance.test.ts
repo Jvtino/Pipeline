@@ -18,6 +18,8 @@ describe("@pipeline/classify — looksLikeJobApplication", () => {
   it("keeps ATS senders even without obvious keywords in the body", () => {
     expect(looksLikeJobApplication(thread("greenhouse.io", "Update on your candidacy", "A short note from the team."))).toBe(true);
     expect(looksLikeJobApplication(thread("myworkday.com", "Initech", "An update."))).toBe(true);
+    // Oracle Recruiting Cloud tenant hosts count as ATS mail too.
+    expect(looksLikeJobApplication(thread("initech.fa.us2.oraclecloud.com", "There is an update", "Sign in to view it."))).toBe(true);
   });
 
   it("keeps interview, offer and rejection threads", () => {

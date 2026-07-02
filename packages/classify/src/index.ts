@@ -265,7 +265,7 @@ export function companyFromDomain(domain: string | null | undefined): string {
 // ATS / recruiting platforms — the real company is in the sender name/subject/body.
 const ATS_DOMAINS = new Set([
   "greenhouse", "greenhouse-mail", "lever", "workday", "myworkday", "myworkdaysite", "workdayjobs", "myworkdayjobs",
-  "linkedin", "jobvite", "icims", "taleo", "smartrecruiters", "ashbyhq",
+  "linkedin", "jobvite", "icims", "taleo", "oraclecloud", "smartrecruiters", "ashbyhq",
   "breezy", "recruitee", "workable", "bamboohr", "personio",
   "jazzhr", "successfactors", "dayforce", "rippling", "teamtailor",
   "comeet", "dover", "gem", "jobscore", "freshteam", "zohorecruit",
@@ -287,7 +287,7 @@ export function isAtsDomain(domain: string | null | undefined): boolean {
 export const ATS_SENDER_DOMAINS: readonly string[] = [
   "greenhouse.io", "greenhouse-mail.io", "lever.co", "hire.lever.co",
   "myworkday.com", "myworkdayjobs.com", "myworkdaysite.com", "workday.com",
-  "icims.com", "taleo.net", "successfactors.com", "smartrecruiters.com",
+  "icims.com", "taleo.net", "oraclecloud.com", "successfactors.com", "smartrecruiters.com",
   "ashbyhq.com", "workable.com", "jobvite.com", "bamboohr.com",
   "breezy.hr", "recruitee.com", "personio.de", "personio.com",
   "jazzhr.com", "applytojob.com", "dayforce.com", "rippling.com",
@@ -301,6 +301,7 @@ export const ATS_SENDER_DOMAINS: readonly string[] = [
 const PLATFORM_WORDS = new Set([
   ...ATS_DOMAINS, "workday", "greenhouse", "lever", "linkedin",
   "indeed", "glassdoor", "ashby", "smartrecruiters", "icims", "taleo", "jobvite", "myworkday",
+  "oracle", // "Oracle Recruiting" sender on oraclecloud.com mail is the platform, not the employer
 ]);
 
 export function tidy(s: string | null | undefined): string {

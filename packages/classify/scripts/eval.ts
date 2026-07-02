@@ -135,7 +135,7 @@ for (const c of (corpus.location ?? []) as { text: string; null?: boolean; kind?
     : r?.kind === c.kind && (c.contains === undefined || (r?.value ?? "").includes(c.contains));
   record("location", c, c.text.slice(0, 60), c.null ? null : `${c.kind}${c.contains ? `~${c.contains}` : ""}`, r, pass);
 }
-for (const c of (corpus.recruiterContact ?? []) as { text: string; null?: boolean; name?: string; titleContains?: string; email?: string; lang?: string }[]) {
+for (const c of (corpus.recruiterContact ?? []) as { text: string; null?: boolean; name?: string; titleContains?: string; email?: string; phone?: string | null; lang?: string }[]) {
   const r = extractRecruiterContact(c.text);
   let pass: boolean;
   if (c.null) pass = r === null;
@@ -144,8 +144,9 @@ for (const c of (corpus.recruiterContact ?? []) as { text: string; null?: boolea
       r !== null &&
       (c.name === undefined || r.name === c.name) &&
       (c.titleContains === undefined || (r.title ?? "").includes(c.titleContains)) &&
-      (c.email === undefined || r.email === c.email);
-  record("recruiterContact", c, c.text.slice(0, 60), c.null ? null : `${c.name ?? ""}/${c.titleContains ?? ""}/${c.email ?? ""}`, r, pass);
+      (c.email === undefined || r.email === c.email) &&
+      (!("phone" in c) || r.phone === c.phone); // "phone": null asserts no phone was invented
+  record("recruiterContact", c, c.text.slice(0, 60), c.null ? null : `${c.name ?? ""}/${c.titleContains ?? ""}/${c.email ?? ""}/${c.phone ?? ""}`, r, pass);
 }
 
 /* ---- matching: distinct employers must stay distinct board groups ----

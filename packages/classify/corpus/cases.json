@@ -180,7 +180,11 @@
     { "text": "Thanks,\nThe Hiring Team", "null": true },
     { "text": "Questions? Contact us at no-reply@greenhouse.io", "null": true },
     { "text": "Please confirm your contact details: John Smith, john.smith@gmail.com, +1 555 0100.", "null": true },
-    { "text": "Best regards,\nAyşe Yılmaz\nSenior Technical Recruiter\nayse.yilmaz@acme.com", "name": "Ayşe Yılmaz", "titleContains": "Recruiter", "email": "ayse.yilmaz@acme.com" }
+    { "text": "Best regards,\nAyşe Yılmaz\nSenior Technical Recruiter\nayse.yilmaz@acme.com", "name": "Ayşe Yılmaz", "titleContains": "Recruiter", "email": "ayse.yilmaz@acme.com" },
+    { "text": "Best,\nJordan Lee\nSenior Technical Recruiter\njordan.lee@acme.com\nDirect: (415) 555-0143", "name": "Jordan Lee", "email": "jordan.lee@acme.com", "phone": "(415) 555-0143" },
+    { "text": "Saygılarımla,\nAyşe Yılmaz\nSenior Technical Recruiter\nayse.yilmaz@acme.com\n+90 532 123 45 67", "name": "Ayşe Yılmaz", "email": "ayse.yilmaz@acme.com", "phone": "+90 532 123 45 67", "lang": "tr" },
+    { "text": "Please reach out to Dana Kim, Talent Acquisition Partner. Your reference number is 20260701123.", "name": "Dana Kim", "titleContains": "Talent Acquisition", "phone": null },
+    { "text": "Best,\nJordan Lee\nSenior Technical Recruiter\njordan.lee@acme.com\nSent on 2026-07-01 14:30", "name": "Jordan Lee", "email": "jordan.lee@acme.com", "phone": null }
   ],
   "_comment_matching": "Matching/grouping layer (Known Issue A): threads reduced via threadsToApplications + boardFromApplications. Distinct employers sharing an ATS platform domain must stay DISTINCT groups — never bundle under the platform. expectCompanies (optional) is the exact group-name set, case-insensitive.",
   "matching": [

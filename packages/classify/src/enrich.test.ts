@@ -50,11 +50,17 @@ describe("@pipeline/classify — extractRecruiterContact", () => {
       if (c.name) expect(r!.name).toBe(c.name);
       if (c.titleContains) expect(r!.title ?? "").toContain(c.titleContains);
       if (c.email) expect(r!.email).toBe(c.email);
+      if ("phone" in c) expect(r!.phone).toBe(c.phone); // "phone": null asserts none was invented
     });
   }
 
   it("never treats a platform/no-reply address as a human contact", () => {
     expect(extractRecruiterContact("Reply to no-reply@lever.co")).toBeNull();
     expect(extractRecruiterContact("The Recruiting Team")).toBeNull();
+  });
+
+  it("a phone number alone never creates a contact (corroboration rule)", () => {
+    expect(extractRecruiterContact("Call me at +1 415 555 0143.")).toBeNull();
+    expect(extractRecruiterContact("Phone: (415) 555-0143")).toBeNull();
   });
 });

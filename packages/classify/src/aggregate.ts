@@ -239,6 +239,7 @@ function enrichmentFrom(c: Classification): Enrichment | undefined {
   if (c.recruiterContact?.name) e.recruiterName = c.recruiterContact.name;
   if (c.recruiterContact?.title) e.recruiterTitle = c.recruiterContact.title;
   if (c.recruiterContact?.email) e.recruiterEmail = c.recruiterContact.email;
+  if (c.recruiterContact?.phone) e.recruiterPhone = c.recruiterContact.phone;
   return Object.keys(e).length ? e : undefined;
 }
 

@@ -130,6 +130,7 @@ export interface RecruiterContact {
   name: string | null;
   title: string | null;
   email: string | null;
+  phone: string | null;
 }
 
 const EMAIL_RE = /\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/gi;
@@ -161,6 +162,28 @@ function findRecruiterEmail(text: string): string | null {
   return null;
 }
 
+// Phone numbers: label-anchored ("Direct: (415) 555-0143", "M: +44 7700 900123",
+// "call me at 415-555-0143"), else a bare international "+CC …" form. Bare local
+// digit runs are intentionally missed — dates, order and reference numbers look
+// exactly like them.
+const PHONE_LABEL_RE =
+  /(?:\b(?:phone|mobile|cell|tel|telephone|direct(?:\s+line)?|call(?:\s+me)?\s+(?:at|on)|reach(?:\s+me)?\s+at|whatsapp)\s*[.:]?|\b[mpt]\s*[.:])\s*(\+?[0-9(][0-9()\s.\-]{5,18}\d)/i;
+const PHONE_INTL_RE = /\+\d{1,3}(?:[\s.\-]?\(?\d{1,4}\)?){2,5}/;
+
+function findPhone(text: string): string | null {
+  for (const re of [PHONE_LABEL_RE, PHONE_INTL_RE]) {
+    const m = text.match(re);
+    if (!m) continue;
+    const raw = (m[1] ?? m[0]).trim();
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length < 7 || digits.length > 15) continue; // too short/long to be dialable
+    const before = text.slice(Math.max(0, (m.index ?? 0) - 60), m.index ?? 0);
+    if (OWN_DETAILS_RE.test(before)) continue; // the candidate's own echoed number
+    return raw;
+  }
+  return null;
+}
+
 function findName(text: string, title: string | null): string | null {
   const lines = text.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
   // "Name\nTitle" — the line directly above the title line.
@@ -186,6 +209,7 @@ export function extractRecruiterContact(text: string | null | undefined): Recrui
   const title = titleMatch ? titleMatch[0].replace(/\s{2,}/g, " ").trim() : null;
   const name = findName(t, title);
   // Require corroboration: a human email, or a name paired with a recruiter title.
+  // A phone rides along on a corroborated contact — it never creates one.
   if (!email && !(name && title)) return null;
-  return { name, title, email };
+  return { name, title, email, phone: findPhone(t) };
 }

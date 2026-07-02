@@ -235,7 +235,7 @@ export function App() {
     try {
       const o = overlayRef.current;
       const keepThreadIds = [
-        ...new Set([...Object.keys(o.notes), ...Object.keys(o.overrides), ...Object.keys(o.meta), ...Object.keys(o.nextDone)]),
+        ...new Set([...Object.keys(o.notes), ...Object.keys(o.overrides), ...Object.keys(o.meta), ...Object.keys(o.nextDone), ...Object.keys(o.companyNames)]),
       ].filter((id) => !id.startsWith("m-")); // manual apps aren't server rows
       const res = await resync(keepThreadIds);
       setBoard(await getBoard());
@@ -283,6 +283,19 @@ export function App() {
   const setMeta = useCallback((id: string, patch: Partial<AppMeta>) => {
     setOverlay((o) => ({ ...o, meta: { ...o.meta, [id]: { ...o.meta[id], ...patch } } }));
   }, [setOverlay]);
+
+  const renameCompany = useCallback((id: string, name: string) => {
+    const clean = name.trim();
+    if (!clean) return;
+    setOverlay((o) => ({ ...o, companyNames: { ...o.companyNames, [id]: clean } }));
+    flash(`Renamed to ${clean}`);
+  }, [setOverlay, flash]);
+
+  const hideApp = useCallback((id: string) => {
+    setOverlay((o) => ({ ...o, hidden: { ...o.hidden, [id]: true } }));
+    setSelectedId(null);
+    flash("Hidden from the board");
+  }, [setOverlay, flash]);
 
   const markNextDone = useCallback((id: string) => {
     setOverlay((o) => ({ ...o, nextDone: { ...o.nextDone, [id]: true } }));
@@ -415,6 +428,8 @@ export function App() {
     onRebuild,
     setStatus,
     setMeta,
+    renameCompany,
+    hideApp,
     markNextDone,
     addNote,
     setTaskLane,

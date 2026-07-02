@@ -115,6 +115,8 @@ export interface Overlay {
   contacts: ContactEntry[];
   docs: DocEntry[];
   dismissedNotifs: Record<string, boolean>; // bell items hidden until their id changes
+  companyNames: Record<string, string>; // user-corrected company name per app id
+  hidden: Record<string, boolean>; // apps removed from the board (mailbox untouched)
   doneTasks: Record<string, boolean>;
   taskLanes: Record<string, "todo" | "doing" | "done">; // kanban lane per derived task id; missing → falls back to doneTasks (legacy)
   clearedTasks: Record<string, boolean>; // derived tasks dismissed from the board (hidden until Restore)

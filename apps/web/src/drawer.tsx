@@ -81,6 +81,13 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
       .catch(() => setMsgState("error"));
   }, [tab, msgState, app.threadId]);
   const [noteDraft, setNoteDraft] = useState("");
+  // Inline company rename (fixes a misattributed card by hand).
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const saveRename = () => {
+    if (nameDraft.trim() && nameDraft.trim() !== app.company) ctx.renameCompany(app.id, nameDraft);
+    setEditingName(false);
+  };
   const [enter, setEnter] = useState(false);
   // Contact add form (Contacts tab)
   const [cName, setCName] = useState("");
@@ -137,7 +144,26 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
       <div className="drawer-head">
           <CompanyAvatar name={app.company} size={46} radius={13} font={18} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ font: "700 16.5px var(--sans)", letterSpacing: "-.01em" }}>{app.company}</div>
+            {editingName ? (
+              <input
+                className="input"
+                autoFocus
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveRename(); if (e.key === "Escape") setEditingName(false); }}
+                onBlur={saveRename}
+                style={{ padding: "5px 9px", font: "700 15px var(--sans)", width: "100%", maxWidth: 260 }}
+              />
+            ) : (
+              <div
+                title="Click to correct the company name"
+                onClick={() => { setNameDraft(app.company); setEditingName(true); }}
+                style={{ font: "700 16.5px var(--sans)", letterSpacing: "-.01em", cursor: "text", display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                {app.company}
+                <span aria-hidden style={{ font: "500 11px var(--sans)", color: "var(--faint)" }}>✎</span>
+              </div>
+            )}
             <div style={{ font: "500 13px var(--sans)", color: "#7a7468", marginTop: 1 }}>{app.role}</div>
           </div>
           <StatusPill status={app.status} />
@@ -296,6 +322,16 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
                 <MetaField label="Résumé version">
                   <input className="input" style={{ padding: "8px 10px", fontSize: 13 }} defaultValue={app.resumeVersion ?? ""} onBlur={(e) => ctx.setMeta(app.id, { resumeVersion: e.target.value.trim() || null })} placeholder="—" />
                 </MetaField>
+              </div>
+
+              {/* escape hatch for junk cards — removes from the board only, never the mailbox */}
+              <div style={{ marginTop: 22, paddingTop: 14, borderTop: "1px solid rgba(34,31,26,.07)", textAlign: "center" }}>
+                <button
+                  onClick={() => { if (window.confirm(`Hide ${app.company} from your board? Your mailbox is untouched — this only removes the card.`)) ctx.hideApp(app.id); }}
+                  style={{ border: "none", background: "transparent", cursor: "pointer", font: "600 12px var(--sans)", color: "#a85544", padding: "6px 10px" }}
+                >
+                  Hide from board
+                </button>
               </div>
             </div>
           )}

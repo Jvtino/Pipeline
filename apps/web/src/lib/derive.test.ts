@@ -163,6 +163,25 @@ describe("flattenBoard — needsReview seam", () => {
     expect(day(3).counts.applied.map((e) => e.id)).toEqual(["r1"]);
   });
 
+  it("applies user renames (regrouping + clearing platformFallback) and hides hidden apps", () => {
+    const board = boardFromApplications(
+      [
+        app({ threadId: "junk", company: "Greenhouse-mail", platformFallback: true }),
+        app({ threadId: "real", company: "Acme" }),
+        app({ threadId: "gone", company: "Spam Co" }),
+      ],
+      "test",
+    );
+    const overlay = { ...defaultOverlay(), companyNames: { junk: "Acme" }, hidden: { gone: true } };
+    const rows = flattenBoard(board, overlay, now);
+    expect(rows.find((r) => r.id === "junk")!.company).toBe("Acme");
+    expect(rows.find((r) => r.id === "junk")!.platformFallback).toBe(false); // groups normally now
+    expect(rows.some((r) => r.id === "gone")).toBe(false);
+    const cards = companyCards(rows);
+    expect(cards).toHaveLength(1); // renamed row merged into the Acme card
+    expect(cards[0]!.apps).toHaveLength(2);
+  });
+
   it("companyCards groups a company's positions into .apps (drives the expandable card)", () => {
     const board = boardFromApplications(
       [

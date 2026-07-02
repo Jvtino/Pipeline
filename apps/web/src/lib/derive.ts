@@ -59,6 +59,7 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
 
   for (const group of board?.groups ?? []) {
     for (const a of group.applications) {
+      if (overlay.hidden[a.threadId]) continue; // user removed it from the board
       let status: UiStatus = a.status; // applied | interview | offer | rejected
       const lastMs = parseIso(a.lastActivity);
       const daysSince = Number.isNaN(lastMs) ? null : daysBetween(nowMs, lastMs);
@@ -77,10 +78,13 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
         else if (a.enrichment.interviewLink) nextStep = "Scheduling pending — pick a time";
       }
 
+      // A user rename beats extraction — and clears the platform-fallback flag
+      // so the row groups into its (now real) company card.
+      const renamed = overlay.companyNames[a.threadId];
       apps.push({
         id: a.threadId,
         threadId: a.threadId,
-        company: a.company,
+        company: renamed || a.company,
         companyDomain: a.companyDomain,
         role: a.role,
         status,
@@ -92,7 +96,7 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
         snippet: a.snippet,
         manual: a.manual ?? false,
         needsReview: a.confidence != null && a.confidence < REVIEW_CONFIDENCE,
-        platformFallback: a.platformFallback ?? false,
+        platformFallback: renamed ? false : a.platformFallback ?? false,
         enrichment: a.enrichment ?? null,
         ...metaFor(a.threadId),
       });
@@ -100,13 +104,14 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
   }
 
   for (const m of overlay.manual) {
+    if (overlay.hidden[m.id]) continue;
     let status = m.status;
     const ov = overlay.overrides[m.id];
     if (ov) status = ov;
     apps.push({
       id: m.id,
       threadId: null,
-      company: m.company,
+      company: overlay.companyNames[m.id] || m.company,
       companyDomain: "",
       role: m.role,
       status,

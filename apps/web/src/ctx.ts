@@ -26,6 +26,8 @@ export interface Ctx {
   // mutations (persisted to the localStorage overlay)
   setStatus: (id: string, s: UiStatus) => void;
   setMeta: (id: string, patch: Partial<AppMeta>) => void;
+  renameCompany: (id: string, name: string) => void; // fix a misattributed company by hand
+  hideApp: (id: string) => void; // remove a card from the board (mailbox untouched)
   markNextDone: (id: string) => void;
   addNote: (id: string, body: string) => void;
   setTaskLane: (id: string, lane: "todo" | "doing" | "done") => void;

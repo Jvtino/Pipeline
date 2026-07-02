@@ -75,6 +75,18 @@ describe("@pipeline/classify — looksLikeJobApplication", () => {
     expect(looksLikeJobApplication(thread("email.roberthalf.com", "Senior Accountant contract opportunity", "I'm with Robert Half and would love to discuss a contract opening with one of our clients. Are you available for a quick call this week?"))).toBe(true);
   });
 
+  // Account/security housekeeping from an agency or ATS (sign-in alerts,
+  // password/username mail) must never become an application card.
+  it("drops account/security mail even from staffing and ATS senders", () => {
+    expect(looksLikeJobApplication(thread("roberthalf.com", "Robert Half: Sign-in from new device", "We noticed a sign-in from a new device."))).toBe(false);
+    expect(looksLikeJobApplication(thread("roberthalf.com", "Your Robert Half passphrase changed", "Your passphrase was changed. If this wasn't you, contact support."))).toBe(false);
+    expect(looksLikeJobApplication(thread("roberthalf.com", "Look up your Robert Half username", "Here is the username you requested."))).toBe(false);
+    expect(looksLikeJobApplication(thread("roberthalf.com", "Requested Information", "Here is the information you requested about your account."))).toBe(false);
+    expect(looksLikeJobApplication(thread("myworkday.com", "Your Workday password was reset", "Your password has been reset."))).toBe(false);
+    // …but application content still wins over an account-ish subject.
+    expect(looksLikeJobApplication(thread("greenhouse.io", "Set a password to track your application", "Create an account to view the status of your application."))).toBe(true);
+  });
+
   // oracle.com carries Oracle Recruiting mail AND cloud receipts/newsletters —
   // platform for company resolution, but relevance still requires content.
   it("content-gates oracle.com like the noisy job boards", () => {

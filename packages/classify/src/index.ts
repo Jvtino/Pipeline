@@ -213,6 +213,12 @@ const NOISY_JOB_BOARDS = new Set([
 const STAFFING_DIGEST_RE =
   /\b(?:job alerts?|jobs? (?:for you|matching|near you)|new jobs?|saved search|recommended (?:jobs?|for you)|weekly digest|newsletter|unsubscribe from these alerts)\b/i;
 
+// Account/security housekeeping (sign-in alerts, password/username mail) that
+// ATS platforms and staffing agencies send around a login. Vetoes the domain
+// auto-passes below — application CONTENT can still qualify such a thread.
+const ACCOUNT_NOISE_RE =
+  /\b(?:sign|log)[- ]?in\b|\bpassword|passphrase|username|verification code|verify your (?:e-?mail|account|identity)|security (?:alert|notice|code)|two[- ]?factor|\b2fa\b|new device|account (?:created|activated|locked|updated)|requested information|privacy (?:policy|notice)|terms of (?:service|use)/i;
+
 /**
  * Whether a thread looks like a real job application (so it belongs on the board).
  * This is the SINGLE relevance decision applied to every inbox (Gmail + Outlook):
@@ -231,12 +237,15 @@ const STAFFING_DIGEST_RE =
  * non-application emails — order receipts, shipping notices, meeting invites, promos.
  */
 export function looksLikeJobApplication(thread: Pick<Thread, "domain" | "subject" | "messages">): boolean {
-  if (isAtsDomain(thread.domain) && !NOISY_JOB_BOARDS.has(rootName(thread.domain))) return true;
+  const subject = thread.subject ?? "";
+  // Account/security mail never auto-passes on the sender alone (a Workday
+  // password reset is not an application) — content can still qualify it.
+  const accountNoise = ACCOUNT_NOISE_RE.test(subject);
+  if (!accountNoise && isAtsDomain(thread.domain) && !NOISY_JOB_BOARDS.has(rootName(thread.domain))) return true;
   // A staffing agency is the counterparty itself: outreach ("I have a contract
   // role for you") is real correspondence even without application phrasing —
-  // keep everything from them except their job-alert digests.
-  if (isStaffingDomain(thread.domain) && !STAFFING_DIGEST_RE.test(thread.subject ?? "")) return true;
-  const subject = thread.subject ?? "";
+  // keep everything from them except job-alert digests and account mail.
+  if (!accountNoise && isStaffingDomain(thread.domain) && !STAFFING_DIGEST_RE.test(subject)) return true;
   if (JOB_APPLICATION_RE.test(subject)) return true;
   for (const m of thread.messages ?? []) {
     const text = `${subject} ${m.body ?? ""}`;

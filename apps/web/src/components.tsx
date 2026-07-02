@@ -26,6 +26,7 @@ import {
   IconBell,
   IconCheck,
   IconCloudOff,
+  IconX,
   IconBox,
   IconMail,
 } from "./lib/icons";
@@ -342,6 +343,7 @@ export function Header({
   onNewApp,
   notifications,
   onOpenApp,
+  onDismiss,
 }: {
   title: string;
   q: string;
@@ -353,6 +355,7 @@ export function Header({
   onNewApp: () => void;
   notifications: Notification[];
   onOpenApp: (appId: string) => void;
+  onDismiss: (ids: string[]) => void;
 }) {
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
@@ -405,18 +408,37 @@ export function Header({
         </button>
         {bellOpen && (
           <div className="bell-pop">
-            <div className="bell-pop-head">Notifications</div>
+            <div className="bell-pop-head" style={{ display: "flex", alignItems: "center" }}>
+              <span style={{ flex: 1 }}>Notifications</span>
+              {notifications.length > 0 && (
+                <button
+                  onClick={() => onDismiss(notifications.map((n) => n.id))}
+                  style={{ border: "none", background: "transparent", cursor: "pointer", font: "600 10px var(--sans)", color: "var(--primary)", padding: 0, textTransform: "none", letterSpacing: 0 }}
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
             {notifications.length === 0 ? (
               <div style={{ padding: "26px 18px", textAlign: "center", font: "500 12.5px var(--sans)", color: "#a89e8c" }}>You're all caught up.</div>
             ) : (
               notifications.map((n) => (
-                <button key={n.id} className="bell-item" onClick={() => { setBellOpen(false); onOpenApp(n.appId); }}>
-                  <span className="bell-tag" style={{ color: n.color, background: n.bg }}>{n.tag}</span>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", font: "600 12.5px var(--sans)", color: "#2a2620", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.title}</span>
-                    <span style={{ display: "block", font: "500 11.5px var(--sans)", color: "var(--muted-2)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.sub}</span>
-                  </span>
-                </button>
+                <div key={n.id} className="bell-item" style={{ padding: 0 }}>
+                  <button className="bell-item" style={{ flex: 1, minWidth: 0 }} onClick={() => { setBellOpen(false); onOpenApp(n.appId); }}>
+                    <span className="bell-tag" style={{ color: n.color, background: n.bg }}>{n.tag}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "block", font: "600 12.5px var(--sans)", color: "#2a2620", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.title}</span>
+                      <span style={{ display: "block", font: "500 11.5px var(--sans)", color: "var(--muted-2)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.sub}</span>
+                    </span>
+                  </button>
+                  <button
+                    aria-label="Dismiss notification"
+                    onClick={() => onDismiss([n.id])}
+                    style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted-2)", padding: "10px 10px 10px 2px", flex: "0 0 auto", alignSelf: "flex-start" }}
+                  >
+                    <IconX size={13} />
+                  </button>
+                </div>
               ))
             )}
           </div>

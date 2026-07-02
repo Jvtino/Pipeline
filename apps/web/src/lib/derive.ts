@@ -200,7 +200,8 @@ export function buildNotifications(apps: UiApplication[], nowMs: number): Notifi
   const review = apps.filter((a) => a.needsReview);
   if (review.length) {
     out.push({
-      id: "review",
+      // The count is part of the id so a dismissed summary resurfaces when it changes.
+      id: `review-${review.length}`,
       appId: review[0]!.id,
       tag: "Review",
       color: "#c08a2a",

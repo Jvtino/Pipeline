@@ -156,7 +156,13 @@ export function App() {
   }, [toast]);
 
   const apps = useMemo(() => flattenBoard(board, overlay, nowMs), [board, overlay, nowMs]);
-  const notifications = useMemo(() => buildNotifications(apps, nowMs), [apps, nowMs]);
+  const notifications = useMemo(
+    () => buildNotifications(apps, nowMs).filter((n) => !overlay.dismissedNotifs[n.id]),
+    [apps, nowMs, overlay.dismissedNotifs],
+  );
+  const dismissNotif = useCallback((ids: string[]) => {
+    setOverlay((o) => ({ ...o, dismissedNotifs: { ...o.dismissedNotifs, ...Object.fromEntries(ids.map((id) => [id, true])) } }));
+  }, [setOverlay]);
   const email = me?.email ?? "you@gmail.com";
 
   // ---- actions -------------------------------------------------------------
@@ -451,6 +457,7 @@ export function App() {
           onNewApp={onNewApp}
           notifications={notifications}
           onOpenApp={openDetail}
+          onDismiss={dismissNotif}
         />
 
         <div className="content">{viewState === "ready" && <ScreenComp {...ctx} />}</div>

@@ -16,6 +16,7 @@ export function defaultOverlay(): Overlay {
     notes: {},
     contacts: [],
     docs: [],
+    dismissedNotifs: {},
     doneTasks: {},
     taskLanes: {},
     clearedTasks: {},

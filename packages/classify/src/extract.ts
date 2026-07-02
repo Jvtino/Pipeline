@@ -136,16 +136,23 @@ const NON_HUMAN_EMAIL =
 const TITLE_RE =
   /\b(?:(?:senior|sr\.?|lead|principal|staff|technical|corporate|global|head\s+of)\s+){0,2}(?:technical\s+)?(?:recruiter|recruiting\s+(?:coordinator|manager|partner|lead)|talent\s+(?:acquisition(?:\s+(?:partner|specialist|manager|lead))?|partner|sourcer|specialist)|sourcer|people\s+(?:operations|partner)|hiring\s+manager|hr\s+(?:manager|partner|coordinator|business\s+partner))\b/i;
 
-const NAME_RE = /^[A-Z][a-z'’.\-]+(?:\s+[A-Z][a-z'’.\-]+){1,2}$/;
+const NAME_RE = /^\p{Lu}[\p{L}'’.\-]+(?:\s+\p{Lu}[\p{L}'’.\-]+){1,2}$/u; // Unicode letters — "Ayşe Yılmaz" is a name
 const NAME_STOP = /\b(the|our|your|team|hiring|recruit\w*|talent|people|hr|dear|hi|hello|regards|thanks|thank|best|sincerely|cheers|warm)\b/i;
 
 function isName(s: string): boolean {
   return NAME_RE.test(s) && !NAME_STOP.test(s) && !!acceptCompany(s.split(/\s+/)[0]);
 }
 
+// An email echoed back to the candidate ("please confirm your contact details:
+// jane@gmail.com") is the CANDIDATE'S address, not the recruiter's.
+const OWN_DETAILS_RE = /\byour (?:contact )?(?:details|information|info|profile|email(?: address)?)\b/i;
+
 function findRecruiterEmail(text: string): string | null {
   for (const m of text.matchAll(EMAIL_RE)) {
-    if (!NON_HUMAN_EMAIL.test(m[0])) return m[0];
+    if (NON_HUMAN_EMAIL.test(m[0])) continue;
+    const before = text.slice(Math.max(0, (m.index ?? 0) - 60), m.index ?? 0);
+    if (OWN_DETAILS_RE.test(before)) continue;
+    return m[0];
   }
   return null;
 }
@@ -159,7 +166,7 @@ function findName(text: string, title: string | null): string | null {
   }
   // "Name, Title" / "Name — Recruiter" on one line.
   const inline = text.match(
-    /\b([A-Z][a-z'’.\-]+\s+[A-Z][a-z'’.\-]+)\s*[,|–—-]\s*(?=(?:senior|sr\.?|lead|principal|staff|technical|corporate|global|head|recruit|talent|sourcer|people|hiring\s+manager|hr)\b)/i,
+    /\b(\p{Lu}[\p{L}'’.\-]+\s+\p{Lu}[\p{L}'’.\-]+)\s*[,|–—-]\s*(?=(?:senior|sr\.?|lead|principal|staff|technical|corporate|global|head|recruit|talent|sourcer|people|hiring\s+manager|hr)\b)/iu,
   );
   if (inline && isName(inline[1]!)) return inline[1]!;
   // After a sign-off word: "Best,\nJordan Lee".

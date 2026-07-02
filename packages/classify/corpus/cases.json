@@ -116,7 +116,12 @@
     { "text": "This is a contract position at $60/hr.", "expect": "$60/hr" },
     { "text": "The salary is £90k per year.", "expect": "£90k per year" },
     { "text": "We offer a highly competitive salary and generous equity.", "null": true },
-    { "text": "Salary is commensurate with experience (DOE).", "null": true }
+    { "text": "Salary is commensurate with experience (DOE).", "null": true },
+    { "text": "The base salary for this role is up to $150k.", "expect": "up to $150k" },
+    { "text": "Compensation is between $120,000 and $150,000 per year.", "expect": "between $120,000 and $150,000 per year" },
+    { "text": "The salary is €70.000 per year.", "expect": "€70.000 per year" },
+    { "text": "We can offer 130k USD annually.", "expect": "130k USD" },
+    { "text": "The range is $140,000 to $170,000 plus equity.", "expect": "$140,000 to $170,000" }
   ],
   "location": [
     { "text": "This role is fully Remote (US).", "kind": "remote" },

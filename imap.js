@@ -3,6 +3,7 @@
 // Uses imapflow (connection) + mailparser (MIME). The map-to-threads logic is a
 // pure function, unit-tested headlessly; only connectAndFetch touches the network.
 "use strict";
+const crypto = require("crypto");
 let ImapFlow, simpleParser;
 try { ({ ImapFlow } = require("imapflow")); } catch (e) { /* installed via npm install */ }
 try { ({ simpleParser } = require("mailparser")); } catch (e) { /* installed via npm install */ }
@@ -84,10 +85,22 @@ function mapParsedToThreads(parsedList) {
     });
   }
   const threads = [];
+  // Hash the WHOLE key: the old derivation (base64 of the key, sliced to 16
+  // chars) only ever encoded the first ~12 bytes — barely more than the domain —
+  // so every same-domain thread shared one id and manual overrides bled across
+  // unrelated applications.
+  const tidFor = (k) => "imap-" + crypto.createHash("sha1").update(k).digest("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
+  const legacyTidFor = (k) => "imap-" + Buffer.from(k).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
   for (const [key, msgs] of groups) {
     msgs.sort((a, b) => a.date.localeCompare(b.date));
+    const threadId = tidFor(key);
+    // The id this thread had under the pre-fix scheme (truncated base64 of
+    // domain|subject). Lets the renderer re-key manual status overrides saved
+    // against an old id (see MIGRATION_PLAN.md).
+    const legacyThreadId = legacyTidFor(msgs[0].domain + "|" + normSubject(msgs[0].subject));
     threads.push({
-      threadId: "imap-" + Buffer.from(key).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 16),
+      threadId,
+      ...(legacyThreadId !== threadId ? { legacyThreadId } : {}),
       domain: msgs[0].domain,
       subject: msgs[0].subject,
       messages: msgs.map(({ date, from, body }) => ({ date, from, body })),

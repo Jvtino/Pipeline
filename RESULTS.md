@@ -49,8 +49,8 @@ Regression cases (in `corpus/cases.json`, permanent):
 Behavior in the app: applications from different companies via one platform now appear as
 separate cards under their real employer names (desktop, web, and API boards); when no employer
 is recoverable, each stays its own "needs review" card instead of silently merging.
-MIGRATION_PLAN.md covers the one data consequence (desktop-IMAP manual overrides/pins keyed on
-old ATS threadIds orphan once) — **awaiting approval, not implemented**.
+MIGRATION_PLAN.md covers the data consequence for desktop-IMAP users — the re-keying repair was
+**approved and implemented** (exactly-one-heir transfer, ambiguous drops with a one-time notice).
 
 ## 3. Every accepted change (one line each)
 
@@ -67,6 +67,12 @@ old ATS threadIds orphan once) — **awaiting approval, not implemented**.
 11. `phase 4c` — recruiter contact: candidate-echoed-details guard, Unicode names.
 12. `phase 5` — Turkish status templates + LinkedIn-TR company subject (lock-step), ASSUMED-labeled `tr` corpus bucket.
 13. `phase 6` — LLM_DECISION.md (memo only) + this report.
+14. `post-approval` — user approved the MIGRATION_PLAN repair: `imap.js` emits each thread's
+    pre-fix `legacyThreadId`; the desktop re-keys orphaned manual status overrides on sync
+    (exactly-one-heir transfers; ambiguous drops with a one-time notice). Building its tests
+    exposed a latent bug — the old id derivation truncated to ~the sender domain, so **all
+    same-domain IMAP threads shared one threadId** (overrides bled across applications); ids are
+    now a hash of the full key, with a collision regression test.
 
 **Reverted attempts: none.** Two intra-diff corrections before commit (recorded for honesty):
 the first icims URL pattern stopped at the platform's own mailbox host (fixed by walking every

@@ -1,43 +1,52 @@
-# MIGRATION_PLAN — data-repair considerations for the Known Issue A fixes
+# MIGRATION_PLAN — data repair for the IMAP thread-identity fixes
 
-**Status: REPORT ONLY. Nothing here is implemented. Approval is required before any of it ships.**
+**Status: APPROVED by the user (option 2) and IMPLEMENTED.** The repair ships alongside the
+threading fix; this document records what changes for existing users and how the repair behaves.
 
 ## What needs no migration (verified)
 
 - **Hosted (web/API/DB)**: application records are stored one-per-thread and re-derived on every
   sync (`upsertApplications` overwrites company/role/status). Bundling happened at *board build
-  time*, not at rest. With the extraction + grouping fixes, existing records self-heal on the
-  next sync; boards built from stored records stop merging as soon as records re-sync (the new
-  nullable `platform_fallback` column backfills via the idempotent `ADD COLUMN IF NOT EXISTS` —
-  additive schema, no data rewrite).
-- **Desktop board**: threads are re-fetched and re-classified on every sync; grouping is computed
-  in-memory. No stored company data to repair.
+  time*, not at rest; records self-heal on the next sync. The new nullable `platform_fallback`
+  column backfills via the idempotent `ADD COLUMN IF NOT EXISTS` — additive, no data rewrite.
+- **Desktop Gmail / Outlook**: threadIds come from the provider APIs, not from a derived key —
+  entirely unaffected.
+- **Desktop board contents**: threads are re-fetched and re-classified on every sync; only
+  user-entered corrections persist locally.
 
-## The one real migration concern (desktop IMAP users only)
+## What changes for desktop IMAP users
 
-The IMAP threading fix changes the derived thread key for shared-ATS mail
-(`domain|subject` → `domain|subject|company` or `domain|subject|messageId`). Desktop threadIds
-are derived from that key (`imap-<base64>`), and three localStorage stores key on them:
+Two identity fixes change derived `imap-<hash>` threadIds:
 
-- `pipeline.statusOverrides` (manual status corrections)
-- pinned positions (by app id)
-- `pipeline.manualPositions` is unaffected (its ids are user-generated)
+1. **Shared-ATS splitting** (Known Issue A): the thread key now carries the mail's recovered
+   employer, so two companies' boilerplate mail stops merging.
+2. **Collision fix** (found while building the repair's tests): the old id derivation kept only
+   the first 16 base64 chars ≈ the first ~12 bytes of `domain|subject` — barely more than the
+   domain — so **every same-domain thread shared one id** and manual status overrides bled across
+   unrelated applications. Ids are now a hash of the full key; all IMAP threadIds change.
 
-**Impact**: after updating, an IMAP-connected desktop user's manual overrides/pins that pointed
-at *ATS-domain threads* stop matching (the thread now has a new id). Non-ATS threads keep their
-exact old ids. Gmail/Outlook (API-threaded) desktop users are entirely unaffected — only the
-IMAP path derives ids from the grouping key.
+Locally persisted, thread-id-keyed data: only `pipeline.statusOverrides` (manual status
+corrections). Pins and the ignore list key on company *names*, not ids (a pin on a
+platform-fallback name like "Myworkday" may detach when the card gains its real employer name —
+re-pinning is one click; not repaired by design).
 
-**Proposed repair (NOT implemented)**: on first load after update, for each orphaned override/pin
-id, re-key it by matching the old thread's `(domain, normalized subject)` against the new thread
-list; when exactly one new thread matches, transfer the override; otherwise drop it and surface a
-one-time "N manual changes could not be carried over" notice. Small, self-contained, runs once.
+## The implemented repair
 
-**Why not silently shipped**: rewriting user-entered corrections heuristically can attach a
-status override to the WRONG company — corrupting user data is worse than a one-time loss of a
-pin. Decision needed: ship the re-keying repair, or accept the one-time orphaning with a notice.
+- `imap.js` attaches to every thread the id it had under the old scheme (`legacyThreadId`,
+  computed with the exact historical derivation — covered by unit tests).
+- On each sync, the app re-keys orphaned overrides (`repairOrphanedOverrides` in `index.html`):
+  - old id still matches a live thread → untouched;
+  - **exactly one** current thread descends from the old id → override transfers to the new id;
+  - **several** current threads descend from it (the formerly-collided/bundled cases) → the
+    override is **dropped and counted** — under the old scheme it pointed at all of them at once,
+    so any transfer would be a guess, and guessing attaches a user's correction to the wrong
+    company;
+  - **zero** matches (thread outside the current fetch window) → left in place, harmless.
+- Repairs persist immediately, so the pass is a no-op afterwards. When anything was dropped, the
+  sync status line shows a one-time "⚠ N manual status change(s) couldn't be carried over".
 
-## Approval requested
+## Residual risk (accepted)
 
-1. Accept one-time orphaning of IMAP-thread overrides/pins (do nothing), OR
-2. Approve the re-keying repair above as a separate reviewed diff.
+Overrides on formerly-collided/bundled ids are lost (with notice) rather than guessed. If a
+dropped override mattered, re-applying it on the now-correctly-separated card is one click — and
+it will stick, which under the old colliding ids it effectively couldn't.

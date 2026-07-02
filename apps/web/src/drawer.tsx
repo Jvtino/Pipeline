@@ -8,6 +8,7 @@ import type { UiApplication, WorkType, DetailTab } from "./types";
 import { STATUS, MOVE_STAGES, type UiStatus } from "./lib/status";
 import { shortDate } from "./lib/format";
 import { getMessages, type ThreadMessage } from "./api";
+import { deriveContacts, mergeContacts } from "./lib/derive";
 import { CompanyAvatar, PersonAvatar, StatusPill, NeedsReviewBadge, ExpandMorph } from "./components";
 import { DocBadge } from "./screens";
 import { IconX, IconClock, IconCheck, IconDownload } from "./lib/icons";
@@ -92,13 +93,18 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
 
   const s = STATUS[app.status];
   const notes = ctx.overlay.notes[app.id] ?? [];
-  const contacts = ctx.overlay.contacts.filter((c) => c.company.toLowerCase() === app.company.toLowerCase());
+  // This application's extracted contact + the company's manual entries (manual wins on collision).
+  const contacts = mergeContacts(
+    deriveContacts([app]),
+    ctx.overlay.contacts.filter((c) => c.company.toLowerCase() === app.company.toLowerCase()),
+  );
   const docs = ctx.overlay.docs;
+  const syncedDocs = app.threadId ? ctx.syncedDocs.filter((d) => d.threadId === app.threadId) : [];
   const nextDone = !!ctx.overlay.nextDone[app.id];
   const hasNext = app.nextStep && app.nextStep !== "—";
   const enr = app.enrichment;
   const recruiterLine = [enr?.recruiterName, enr?.recruiterTitle].filter(Boolean).join(" · ");
-  const hasEnrichment = !!(enr && (enr.interviewDateTime || enr.interviewLink || enr.compensation || enr.location || recruiterLine || enr.recruiterEmail));
+  const hasEnrichment = !!(enr && (enr.interviewDateTime || enr.interviewLink || enr.compensation || enr.location || recruiterLine || enr.recruiterEmail || enr.recruiterPhone));
 
   const addNote = () => {
     const t = noteDraft.trim();
@@ -230,6 +236,12 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
                         }
                       />
                     )}
+                    {enr!.recruiterPhone && (
+                      <EnrichRow
+                        label="Phone"
+                        value={<a href={`tel:${enr!.recruiterPhone.replace(/[^+\d]/g, "")}`} style={{ color: "var(--primary)", textDecoration: "none" }}>{enr!.recruiterPhone}</a>}
+                      />
+                    )}
                   </div>
                 </>
               )}
@@ -321,8 +333,13 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
                 <div key={k.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 15px", background: "var(--card)", border: "1px solid var(--card-border)", borderRadius: 12, marginBottom: 9 }}>
                   <PersonAvatar name={k.name} company={k.company} size={42} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ font: "650 13.5px var(--sans)" }}>{k.name}</div>
-                    <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)" }}>{[k.title, k.email].filter(Boolean).join(" · ") || "—"}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      <span style={{ font: "650 13.5px var(--sans)" }}>{k.name}</span>
+                      {k.source === "email" && (
+                        <span style={{ padding: "2px 7px", borderRadius: 6, background: "rgba(47,146,102,.12)", font: "600 9.5px var(--sans)", color: "#1f7a52" }}>from email</span>
+                      )}
+                    </div>
+                    <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)" }}>{[k.title, k.email, k.phone].filter(Boolean).join(" · ") || "—"}</div>
                   </div>
                   {k.email && (
                     <a href={`mailto:${k.email}`} className="btn" style={{ padding: "7px 12px", fontSize: 11.5 }}>Email</a>
@@ -330,7 +347,7 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
                 </div>
               ))}
               {contacts.length === 0 && (
-                <div style={{ textAlign: "center", padding: "32px 20px 22px", color: "#a89e8c", font: "500 13px var(--sans)" }}>No contacts linked yet. Add the recruiter or hiring manager you’re talking to.</div>
+                <div style={{ textAlign: "center", padding: "32px 20px 22px", color: "#a89e8c", font: "500 13px var(--sans)" }}>No contacts yet — recruiters found in this thread's emails appear here automatically, or add one below.</div>
               )}
               <div style={{ marginTop: 12, paddingTop: 14, borderTop: "1px solid rgba(34,31,26,.07)", display: "flex", flexDirection: "column", gap: 8 }}>
                 <input className="input" value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Name" />
@@ -345,8 +362,23 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
 
           {tab === "files" && (
             <div>
-              {docs.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "40px 20px", color: "#a89e8c", font: "500 13px var(--sans)" }}>No documents yet. Add files from the Documents screen to attach them here.</div>
+              {syncedDocs.length > 0 && (
+                <>
+                  <div className="eyebrow" style={{ margin: "0 0 10px" }}>From this thread's emails</div>
+                  {syncedDocs.map((d, i) => (
+                    <div key={`${d.name}-${i}`} style={{ display: "flex", alignItems: "center", gap: 13, padding: "13px 15px", background: "var(--card)", border: "1px solid var(--card-border)", borderRadius: 12, marginBottom: 9 }}>
+                      <DocBadge type={/\.([a-z0-9]{2,5})$/i.exec(d.name)?.[1]?.toUpperCase() ?? "FILE"} big={false} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ font: "600 13px var(--sans)" }}>{d.name}</div>
+                        <div style={{ font: "500 11px var(--mono)", color: "var(--faint)", marginTop: 2 }}>{humanSize(d.size) ?? "—"} · {shortDate(d.date)}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {docs.length > 0 && <div className="eyebrow" style={{ margin: "14px 0 10px" }}>Your uploads</div>}
+                </>
+              )}
+              {docs.length === 0 && syncedDocs.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#a89e8c", font: "500 13px var(--sans)" }}>No files yet — attachments the company emails you appear here after a sync, and uploads from the Documents screen show here too.</div>
               ) : (
                 docs.map((d) => (
                   <div key={d.id} className="hover-border" style={{ display: "flex", alignItems: "center", gap: 13, padding: "13px 15px", background: "var(--card)", border: "1px solid var(--card-border)", borderRadius: 12, marginBottom: 9, cursor: "pointer" }}>

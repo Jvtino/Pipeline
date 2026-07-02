@@ -2,7 +2,7 @@
 // Keeps prop-threading flat: screens destructure what they need.
 import type { Screen, Plan, Overlay, UiApplication, OverlaySettings, AppMeta } from "./types";
 import type { UiStatus } from "./lib/status";
-import type { Mailbox } from "./api";
+import type { Mailbox, SyncedDoc } from "./api";
 
 export interface Ctx {
   apps: UiApplication[]; // flattened + overlaid, newest activity first
@@ -11,6 +11,7 @@ export interface Ctx {
   me: Plan | null;
   email: string;
   mailboxes: Mailbox[]; // really-connected mailboxes from /api/connections
+  syncedDocs: SyncedDoc[]; // attachment metadata found in synced mail (never file content)
 
   // header search
   q: string;

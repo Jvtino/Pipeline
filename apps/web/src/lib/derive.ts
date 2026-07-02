@@ -3,7 +3,7 @@
 // fields, so the 7-status board, donut, trend, top-sources, statistics, calendar,
 // companies, tasks and "needs you today" nudges are all computed client-side.
 import type { Board } from "@pipeline/contracts";
-import type { Overlay, UiApplication } from "../types";
+import type { ContactEntry, Overlay, UiApplication } from "../types";
 import type { UiStatus } from "./status";
 import { STATUS, STATUS_ORDER } from "./status";
 import { daysBetween, parseIso, shortDate, MONTHS } from "./format";
@@ -131,6 +131,40 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
     return b - a;
   });
   return apps;
+}
+
+/** Contacts found in synced mail (enrichment.recruiter*), one per unique person.
+ *  Dedup key: email, else name|company — the same recruiter across two roles at
+ *  one company stays a single card. */
+export function deriveContacts(apps: UiApplication[]): ContactEntry[] {
+  const out: ContactEntry[] = [];
+  const seen = new Set<string>();
+  for (const a of apps) {
+    const e = a.enrichment;
+    if (!e || (!e.recruiterName && !e.recruiterEmail)) continue;
+    const name = e.recruiterName ?? e.recruiterEmail!.split("@")[0]!;
+    const key = (e.recruiterEmail ?? `${name}|${a.company}`).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: `x-${a.id}`,
+      name,
+      title: e.recruiterTitle ?? "",
+      email: e.recruiterEmail ?? "",
+      company: a.company,
+      ...(e.recruiterPhone ? { phone: e.recruiterPhone } : {}),
+      appId: a.id,
+      source: "email",
+    });
+  }
+  return out;
+}
+
+/** Manual entries win on key collision (the user's own record beats extraction). */
+export function mergeContacts(derived: ContactEntry[], manual: ContactEntry[]): ContactEntry[] {
+  const key = (c: ContactEntry) => (c.email ? c.email.toLowerCase() : `${c.name}|${c.company}`.toLowerCase());
+  const manualKeys = new Set(manual.map(key));
+  return [...manual, ...derived.filter((c) => !manualKeys.has(key(c)))];
 }
 
 export type Counts = Record<UiStatus | "total", number>;

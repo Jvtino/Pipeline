@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { boardFromApplications } from "@pipeline/contracts";
 import type { Application } from "@pipeline/contracts";
-import { flattenBoard, companyCards } from "./derive";
+import { flattenBoard, companyCards, deriveContacts, mergeContacts } from "./derive";
 import { defaultOverlay } from "./overlay";
 
 const app = (over: Partial<Application> & { threadId: string }): Application => ({
@@ -68,6 +68,32 @@ describe("flattenBoard — needsReview seam", () => {
     expect(step["pend"]).toBe("Scheduling pending — pick a time");
     expect(step["bare"]).toBe("Prepare for the interview"); // no enrichment → generic label
     expect(step["notint"]).toBe("Awaiting reply"); // sub-state only applies to interview cards
+  });
+
+  it("deriveContacts extracts recruiters from enrichment, dedups, and merges manual-first", () => {
+    const board = boardFromApplications(
+      [
+        app({ threadId: "a", enrichment: { recruiterName: "Jordan Lee", recruiterTitle: "Recruiter", recruiterEmail: "jl@acme.com", recruiterPhone: "(415) 555-0143" } }),
+        app({ threadId: "b", enrichment: { recruiterEmail: "JL@acme.com" } }), // same person, different casing → deduped
+        app({ threadId: "c", enrichment: { recruiterEmail: "dana@acme.com" } }), // no name → email local part
+        app({ threadId: "d", enrichment: { compensation: "$100k" } }), // no recruiter → no contact
+        app({ threadId: "e" }),
+      ],
+      "test",
+    );
+    const rows = flattenBoard(board, defaultOverlay(), Date.parse("2026-05-10"));
+    const derived = deriveContacts(rows);
+    expect(derived.map((c) => c.name).sort()).toEqual(["Jordan Lee", "dana"]);
+    const jordan = derived.find((c) => c.name === "Jordan Lee")!;
+    expect(jordan.phone).toBe("(415) 555-0143");
+    expect(jordan.source).toBe("email");
+    expect(jordan.appId).toBe("a");
+
+    // A manual entry for the same email wins; other derived contacts still appear.
+    const manual = [{ id: "m1", name: "Jordan L.", title: "Sr Recruiter", email: "jl@acme.com", company: "Acme" }];
+    const merged = mergeContacts(derived, manual);
+    expect(merged.map((c) => c.name).sort()).toEqual(["Jordan L.", "dana"]);
+    expect(merged[0]!.id).toBe("m1"); // manual first
   });
 
   it("companyCards groups a company's positions into .apps (drives the expandable card)", () => {

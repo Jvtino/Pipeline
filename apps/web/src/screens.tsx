@@ -12,6 +12,8 @@ import {
   trendSeries,
   companyCards,
   deriveTasks,
+  deriveContacts,
+  mergeContacts,
   calendarFor,
   computeStats,
   volumeStats,
@@ -28,7 +30,7 @@ import {
   type CompanyCardData,
   type DerivedTask,
 } from "./lib/derive";
-import { MONTHS } from "./lib/format";
+import { MONTHS, shortDate } from "./lib/format";
 import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip, NeedsReviewBadge, ExpandMorph } from "./components";
 import { IconBolt, IconChevronRight, IconSearch, IconMail, IconDownload, IconPlus, IconShield, IconCheck, IconX } from "./lib/icons";
 
@@ -364,20 +366,28 @@ function CompanyExpand({ card, from, onClose, onOpenApp }: { card: CompanyCardDa
    CONTACTS
    ========================================================================== */
 export function Contacts(ctx: Ctx) {
-  const list = ctx.overlay.contacts;
+  const list = useMemo(() => mergeContacts(deriveContacts(ctx.apps), ctx.overlay.contacts), [ctx.apps, ctx.overlay.contacts]);
   if (list.length === 0) {
-    return <EmptyInline title="No contacts yet" sub="Add the recruiters and hiring managers you’re talking to from any application’s Contacts tab and they’ll appear here." />;
+    return <EmptyInline title="No contacts yet" sub="Contacts appear here automatically as Pipeline finds recruiters in your synced mail — or add the people you’re talking to from any application’s Contacts tab." />;
   }
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
       {list.map((k) => (
-        <div key={k.id} className="card hover-border" style={{ padding: 17 }}>
+        <div
+          key={k.id}
+          className="card hover-border"
+          style={{ padding: 17, cursor: k.appId ? "pointer" : "default" }}
+          onClick={k.appId ? () => ctx.openDetail(k.appId!) : undefined}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <PersonAvatar name={k.name} company={k.company} />
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ font: "650 14.5px var(--sans)" }}>{k.name}</div>
               <div style={{ font: "500 12px var(--sans)", color: "var(--muted-2)" }}>{k.title || "—"}</div>
             </div>
+            {k.source === "email" && (
+              <span style={{ flex: "0 0 auto", padding: "3px 8px", borderRadius: 7, background: "rgba(47,146,102,.12)", font: "600 10px var(--sans)", color: "#1f7a52" }}>from email</span>
+            )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, paddingTop: 13, borderTop: "1px solid rgba(34,31,26,.07)" }}>
             <CompanyAvatar name={k.company} size={24} radius={7} font={10} />
@@ -386,7 +396,12 @@ export function Contacts(ctx: Ctx) {
           {k.email && (
             <div style={{ font: "500 12px var(--sans)", color: "#7e88a0", marginTop: 11, display: "flex", alignItems: "center", gap: 7 }}>
               <IconMail size={13} color="#9aa3b5" />
-              {k.email}
+              <a href={`mailto:${k.email}`} onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "none" }}>{k.email}</a>
+            </div>
+          )}
+          {k.phone && (
+            <div style={{ font: "500 12px var(--sans)", color: "#7e88a0", marginTop: 7 }}>
+              <a href={`tel:${k.phone.replace(/[^+\d]/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "none" }}>☎ {k.phone}</a>
             </div>
           )}
         </div>
@@ -1032,15 +1047,61 @@ function ContextCard({ value, unit, color, title, sub }: { value: string; unit: 
 /* ============================================================================
    DOCUMENTS
    ========================================================================== */
+/** "application/pdf" / "Offer.pdf" → the short badge label ("PDF"). */
+function docTypeOf(name: string, contentType: string | null): string {
+  const ext = /\.([a-z0-9]{2,5})$/i.exec(name)?.[1];
+  if (ext) return ext.toUpperCase();
+  if (contentType?.includes("pdf")) return "PDF";
+  if (contentType?.includes("word") || contentType?.includes("document")) return "DOC";
+  return "FILE";
+}
+
+function docSize(bytes: number | null): string {
+  if (bytes == null || !Number.isFinite(bytes)) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function Documents(ctx: Ctx) {
   const fileRef = useRef<HTMLInputElement>(null);
   const docs = ctx.overlay.docs;
+  const synced = ctx.syncedDocs;
   const pick = () => fileRef.current?.click();
   return (
     <div style={{ maxWidth: 840 }}>
       <input ref={fileRef} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) ctx.addDoc(f); e.target.value = ""; }} />
-      {docs.length === 0 ? (
-        <EmptyInline title="No documents yet" sub="Add your resume, cover letters and portfolio so you can attach them to applications." primary="Upload a document" onPrimary={pick} />
+
+      {synced.length > 0 && (
+        <>
+          <div className="eyebrow" style={{ margin: "0 0 10px" }}>From your emails</div>
+          <div className="card" style={{ overflow: "hidden", marginBottom: 22 }}>
+            {synced.map((d, i) => (
+              <div key={`${d.threadId}-${d.name}-${i}`} className="hover-row" style={{ display: "flex", alignItems: "center", gap: 14, padding: "15px 18px", borderBottom: "1px solid rgba(34,31,26,.05)", cursor: "pointer" }} onClick={() => ctx.openDetail(d.threadId)}>
+                <DocBadge type={docTypeOf(d.name, d.contentType)} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ font: "600 13.5px var(--sans)" }}>{d.name}</div>
+                  <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", marginTop: 2 }}>{d.company} · {d.role}</div>
+                </div>
+                <span style={{ font: "500 12px var(--mono)", color: "var(--muted-2)" }}>{docSize(d.size)}</span>
+                <span style={{ font: "500 12px var(--mono)", color: "var(--faint)", width: 54, textAlign: "right" }}>{shortDate(d.date)}</span>
+              </div>
+            ))}
+            <div style={{ padding: "10px 18px", font: "500 11px var(--sans)", color: "var(--faint)" }}>Found in your synced mail — names only; open the original email to download the file.</div>
+          </div>
+        </>
+      )}
+
+      {synced.length > 0 && <div className="eyebrow" style={{ margin: "0 0 10px" }}>Uploaded</div>}
+      {docs.length === 0 && synced.length === 0 ? (
+        <EmptyInline title="No documents yet" sub="Attachments from your synced emails will appear here automatically — or upload your resume, cover letters and portfolio." primary="Upload a document" onPrimary={pick} />
+      ) : docs.length === 0 ? (
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div onClick={pick} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: 15, color: "var(--primary)", font: "600 12.5px var(--sans)", cursor: "pointer" }}>
+            <IconPlus size={15} />
+            Upload a document
+          </div>
+        </div>
       ) : (
         <div className="card" style={{ overflow: "hidden" }}>
           {docs.map((d) => (

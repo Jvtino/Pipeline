@@ -10,7 +10,7 @@ import type { Board } from "@pipeline/contracts";
 import type { Overlay, Plan, Screen, OverlaySettings, ViewState, AppMeta } from "./types";
 import type { UiStatus } from "./lib/status";
 import { STATUS } from "./lib/status";
-import { ensureSession, getMe, getBoard, runSync, resync, getConnections, deleteConnection, postJson, type Mailbox, type SyncSummary } from "./api";
+import { ensureSession, getMe, getBoard, getDocuments, runSync, resync, getConnections, deleteConnection, postJson, type Mailbox, type SyncedDoc, type SyncSummary } from "./api";
 import { loadOverlay, saveOverlay, defaultOverlay } from "./lib/overlay";
 import { flattenBoard } from "./lib/derive";
 import { shortDate, syncedLabel, localIsoDate } from "./lib/format";
@@ -66,6 +66,7 @@ export function App() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<number | null>(null);
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
+  const [syncedDocs, setSyncedDocs] = useState<SyncedDoc[]>([]); // attachment metadata from synced mail
   // Toast carries a nonce so flashing the *same* message twice still produces a
   // fresh state identity — otherwise React bails on the equal update and the
   // [toast]-keyed auto-dismiss effect wouldn't re-arm the timer.
@@ -90,6 +91,11 @@ export function App() {
     await ensureSession();
     setMe(await getMe());
     setBoard(await getBoard());
+    try {
+      setSyncedDocs((await getDocuments()).documents);
+    } catch {
+      /* non-fatal — the Documents screen just shows uploads */
+    }
     try {
       const c = await getConnections();
       setMailboxes(c.mailboxes);
@@ -185,6 +191,11 @@ export function App() {
       const res = await runSync();
       const nextBoard = await getBoard();
       setBoard(nextBoard);
+      try {
+        setSyncedDocs((await getDocuments()).documents);
+      } catch {
+        /* non-fatal */
+      }
       // Jump to Applications when the sync produced new rows.
       const found = nextBoard.groups.flatMap((g) => g.applications.map((a) => a.threadId)).filter((id) => !before.has(id));
       if (found.length) setNav("applications");
@@ -221,6 +232,11 @@ export function App() {
       ].filter((id) => !id.startsWith("m-")); // manual apps aren't server rows
       const res = await resync(keepThreadIds);
       setBoard(await getBoard());
+      try {
+        setSyncedDocs((await getDocuments()).documents);
+      } catch {
+        /* non-fatal */
+      }
       if (res.connections) {
         const { ok, failText } = describeFailures(res);
         if (ok > 0) setLastSync(Date.now());
@@ -377,6 +393,7 @@ export function App() {
     me,
     email,
     mailboxes,
+    syncedDocs,
     q,
     goto,
     openDetail,

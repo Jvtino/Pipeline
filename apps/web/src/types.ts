@@ -72,6 +72,9 @@ export interface ContactEntry {
   title: string;
   email: string;
   company: string;
+  phone?: string; // extracted-only (enrichment.recruiterPhone)
+  appId?: string; // extracted-only — the application the contact came from
+  source?: "manual" | "email"; // absent (legacy overlay entries) = manual
 }
 
 export interface DocEntry {

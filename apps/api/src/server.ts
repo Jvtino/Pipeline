@@ -15,6 +15,7 @@ import {
   applicationBelongsTo,
   listThreadMessages,
   listUserAttachments,
+  listStatusEvents,
 } from "@pipeline/db";
 import { issueLicense } from "@pipeline/license";
 import type { HttpTransport } from "@pipeline/providers";
@@ -139,6 +140,17 @@ export async function buildServer(opts: ServerOptions = {}) {
       return reply.code(404).send({ error: "application not found" });
     const messages = await listThreadMessages(store.db, user.id, threadId);
     return { messages: messages.map((m) => ({ date: m.date, from: m.from, bodyPreview: m.bodyPreview, attachments: m.attachments ?? [] })) };
+  });
+
+  // The recorded status timeline for one application (drives the drawer's
+  // progress timeline with real dates instead of inferred ones).
+  app.get("/api/applications/:threadId/events", async (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return reply;
+    const threadId = (req.params as { threadId?: string }).threadId ?? "";
+    if (!(await applicationBelongsTo(store.db, user.id, `${user.id}:${threadId}`)))
+      return reply.code(404).send({ error: "application not found" });
+    return { events: await listStatusEvents(store.db, user.id, threadId) };
   });
 
   // Every synced attachment (METADATA only) across the user's applications —

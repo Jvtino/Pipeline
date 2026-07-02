@@ -23,6 +23,7 @@ import {
   upsertThreadMessages,
   listThreadMessages,
   listUserAttachments,
+  listStatusEvents,
 } from "./repo";
 
 const masterKey = () => Buffer.from(generateMasterKey(), "base64");
@@ -144,6 +145,31 @@ describe("@pipeline/db", () => {
     expect(contact.name).toBe("Jane");
     expect(await listContacts(h.db, "u1", appId)).toHaveLength(1);
     expect(await listContacts(h.db, "u2", appId)).toHaveLength(0);
+  });
+
+  it("records status transitions as events: first sight, changes only, user-scoped", async () => {
+    await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
+    // First sight → one "applied" event stamped with firstSeen.
+    await upsertApplications(h.db, "u1", [appFixture("t1", "Acme", "applied")]);
+    let ev = await listStatusEvents(h.db, "u1", "t1");
+    expect(ev.map((e) => [e.status, e.occurredAt])).toEqual([["applied", "2026-01-01"]]);
+
+    // Same status re-upserted (idempotent sync round) → no new event.
+    await upsertApplications(h.db, "u1", [appFixture("t1", "Acme", "applied")]);
+    expect(await listStatusEvents(h.db, "u1", "t1")).toHaveLength(1);
+
+    // Status advance → one new event stamped with lastActivity.
+    const advanced = { ...appFixture("t1", "Acme", "interview"), lastActivity: "2026-02-15" };
+    await upsertApplications(h.db, "u1", [advanced]);
+    ev = await listStatusEvents(h.db, "u1", "t1");
+    expect(ev.map((e) => [e.status, e.occurredAt])).toEqual([
+      ["applied", "2026-01-01"],
+      ["interview", "2026-02-15"],
+    ]);
+    expect(ev.every((e) => e.source === "sync")).toBe(true);
+
+    // Another user can't read them.
+    expect(await listStatusEvents(h.db, "u2", "t1")).toHaveLength(0);
   });
 
   it("per-message previews: idempotent upsert, ordered read, attachment enrichment, user scoping", async () => {

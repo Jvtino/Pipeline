@@ -11,6 +11,7 @@ const KEY = "pipeline.overlay.v1";
 export function defaultOverlay(): Overlay {
   return {
     overrides: {},
+    moves: {},
     manual: [],
     notes: {},
     contacts: [],
@@ -40,6 +41,16 @@ function sanitizeManual(raw: ManualApp[] | undefined): ManualApp[] {
   return (raw ?? []).map((m) => (isStatus(m.status) ? m : { ...m, status: "applied" }));
 }
 
+/** Keep only move entries whose status this build knows. */
+function sanitizeMoves(raw: Overlay["moves"] | undefined): Overlay["moves"] {
+  const out: Overlay["moves"] = {};
+  for (const [id, list] of Object.entries(raw ?? {})) {
+    const clean = (Array.isArray(list) ? list : []).filter((m) => m && isStatus(m.status) && typeof m.when === "string");
+    if (clean.length) out[id] = clean;
+  }
+  return out;
+}
+
 function sanitizeLanes(raw: Record<string, unknown> | undefined): Overlay["taskLanes"] {
   const out: Overlay["taskLanes"] = {};
   for (const [id, v] of Object.entries(raw ?? {})) if (typeof v === "string" && LANES.has(v)) out[id] = v as "todo" | "doing" | "done";
@@ -63,6 +74,7 @@ export function loadOverlay(): Overlay {
       ...parsed,
       settings: { ...base.settings, ...(parsed.settings ?? {}) },
       overrides: sanitizeOverrides(parsed.overrides),
+      moves: sanitizeMoves(parsed.moves),
       manual: sanitizeManual(parsed.manual),
       taskLanes: sanitizeLanes(parsed.taskLanes),
     };

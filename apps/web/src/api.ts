@@ -105,6 +105,18 @@ export function getMessages(threadId: string): Promise<{ messages: ThreadMessage
   return getJson<{ messages: ThreadMessage[] }>(`/api/applications/${encodeURIComponent(threadId)}/messages`);
 }
 
+/** One recorded status transition (the drawer's real timeline). */
+export interface StatusEvent {
+  status: "applied" | "interview" | "offer" | "rejected";
+  occurredAt: string;
+  source: string;
+}
+
+/** The recorded status timeline for an application, oldest first. */
+export function getEvents(threadId: string): Promise<{ events: StatusEvent[] }> {
+  return getJson<{ events: StatusEvent[] }>(`/api/applications/${encodeURIComponent(threadId)}/events`);
+}
+
 /** A synced attachment (METADATA only — name/type/size, no file content). */
 export interface SyncedDoc {
   threadId: string;

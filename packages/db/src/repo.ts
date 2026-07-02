@@ -14,7 +14,7 @@ import {
   type Thread,
 } from "@pipeline/contracts";
 import type { Database } from "./client";
-import { users, mailConnections, applications, applicationMessages, syncState, notes, contacts } from "./schema";
+import { users, mailConnections, applications, applicationEvents, applicationMessages, syncState, notes, contacts } from "./schema";
 
 export type Plan = "free" | "pro" | "teams";
 export type Provider = "google" | "microsoft" | "imap";
@@ -117,8 +117,16 @@ export async function updateMailConnectionSecret(
     .where(eq(mailConnections.id, connectionId));
 }
 
-/** Idempotently upsert derived applications for a user (current status overwrites). */
+/** Idempotently upsert derived applications for a user (current status overwrites).
+ *  Status TRANSITIONS are recorded as application_events rows (the real per-stage
+ *  timeline): one event when a row first appears, one whenever its status changes. */
 export async function upsertApplications(db: Database, userId: string, apps: Application[]): Promise<void> {
+  // Previous statuses, read once — the transition detector for the whole batch.
+  const existing = await db
+    .select({ threadId: applications.threadId, status: applications.status })
+    .from(applications)
+    .where(eq(applications.userId, userId));
+  const prev = new Map(existing.map((r) => [r.threadId, r.status as Status]));
   for (const a of apps) {
     const id = `${userId}:${a.threadId}`;
     const values = {
@@ -157,7 +165,36 @@ export async function upsertApplications(db: Database, userId: string, apps: App
           updatedAt: new Date(),
         },
       });
+    // After the row exists (FK target): record the transition, if any.
+    const was = prev.get(a.threadId);
+    if (was !== a.status) {
+      await db.insert(applicationEvents).values({
+        id: randomUUID(),
+        applicationId: id,
+        status: a.status,
+        // occurred_at: the activity that carried the change (first sight uses firstSeen).
+        occurredAt: (was === undefined ? a.firstSeen : a.lastActivity) || a.lastActivity || a.firstSeen,
+        source: "sync",
+      });
+    }
   }
+}
+
+export interface StatusEventRow {
+  status: Status;
+  occurredAt: string;
+  source: string;
+}
+
+/** The recorded status timeline for one application, oldest first (user-scoped via join). */
+export async function listStatusEvents(db: Database, userId: string, threadId: string): Promise<StatusEventRow[]> {
+  const rows = await db
+    .select({ status: applicationEvents.status, occurredAt: applicationEvents.occurredAt, source: applicationEvents.source })
+    .from(applicationEvents)
+    .innerJoin(applications, eq(applicationEvents.applicationId, applications.id))
+    .where(and(eq(applications.userId, userId), eq(applications.threadId, threadId)))
+    .orderBy(asc(applicationEvents.occurredAt));
+  return rows.map((r) => ({ status: r.status as Status, occurredAt: r.occurredAt, source: r.source }));
 }
 
 export async function getApplicationsForUser(db: Database, userId: string): Promise<Application[]> {

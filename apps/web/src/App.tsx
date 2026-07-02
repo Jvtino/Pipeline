@@ -265,7 +265,12 @@ export function App() {
   }, [overlay.settings.autoSync]);
 
   const setStatus = useCallback((id: string, s: UiStatus) => {
-    setOverlay((o) => ({ ...o, overrides: { ...o.overrides, [id]: s } }));
+    // Record the move too — it becomes a dated entry on the drawer's timeline.
+    setOverlay((o) => ({
+      ...o,
+      overrides: { ...o.overrides, [id]: s },
+      moves: { ...o.moves, [id]: [...(o.moves[id] ?? []), { status: s, when: localIsoDate(Date.now()) }] },
+    }));
     flash(`Moved to ${STATUS[s].label}`);
   }, [setOverlay, flash]);
 

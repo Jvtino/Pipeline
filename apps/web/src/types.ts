@@ -100,9 +100,16 @@ export interface OverlaySettings {
   syncOnOpen: boolean;
 }
 
+/** One manual stage move (drives the drawer's real timeline for hand-moved stages). */
+export interface StageMove {
+  status: UiStatus;
+  when: string; // local ISO date
+}
+
 /** Everything we persist client-side, layered on top of the server board. */
 export interface Overlay {
   overrides: Record<string, UiStatus>;
+  moves: Record<string, StageMove[]>; // manual stage-move history per app id
   manual: ManualApp[];
   notes: Record<string, NoteEntry[]>;
   contacts: ContactEntry[];

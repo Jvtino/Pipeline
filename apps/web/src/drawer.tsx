@@ -2,12 +2,12 @@
 // Overview (next step + move stage + progress timeline + details), Email
 // (stored per-message previews from the server), Notes, Contacts, Files.
 // Notes/contacts/files read & write the client overlay.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Ctx } from "./ctx";
 import type { UiApplication, WorkType, DetailTab } from "./types";
 import { STATUS, MOVE_STAGES, type UiStatus } from "./lib/status";
 import { shortDate } from "./lib/format";
-import { getMessages, type ThreadMessage } from "./api";
+import { getMessages, getEvents, type ThreadMessage, type StatusEvent } from "./api";
 import { deriveContacts, mergeContacts } from "./lib/derive";
 import { CompanyAvatar, PersonAvatar, StatusPill, NeedsReviewBadge, ExpandMorph } from "./components";
 import { DocBadge } from "./screens";
@@ -61,6 +61,18 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
     setMessages(null);
     setMsgState("idle");
   }, [app.id]);
+  // Real stage history: recorded sync transitions + the user's manual moves.
+  const [events, setEvents] = useState<StatusEvent[] | null>(null);
+  useEffect(() => {
+    setEvents(null);
+    if (!app.threadId) return;
+    getEvents(app.threadId).then((r) => setEvents(r.events)).catch(() => setEvents([]));
+  }, [app.id, app.threadId]);
+  const history = useMemo(() => {
+    const fromSync = (events ?? []).map((e) => ({ status: e.status as UiStatus, when: e.occurredAt, via: "from email" }));
+    const fromMoves = (ctx.overlay.moves[app.id] ?? []).map((m) => ({ status: m.status, when: m.when, via: "moved by you" }));
+    return [...fromSync, ...fromMoves].sort((a, b) => a.when.localeCompare(b.when));
+  }, [events, ctx.overlay.moves, app.id]);
   useEffect(() => {
     if (tab !== "email" || msgState !== "idle" || !app.threadId) return;
     setMsgState("loading");
@@ -184,23 +196,41 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
                 ))}
               </div>
 
-              {/* timeline */}
+              {/* timeline — recorded history (sync transitions + manual moves) when we
+                  have it, the inferred stage ladder otherwise */}
               <div className="eyebrow" style={{ margin: "22px 0 14px" }}>Application progress</div>
-              {timelineFor(app).map((e, i, arr) => {
-                const color = e.state === "done" ? STATUS.offer.dot : e.state === "rejected" ? STATUS.rejected.dot : e.state === "current" ? s.dot : null;
-                return (
-                  <div key={i} style={{ display: "flex", gap: 14 }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "0 0 auto" }}>
-                      <span style={{ width: 15, height: 15, borderRadius: "50%", flex: "0 0 auto", background: color || "#fbf8f2", border: `2px solid ${color || "#d2ccc0"}` }} />
-                      {i < arr.length - 1 && <span style={{ width: 2, flex: 1, minHeight: 26, margin: "3px 0", background: e.state === "done" ? "#bfe0cd" : "#e2dccf" }} />}
-                    </div>
-                    <div style={{ flex: 1, paddingBottom: 16 }}>
-                      <div style={{ font: "600 13.5px var(--sans)", color: "#2a2620" }}>{e.label}</div>
-                      <div style={{ font: "500 12px var(--sans)", color: "var(--muted)", marginTop: 2 }}>{e.cap}</div>
-                    </div>
-                  </div>
-                );
-              })}
+              {history.length > 0
+                ? history.map((e, i, arr) => {
+                    const st = STATUS[e.status];
+                    const current = i === arr.length - 1;
+                    return (
+                      <div key={i} style={{ display: "flex", gap: 14 }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "0 0 auto" }}>
+                          <span style={{ width: 15, height: 15, borderRadius: "50%", flex: "0 0 auto", background: current ? st.dot : "#fbf8f2", border: `2px solid ${st.dot}` }} />
+                          {i < arr.length - 1 && <span style={{ width: 2, flex: 1, minHeight: 26, margin: "3px 0", background: "#e2dccf" }} />}
+                        </div>
+                        <div style={{ flex: 1, paddingBottom: 16 }}>
+                          <div style={{ font: "600 13.5px var(--sans)", color: "#2a2620" }}>{st.label}</div>
+                          <div style={{ font: "500 12px var(--sans)", color: "var(--muted)", marginTop: 2 }}>{shortDate(e.when)} · {e.via}</div>
+                        </div>
+                      </div>
+                    );
+                  })
+                : timelineFor(app).map((e, i, arr) => {
+                    const color = e.state === "done" ? STATUS.offer.dot : e.state === "rejected" ? STATUS.rejected.dot : e.state === "current" ? s.dot : null;
+                    return (
+                      <div key={i} style={{ display: "flex", gap: 14 }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "0 0 auto" }}>
+                          <span style={{ width: 15, height: 15, borderRadius: "50%", flex: "0 0 auto", background: color || "#fbf8f2", border: `2px solid ${color || "#d2ccc0"}` }} />
+                          {i < arr.length - 1 && <span style={{ width: 2, flex: 1, minHeight: 26, margin: "3px 0", background: e.state === "done" ? "#bfe0cd" : "#e2dccf" }} />}
+                        </div>
+                        <div style={{ flex: 1, paddingBottom: 16 }}>
+                          <div style={{ font: "600 13.5px var(--sans)", color: "#2a2620" }}>{e.label}</div>
+                          <div style={{ font: "500 12px var(--sans)", color: "var(--muted)", marginTop: 2 }}>{e.cap}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
 
               {/* details grid */}
               <div className="eyebrow" style={{ margin: "8px 0 12px" }}>Details</div>

@@ -84,6 +84,11 @@ for (const c of (corpus.company ?? []) as CompanyCase[]) {
   const smart = resolveCompanySmart(companyThread(c)).company;
   record("companySmart", c, `${c.domain} :: ${(c.subject || c.from).slice(0, 44)}`, c.expected, smart, smart === c.expected);
 }
+// Smart-only cases (signals the parity-gated base resolver doesn't have, e.g. ATS URLs).
+for (const c of (corpus.companySmart ?? []) as CompanyCase[]) {
+  const smart = resolveCompanySmart(companyThread(c)).company;
+  record("companySmart", c, `${c.domain} :: ${(c.subject || c.from).slice(0, 44)}`, c.expected, smart, smart === c.expected);
+}
 
 /* ---- companyFromDomain / companyFromSenderName-null ---- */
 for (const c of (corpus.companyFromDomain ?? []) as { domain: string; expected: string; lang?: string }[]) {

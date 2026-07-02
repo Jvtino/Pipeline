@@ -108,6 +108,12 @@ const APPLY_URL_RES: RegExp[] = [
   /jobs\.lever\.co\/([a-z0-9][a-z0-9-]{1,40})/i,
   /\b([a-z0-9][a-z0-9-]{1,40})\.(?:applytojob|breezy|recruitee|teamtailor|bamboohr|ashbyhq|workable|jobvite)\.(?:com|hr|io)/i,
   /\b([a-z0-9][a-z0-9-]{1,40})\.smartrecruiters\.com/i,
+  /\b([a-z0-9][a-z0-9-]{1,40})\.(?:wd\d+\.)?myworkdaysite\.com/i,
+  /\b(?:careers?-|jobs?-)?([a-z0-9][a-z0-9-]{1,40}?)\.icims\.com/i,
+  /jobs\.smartrecruiters\.com\/([A-Za-z0-9][\w-]{1,40})/i,
+  /\b([a-z0-9][a-z0-9-]{1,40})\.(?:successfactors|sapsf)\.(?:com|eu)/i,
+  /\b([a-z0-9][a-z0-9-]{1,40})\.taleo\.net/i,
+  /\b([a-z0-9][a-z0-9-]{1,40})\.(?:jobs\.)?personio\.(?:de|com)/i,
 ];
 
 // Sub-domain / slug labels that are the platform's own, never a company.
@@ -122,8 +128,12 @@ const GENERIC_HOST_LABEL = new Set([
 
 function companyFromApplyUrl(text: string): string | null {
   for (const re of APPLY_URL_RES) {
-    const m = re.exec(text);
-    if (m && m[1]) {
+    // Walk EVERY occurrence: the first hit is often the platform's own mailbox
+    // host ("talent.icims.com" in the from) while the tenant URL comes later.
+    const g = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
+    let m: RegExpExecArray | null;
+    while ((m = g.exec(text)) !== null) {
+      if (!m[1]) continue;
       const slug = m[1].toLowerCase();
       if (GENERIC_HOST_LABEL.has(slug)) continue;
       const c = acceptCompany(titleCase(slug));
@@ -134,7 +144,7 @@ function companyFromApplyUrl(text: string): string | null {
 }
 
 // Single subject-noise words that must never be taken as a company name.
-const SUBJECT_NOISE_RE = /^(update|status|reminder|confirmation|notification|alert|re|fwd|fw|action|important|hello|hi|welcome|congratulations|next steps?)$/i;
+const SUBJECT_NOISE_RE = /^(update|status|reminder|confirmation|notification|alert|re|fwd|fw|action|important|hello|hi|welcome|congratulations|next steps?|https?|www|link)$/i;
 
 // Subject/body shapes the base resolver doesn't cover: company at the START
 // ("Acme — Application Received"), "applying to <Company>", "interest in <Company>",
@@ -156,7 +166,7 @@ function firstCompanyMatch(res: RegExp[], text: string): string | null {
   for (const re of res) {
     const m = re.exec(text);
     if (m && m[1]) {
-      const raw = m[1].replace(/\b(for|as|the|role|position|team|and|we|has|have|is|to|on|careers?)\b.*$/i, "");
+      const raw = m[1].replace(/\b(for|as|the|role|position|team|and|we|has|have|is|to|on|was|were|will|are|been|being|would|could|should|does|did|do|you|your|our|via|regarding|careers?)\b.*$/i, "");
       const c = acceptCompany(raw);
       if (c && !SUBJECT_NOISE_RE.test(c)) return c;
     }

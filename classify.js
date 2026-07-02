@@ -138,9 +138,30 @@ function acceptCompany(s) {
 function companyFromSenderName(fromName) {
   let s = String(fromName || "").replace(/<[^>]*>/g, " ").trim();   // drop the <email> part
   if (!s) return null;
+  if (/@/.test(s)) return null;                                     // bare address, no display name — never a company
   const m = s.match(/^(.+?)\s*[\(\[|]?\s*\bvia\s+\w+/i);            // "Acme via Greenhouse"
   if (m) s = m[1];
   return acceptCompany(s);
+}
+
+// 1b) Tenant slug in the from-address LOCAL PART — Workday-family platforms
+// address mail per employer ("initech@myworkday.com"), so the local part IS the
+// company identity even when the display name is just "Workday". Restricted to
+// that family: broad platforms (LinkedIn, Indeed, …) use functional mailboxes
+// ("jobs-noreply@") that must never be read as an employer.
+const TENANT_LOCAL_ROOTS = new Set(["workday", "myworkday", "myworkdayjobs", "myworkdaysite", "workdayjobs"]);
+const GENERIC_LOCAL_RE = /^(?:no-?reply|do-?not-?reply|noreply|donotreply|notifications?|notify|mailer(?:-daemon)?|postmaster|jobs?|careers?|talent|recruiting|recruitment|hr|info|hello|support|admin|apply|applications?|system|messages?|mail|team|updates?|alerts?|news(?:letter)?|invitations?|security|workday)$/i;
+
+function companyFromAtsLocalPart(from) {
+  const m = String(from || "").match(/([A-Za-z0-9][A-Za-z0-9._+-]*)@([A-Za-z0-9.-]+)/);
+  if (!m) return null;
+  if (!TENANT_LOCAL_ROOTS.has(rootName(m[2]))) return null;
+  const local = m[1].toLowerCase().replace(/\+.*$/, "");
+  if (GENERIC_LOCAL_RE.test(local) || /\d{4,}/.test(local)) return null; // mailbox role or an id, not a name
+  const words = local.replace(/[._-]+/g, " ").trim();
+  if (!words) return null;
+  const pretty = words.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return acceptCompany(pretty);
 }
 
 // 2) Subject — handles LinkedIn ("…sent to Acme"), "…at Acme", "…to Acme",
@@ -151,6 +172,7 @@ const SUBJECT_PATS = [
   /\bat\s+([A-Z][A-Za-z0-9&.'\- ]+?)(?:\s*[-–—(|]|\s+via\b|[.!]|\s*$)/,
   /\b(?:to|with)\s+([A-Z][A-Za-z0-9&.'\- ]+?)(?:\s+for\b|\s*[-–—(|]|[.!]|\s*$)/,
   /\binterest in (?:working (?:at|for) |joining )?([A-Z][A-Za-z0-9&.'\- ]+?)(?:\s*[-–—(|.!]|\s+(?:for|as|has|team)\b|\s*$)/,
+  /\b(?:viewed|reviewed) by\s+([A-Z][A-Za-z0-9&.'\- ]+?)(?:\s*[-–—(|]|[.!]|\s*$)/,
 ];
 function extractCompanyFromSubject(subject) {
   const s = String(subject || "");
@@ -166,6 +188,7 @@ function extractCompanyFromSubject(subject) {
 const BODY_PATS = [
   /\b(?:applying to|apply to|application (?:to|with)|your application (?:to|with)|applied (?:to|for the .*? at)|thank you for (?:your interest in|applying to)|interested in (?:joining|working at))\s+([A-Z][A-Za-z0-9&.'\- ]{1,40})/,
   /\bat\s+([A-Z][A-Za-z0-9&.'\- ]{1,40}?)\s+(?:has been|have|on indeed|team|appreciates|received your)/,
+  /\b(?:viewed|reviewed) by (?:the (?:hiring )?(?:team|recruiter|manager|employer)(?: at)? )?([A-Z][A-Za-z0-9&.'\- ]{1,40})/,
 ];
 function companyFromBody(body) {
   const b = String(body || "");
@@ -173,7 +196,7 @@ function companyFromBody(body) {
     const m = b.match(re);
     if (m) {
       // cut trailing clause words the greedy match may have grabbed
-      const raw = m[1].replace(/\b(for|as|the|role|position|team|and|we|has|have|is|to|on)\b.*$/i, "");
+      const raw = m[1].replace(/\b(for|as|the|role|position|team|and|we|has|have|is|to|on|was|were|will|are|been|being|would|could|should|does|did|do|you|your|our|via|regarding)\b.*$/i, "");
       const c = acceptCompany(raw);
       if (c) return c;
     }
@@ -196,6 +219,7 @@ function resolveCompany(th) {
   let company = null;
   for (const m of msgs) { company = companyFromSenderName(m.from); if (company) break; }
   if (!company) company = extractCompanyFromSubject(th.subject);
+  if (!company) for (const m of msgs) { company = companyFromAtsLocalPart(m.from); if (company) break; }
   if (!company) for (const m of msgs) { company = companyFromBody(m.body); if (company) break; }
   if (company) return { company, domain: guessCompanyDomain(company) };
   // Couldn't identify the employer — fall back to the platform name (rare now).
@@ -234,7 +258,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     STATUS_RANK, detectStatus,
     rootName, companyFromDomain, isAtsDomain, cleanCompanyName,
-    companyFromSenderName, extractCompanyFromSubject, companyFromBody,
+    companyFromSenderName, companyFromAtsLocalPart, extractCompanyFromSubject, companyFromBody,
     resolveCompany, guessCompanyDomain, extractRole, tidy,
   };
 }

@@ -52,7 +52,17 @@
     { "domain": "greenhouse.io", "from": "Acme via Greenhouse <x@greenhouse.io>", "subject": "Update", "body": "", "expected": "Acme" },
     { "domain": "greenhouse.io", "from": "Globex via Greenhouse <y@greenhouse.io>", "subject": "Update", "body": "", "expected": "Globex" },
     { "domain": "greenhouse.io", "from": "Acme, Inc. via Greenhouse <x@greenhouse.io>", "subject": "Update", "body": "", "expected": "Acme" },
-    { "domain": "greenhouse.io", "from": "Acme Talent Acquisition <y@greenhouse.io>", "subject": "Update", "body": "", "expected": "Acme" }
+    { "domain": "greenhouse.io", "from": "Acme Talent Acquisition <y@greenhouse.io>", "subject": "Update", "body": "", "expected": "Acme" },
+    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was viewed by Acme Corp", "body": "", "expected": "Acme Corp" },
+    { "domain": "myworkday.com", "from": "Workday <initech@myworkday.com>", "subject": "Application Update", "body": "There is an update on your application. Sign in to the portal to view it.", "expected": "Initech" },
+    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Update on your application", "body": "Your application to Acme Corp was viewed by the hiring team.", "expected": "Acme Corp" },
+    { "domain": "greenhouse.io", "from": "no-reply@greenhouse.io", "subject": "Update", "body": "Your application to Globex has been received.", "expected": "Globex" }
+  ],
+  "_comment_companySmart": "TS-only (resolveCompanySmart in aggregate.ts) — signals the parity-gated base resolver does not have (ATS apply/tenant URLs). Not read by the parity gate.",
+  "companySmart": [
+    { "domain": "icims.com", "from": "iCIMS Recruiting <noreply@talent.icims.com>", "subject": "Interview availability", "body": "Please book here: https://careers-acme.icims.com/jobs/123", "expected": "Acme" },
+    { "domain": "smartrecruiters.com", "from": "SmartRecruiters <no-reply@smartrecruiters.com>", "subject": "Thanks for applying", "body": "Visit https://jobs.smartrecruiters.com/Initech/743999 to check your status.", "expected": "Initech" },
+    { "domain": "myworkdaysite.com", "from": "Workday <noreply@myworkdaysite.com>", "subject": "Application received", "body": "Manage your application at https://globex.wd3.myworkdaysite.com/careers.", "expected": "Globex" }
   ],
   "companyFromDomain": [
     { "domain": "careers.acme.co.uk", "expected": "Acme" },
@@ -62,7 +72,8 @@
   "companyFromSenderName_null": [
     { "from": "Greenhouse <no-reply@greenhouse.io>" },
     { "from": "LinkedIn Job Alerts <x@linkedin.com>" },
-    { "from": "Indeed Apply <x@indeed.com>" }
+    { "from": "Indeed Apply <x@indeed.com>" },
+    { "from": "no-reply@greenhouse.io" }
   ],
   "role": [
     { "subject": "Your application for Senior Software Engineer at Acme Corp", "expected": "Senior Software Engineer" },

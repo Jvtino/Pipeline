@@ -23,12 +23,18 @@ const BOOKING_RE =
 const DATETIME_RES: RegExp[] = [
   // [Weekday,] Month Day [, Year] [at Time TZ]
   /\b(?:(?:mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat|sun)[a-z]*,?\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?!\d)(?:st|nd|rd|th)?(?:,?\s+\d{4})?(?:,?\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)(?:\s*[a-z]{2,4})?)?/i,
+  // Day Month [Year] [at Time [TZ]] — European order, 24h time allowed ("12 June at 14:00 CET")
+  /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?(?:\s+\d{4})?(?:,?\s+(?:at\s+)?\d{1,2}(?::\d{2})?(?:\s*(?:am|pm))?(?:\s*[a-z]{2,4}\b)?)?/i,
   // Weekday[,] [at] Time TZ
   /\b(?:mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat|sun)[a-z]*,?\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)(?:\s*[a-z]{2,4})?/i,
+  // Weekday[,] [at] 24h time ("Thursday 15:30", "Fri at 09:45 CET")
+  /\b(?:mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat|sun)[a-z]*,?\s+(?:at\s+)?(?:[01]?\d|2[0-3]):[0-5]\d(?:\s*[a-z]{2,4}\b)?/i,
   // ISO date [time]
   /\b\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2})?\b/,
   // "at 3:00pm PT"
   /\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)(?:\s*[a-z]{2,4})?/i,
+  // "at 14:00 CET" — 24h needs the explicit minutes to avoid matching bare counts
+  /\bat\s+(?:[01]?\d|2[0-3]):[0-5]\d(?:\s*[a-z]{2,4}\b)?/i,
 ];
 
 export function extractInterview(text: string | null | undefined): InterviewInfo | null {

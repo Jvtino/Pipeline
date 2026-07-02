@@ -3,6 +3,7 @@
 // navigates to Applications and toasts.
 import { useEffect, useRef, useState } from "react";
 import { NEW_APP_STATUSES, STATUS, type UiStatus } from "./lib/status";
+import { localIsoDate } from "./lib/format";
 import type { WorkType } from "./types";
 import { IconX } from "./lib/icons";
 
@@ -10,7 +11,7 @@ export interface NewAppForm {
   company: string;
   role: string;
   status: UiStatus;
-  dateLabel: string;
+  dateIso: string; // applied date (YYYY-MM-DD) — drives the label AND the metrics
   source: string;
   workType: WorkType | null;
   location: string;
@@ -27,7 +28,7 @@ const WORK_TYPES: { value: WorkType | ""; label: string }[] = [
 ];
 
 export function NewApplicationModal({ onClose, onSave }: { onClose: () => void; onSave: (f: NewAppForm) => void }) {
-  const [form, setForm] = useState<NewAppForm>({ company: "", role: "", status: "applied", dateLabel: "", source: "LinkedIn", workType: null, location: "", salary: null, resumeVersion: "" });
+  const [form, setForm] = useState<NewAppForm>({ company: "", role: "", status: "applied", dateIso: localIsoDate(Date.now()), source: "LinkedIn", workType: null, location: "", salary: null, resumeVersion: "" });
   const [err, setErr] = useState(false);
   const [enter, setEnter] = useState(false);
   const raf = useRef(0);
@@ -43,7 +44,7 @@ export function NewApplicationModal({ onClose, onSave }: { onClose: () => void; 
       setErr(true);
       return;
     }
-    onSave({ ...form, company: form.company.trim(), role: form.role.trim(), dateLabel: form.dateLabel.trim() });
+    onSave({ ...form, company: form.company.trim(), role: form.role.trim() });
   };
 
   return (
@@ -78,8 +79,8 @@ export function NewApplicationModal({ onClose, onSave }: { onClose: () => void; 
             </select>
           </div>
           <div style={{ flex: 1 }}>
-            <label className="field-label">Date</label>
-            <input className="input" style={{ marginTop: 6 }} value={form.dateLabel} onChange={(e) => set("dateLabel", e.target.value)} placeholder="e.g. May 14" />
+            <label className="field-label">Date applied</label>
+            <input type="date" className="input" style={{ marginTop: 6 }} value={form.dateIso} onChange={(e) => set("dateIso", e.target.value)} />
           </div>
         </div>
         <div style={{ display: "flex", gap: 11, marginTop: 13 }}>

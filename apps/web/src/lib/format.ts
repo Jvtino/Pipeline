@@ -22,6 +22,15 @@ export function daysBetween(aMs: number, bMs: number): number {
   return Math.floor((aMs - bMs) / 86_400_000);
 }
 
+/** The LOCAL calendar date (YYYY-MM-DD) for an instant — what a user means by
+ *  "today". toISOString() would give the UTC date, which is yesterday/tomorrow
+ *  for part of every day outside UTC. */
+export function localIsoDate(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 /** A friendly "synced" label for the header chip from an ISO timestamp or null. */
 export function syncedLabel(at: number | null): string {
   if (!at) return "not synced yet";

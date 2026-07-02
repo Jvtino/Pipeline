@@ -13,7 +13,8 @@ emails into derived records (company · role · status · dates · a short snipp
 It's **local-first and single-user**: it runs on *your* machine, signs you in
 through your browser, and stores the mailbox tokens **envelope-encrypted at rest**
 (AES via `PIPELINE_MASTER_KEY`). Tokens never leave your machine. Clicking
-**Disconnect** (or deleting the data dir) signs you out.
+**Disconnect** deletes the stored tokens for that mailbox, so Pipeline (including
+background auto-sync) stops reading it immediately.
 
 The one thing only **you** can do: register an OAuth app with Google / Microsoft
 and approve the consent screen in your browser. Pipeline can't access your mailbox
@@ -138,14 +139,14 @@ Open <http://localhost:5173>.
 
 ## 4. Connect and sync
 
-1. In the app, open **Settings → Connect another mailbox**, or use the onboarding
-   screen's **Connect Gmail / Connect Outlook** (Settings → **Disconnect** takes you
+1. In the app, open **Settings → Connect Gmail / Connect Outlook**, or use the
+   onboarding screen's connect buttons (disconnecting your last mailbox takes you
    there).
 2. You're redirected to Microsoft/Google, you approve **read-only** mail access,
    and you land back on the board.
-3. Pipeline immediately runs a sync. Your **demo sample data is cleared** and your
-   real job-application emails appear. Use **Run sync** (top bar) any time to pull
-   new mail.
+3. Pipeline immediately runs a sync. Once that first sync succeeds, your **demo
+   sample data is cleared** and your real job-application emails appear. Use
+   **Run sync** (top bar) any time to pull new mail.
 
 **Background auto-sync:** start the API with `SYNC_INTERVAL_MS=1800000` (30 min) to
 keep the board fresh without clicking.
@@ -154,12 +155,15 @@ keep the board fresh without clicking.
 
 ## What gets imported (and what doesn't)
 
-- Only mail that **looks like a job application** becomes a card. Outlook's inbox is
-  scanned and filtered by a relevance gate (ATS senders like Greenhouse/Lever/
-  Workday, plus application/interview/offer/rejection language); Gmail is narrowed by
-  a search query up front. Newsletters, receipts and personal mail are ignored.
-- **Gmail** searches all mail (incl. archived) from the last year. **Outlook** reads
-  your **Inbox** folder (incremental after the first backfill).
+- Only mail that **looks like a job application** becomes a card. Both providers are
+  pre-filtered by the same superset query (ATS senders like Greenhouse/Lever/
+  Workday, plus application/interview/offer/rejection language), and a shared
+  relevance gate makes the final call. Newsletters, receipts and personal mail are
+  ignored.
+- **Gmail** searches all mail (incl. archived) from the last year, then follows
+  changes incrementally. **Outlook** keyword-searches your whole mailbox (incl.
+  Junk): the first sync covers the last year, and later syncs re-search only from
+  the last sync.
 - The status (Applied → Screening → Interview → Offer / Rejected) is inferred from the
   newest decisive message in each thread; you can always override it with **Move stage**.
 

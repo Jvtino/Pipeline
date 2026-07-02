@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { Screen, Plan } from "./types";
-import { STATUS, STATUS_ORDER, type UiStatus } from "./lib/status";
+import { STATUS, styleFor, type UiStatus } from "./lib/status";
 import { tintFor, monogram, initials } from "./lib/avatar";
 import { donutSegments, DONUT_C, type DonutSegment } from "./lib/derive";
 import type { UiApplication } from "./types";
@@ -47,7 +47,7 @@ export const screenTitle = (s: Screen): string => NAV.find((n) => n.key === s)?.
 
 /* ---- status pill ---------------------------------------------------------- */
 export function StatusPill({ status, sm }: { status: UiStatus; sm?: boolean }) {
-  const s = STATUS[status];
+  const s = styleFor(status); // tolerant lookup — an unknown status must not unmount the app
   return (
     <span className={`pill${sm ? " sm" : ""}`} style={{ color: s.fg, background: s.bg }}>
       <span className="dot" style={{ background: s.dot }} />
@@ -58,7 +58,8 @@ export function StatusPill({ status, sm }: { status: UiStatus; sm?: boolean }) {
 
 /* ---- needs-review badge --------------------------------------------------- */
 /** Subtle "unconfirmed" affordance for low-confidence classifier results. The
- *  card is still shown; this just invites a one-tap review (open → Move stage). */
+ *  card is still shown; this just invites a one-tap review (open → Move stage).
+ *  Amber = the interview palette entry, so retuning STATUS retunes this too. */
 export function NeedsReviewBadge({ compact }: { compact?: boolean }) {
   return (
     <span
@@ -71,16 +72,106 @@ export function NeedsReviewBadge({ compact }: { compact?: boolean }) {
         font: `700 ${compact ? 7.5 : 8}px var(--mono)`,
         letterSpacing: ".08em",
         textTransform: "uppercase",
-        color: "#9a6a16",
-        background: "rgba(192,138,42,.16)",
+        color: STATUS.interview.fg,
+        background: STATUS.interview.bg,
         padding: compact ? "2px 5px" : "2px 6px",
         borderRadius: 5,
         whiteSpace: "nowrap",
       }}
     >
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#c08a2a" }} />
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: STATUS.interview.dot }} />
       {compact ? "?" : "Unconfirmed"}
     </span>
+  );
+}
+
+/* ---- Apple-style expand-from-rect morph ------------------------------------ */
+/** The tapped-card → centered-panel morph: dimmed backdrop, double-rAF enter so
+ *  the square geometry paints first, reverse morph on close (unmounts via
+ *  onTransitionEnd's width sentinel), Escape to close. ONE implementation shared
+ *  by the Applications company square and the detail drawer's expand mode, so
+ *  the animation can't drift between them. Children get `beginClose` (wire it to
+ *  close buttons) and `enter` (for content fades). */
+const MORPH_EASE = "cubic-bezier(.32,.72,0,1)"; // iOS panel easing
+
+export function ExpandMorph({
+  from,
+  height,
+  vhMargin = 56,
+  zIndex = 45,
+  background = "#fffdf8",
+  captureEscape = false,
+  onClosed,
+  children,
+}: {
+  from: DOMRect;
+  height: number; // target panel height, clamped to the viewport minus vhMargin
+  vhMargin?: number;
+  zIndex?: number; // backdrop; the panel sits at zIndex + 1
+  background?: string;
+  captureEscape?: boolean; // win over a morph stacked underneath (drawer over company panel)
+  onClosed: () => void;
+  children: (beginClose: () => void, enter: boolean) => ReactNode;
+}) {
+  const [enter, setEnter] = useState(false);
+  const closing = useRef(false);
+  const raf = useRef(0);
+  const onClosedRef = useRef(onClosed);
+  onClosedRef.current = onClosed;
+  const beginClose = () => {
+    closing.current = true;
+    setEnter(false);
+  };
+
+  useEffect(() => {
+    // Paint the start (square) geometry for one frame, then transition open.
+    raf.current = requestAnimationFrame(() => { raf.current = requestAnimationFrame(() => setEnter(true)); });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      beginClose();
+      if (captureEscape) e.stopImmediatePropagation(); // don't also close the panel behind us
+    };
+    const opts: AddEventListenerOptions | undefined = captureEscape ? { capture: true } : undefined;
+    window.addEventListener("keydown", onKey, opts);
+    return () => {
+      cancelAnimationFrame(raf.current);
+      window.removeEventListener("keydown", onKey, opts);
+    };
+  }, [captureEscape]);
+
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const W = Math.min(560, vw - 40);
+  const H = Math.min(height, vh - vhMargin);
+  const geo: CSSProperties = enter
+    ? { top: Math.max(24, (vh - H) / 2), left: (vw - W) / 2, width: W, height: H, borderRadius: 22 }
+    : { top: from.top, left: from.left, width: from.width, height: from.height, borderRadius: 12 };
+
+  return (
+    <>
+      <div
+        onClick={beginClose}
+        style={{ position: "fixed", inset: 0, zIndex, background: "rgba(34,31,26,.34)", opacity: enter ? 1 : 0, transition: `opacity .44s ${MORPH_EASE}` }}
+      />
+      <div
+        onTransitionEnd={(e) => { if (closing.current && e.propertyName === "width") onClosedRef.current(); }}
+        style={{
+          position: "fixed",
+          zIndex: zIndex + 1,
+          background,
+          border: "1px solid rgba(34,31,26,.08)",
+          overflow: "hidden",
+          boxShadow: enter ? "0 40px 90px rgba(34,31,26,.30)" : "0 2px 8px rgba(34,31,26,.10)",
+          transition: `top .46s ${MORPH_EASE}, left .46s ${MORPH_EASE}, width .46s ${MORPH_EASE}, height .46s ${MORPH_EASE}, border-radius .46s ${MORPH_EASE}, box-shadow .46s ${MORPH_EASE}`,
+          willChange: "top,left,width,height",
+          display: "flex",
+          flexDirection: "column",
+          ...geo,
+        }}
+      >
+        {children(beginClose, enter)}
+      </div>
+    </>
   );
 }
 
@@ -487,4 +578,3 @@ export function CountChip({ children }: { children: ReactNode }) {
   return <span style={{ font: "600 11px var(--mono)", color: "var(--faint-2)", background: "#efe9df", padding: "1px 7px", borderRadius: 6 }}>{children}</span>;
 }
 
-export { STATUS_ORDER };

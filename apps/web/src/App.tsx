@@ -10,10 +10,10 @@ import type { Board } from "@pipeline/contracts";
 import type { Overlay, Plan, Screen, OverlaySettings, ViewState, AppMeta } from "./types";
 import type { UiStatus } from "./lib/status";
 import { STATUS } from "./lib/status";
-import { ensureSession, getMe, getBoard, runSync, resync, getConnections, postJson } from "./api";
+import { ensureSession, getMe, getBoard, runSync, resync, getConnections, deleteConnection, postJson, type Mailbox, type SyncSummary } from "./api";
 import { loadOverlay, saveOverlay, defaultOverlay } from "./lib/overlay";
 import { flattenBoard } from "./lib/derive";
-import { shortDate, syncedLabel } from "./lib/format";
+import { shortDate, syncedLabel, localIsoDate } from "./lib/format";
 import { Sidebar, Header, Toast, StateLoading, StateError, screenTitle } from "./components";
 import type { Ctx } from "./ctx";
 import { Dashboard, Applications, Contacts, Calendar, Tasks, Statistics, Documents, Templates, Settings } from "./screens";
@@ -58,16 +58,14 @@ export function App() {
 
   const [nav, setNav] = useState<Screen>("dashboard");
   const [q, setQ] = useState("");
-  const [appTab, setAppTab] = useState<UiStatus | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailFrom, setDetailFrom] = useState<DOMRect | null>(null); // when set, the detail expands from this rect (Apple-style); null → right-docked drawer
   const [modalOpen, setModalOpen] = useState(false);
-  const [newIds, setNewIds] = useState<Set<string>>(new Set());
 
   const [viewState, setViewState] = useState<ViewState>("loading");
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<number | null>(null);
-  const [connCount, setConnCount] = useState(0);
+  const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   // Toast carries a nonce so flashing the *same* message twice still produces a
   // fresh state identity — otherwise React bails on the equal update and the
   // [toast]-keyed auto-dismiss effect wouldn't re-arm the timer.
@@ -85,17 +83,27 @@ export function App() {
 
   const flash = useCallback((msg: string) => setToast({ msg, n: (toastSeq.current += 1) }), []);
 
-  const refresh = useCallback(async () => {
+  // Board + identity + connections. Deliberately does NOT stamp lastSync — this
+  // only re-reads what's stored; the "synced" chip must reflect real mailbox
+  // syncs, not page loads. Returns the connection count (for sync-on-open).
+  const refresh = useCallback(async (): Promise<number> => {
     await ensureSession();
     setMe(await getMe());
     setBoard(await getBoard());
     try {
-      setConnCount((await getConnections()).count);
+      const c = await getConnections();
+      setMailboxes(c.mailboxes);
+      return c.count;
     } catch {
       /* non-fatal — chip just shows 0 */
+      return 0;
     }
-    setLastSync(Date.now());
   }, []);
+
+  // Latest onSync/overlay without re-running mount-style effects on every render.
+  const onSyncRef = useRef<() => void>(() => {});
+  const overlayRef = useRef(overlay);
+  overlayRef.current = overlay;
 
   // Initial load + post-connect (?connect=) handling.
   useEffect(() => {
@@ -104,7 +112,7 @@ export function App() {
       const connect = new URLSearchParams(window.location.search).get("connect");
       if (connect) {
         window.history.replaceState({}, "", window.location.pathname);
-        flash(CONNECT_TOASTS[connect] ?? "Mailbox connection failed or was cancelled.");
+        flash(CONNECT_TOASTS[connect] ?? CONNECT_TOASTS.error!);
         if (connect === "ok") {
           setOverlay((o) => ({ ...o, disconnected: false }));
           try {
@@ -114,8 +122,14 @@ export function App() {
           }
         }
       }
-      await refresh();
-      if (alive) setViewState("ready");
+      const connections = await refresh();
+      if (!alive) return;
+      setViewState("ready");
+      // "Sync on app open" (Settings): a real behavior, not a dead toggle. The
+      // post-connect path just synced, so don't double up on that redirect.
+      if (connect !== "ok" && connections > 0 && overlayRef.current.settings.syncOnOpen) {
+        onSyncRef.current();
+      }
     })().catch((e: unknown) => {
       if (alive) {
         setViewState("error");
@@ -152,15 +166,16 @@ export function App() {
   }, []);
   const onNewApp = useCallback(() => setModalOpen(true), []);
 
-  const flagNew = useCallback((ids: string[]) => {
-    if (!ids.length) return;
-    setNewIds((prev) => new Set([...prev, ...ids]));
-    window.setTimeout(() => setNewIds((prev) => {
-      const next = new Set(prev);
-      for (const id of ids) next.delete(id);
-      return next;
-    }), 5000);
-  }, []);
+  // A sync round is only a success for the mailboxes that actually synced — the
+  // API returns per-connection outcomes, and "reauth required" must never read
+  // as "Synced 1 mailbox(es)." while the board quietly goes stale.
+  const describeFailures = (res: SyncSummary): { ok: number; failText: string | null } => {
+    const failed = res.results.filter((r) => r.error);
+    if (failed.length === 0) return { ok: res.results.length, failText: null };
+    const f = failed[0]!;
+    const why = f.error === "reauth required" ? `${f.email} needs to be reconnected (Settings → Connect)` : `${f.email}: ${f.error}`;
+    return { ok: res.results.length - failed.length, failText: why };
+  };
 
   const onSync = useCallback(async () => {
     if (syncing) return;
@@ -170,47 +185,67 @@ export function App() {
       const res = await runSync();
       const nextBoard = await getBoard();
       setBoard(nextBoard);
-      setConnCount(res.connections);
-      setLastSync(Date.now());
-      // Flag rows that appeared as a result of the sync.
+      // Jump to Applications when the sync produced new rows.
       const found = nextBoard.groups.flatMap((g) => g.applications.map((a) => a.threadId)).filter((id) => !before.has(id));
-      if (found.length) {
-        flagNew(found);
-        setNav("applications");
-        setAppTab("all");
+      if (found.length) setNav("applications");
+      if (!res.connections) {
+        flash("No mailbox connected yet — connect one in Settings.");
+      } else {
+        const { ok, failText } = describeFailures(res);
+        if (ok > 0) setLastSync(Date.now()); // stamp only when a mailbox really synced
+        if (!failText) flash(`Synced ${res.connections} mailbox(es).`);
+        else if (ok > 0) flash(`Synced ${ok} mailbox(es), but ${failText}.`);
+        else flash(`Sync failed — ${failText}.`);
       }
-      flash(res.connections ? `Synced ${res.connections} mailbox(es).` : "No mailbox connected yet — connect one in Settings.");
     } catch {
-      flash("Sync failed. Is a mailbox connected?");
+      flash("Sync failed. Is the API running?");
     } finally {
       setSyncing(false);
     }
-  }, [syncing, apps, flash, flagNew]);
+  }, [syncing, apps, flash]);
+  onSyncRef.current = () => void onSync();
 
   // Clear synced applications and re-scan the mailbox from scratch — recovery for
-  // a board polluted by a previous bad sync. Manual + annotated apps are kept.
+  // a board polluted by a previous bad sync. Manual apps are kept server-side;
+  // everything the user annotated IN THE APP (notes, stage moves, tracking
+  // fields) lives in the client overlay, so those thread ids are sent along for
+  // the rebuild to preserve — otherwise the dialog's promise would be false.
   const onRebuild = useCallback(async () => {
     if (syncing) return;
-    if (!window.confirm("Rebuild your board from your mailbox? This clears synced applications and re-scans your inbox from scratch. Manual entries and anything you've annotated are kept.")) return;
+    if (!window.confirm("Rebuild your board from your mailbox? This clears synced applications and re-scans your inbox from scratch. Manual entries and anything you've annotated (notes, stage moves, tracking fields) are kept.")) return;
     setSyncing(true);
     try {
-      const res = await resync();
+      const o = overlayRef.current;
+      const keepThreadIds = [
+        ...new Set([...Object.keys(o.notes), ...Object.keys(o.overrides), ...Object.keys(o.meta), ...Object.keys(o.nextDone)]),
+      ].filter((id) => !id.startsWith("m-")); // manual apps aren't server rows
+      const res = await resync(keepThreadIds);
       setBoard(await getBoard());
-      setConnCount(res.connections);
-      setLastSync(Date.now());
       if (res.connections) {
+        const { ok, failText } = describeFailures(res);
+        if (ok > 0) setLastSync(Date.now());
         setNav("applications");
-        setAppTab("all");
-        flash(`Rebuilt your board — cleared ${res.removed} stale item(s) and re-scanned ${res.connections} mailbox(es).`);
+        if (!failText) flash(`Rebuilt your board — cleared ${res.removed} stale item(s) and re-scanned ${res.connections} mailbox(es).`);
+        else flash(`Cleared ${res.removed} stale item(s), but the re-scan hit a problem — ${failText}.`);
       } else {
         flash("No mailbox connected yet — connect one in Settings.");
       }
     } catch {
-      flash("Rebuild failed. Is a mailbox connected?");
+      flash("Rebuild failed. Is the API running?");
     } finally {
       setSyncing(false);
     }
   }, [syncing, flash]);
+
+  // "Auto-sync frequency" (Settings): a real client-side scheduler. (A hosted
+  // deployment may ALSO run the server scheduler via SYNC_INTERVAL_MS; both
+  // funnel through the same idempotent /api/sync.)
+  useEffect(() => {
+    if (overlay.settings.autoSync === "Manual") return;
+    const ms = overlay.settings.autoSync === "Hourly" ? 3_600_000 : 1_800_000;
+    const t = window.setInterval(() => onSyncRef.current(), ms);
+    return () => window.clearInterval(t);
+  }, [overlay.settings.autoSync]);
 
   const setStatus = useCallback((id: string, s: UiStatus) => {
     setOverlay((o) => ({ ...o, overrides: { ...o.overrides, [id]: s } }));
@@ -227,7 +262,8 @@ export function App() {
   }, [setOverlay, flash]);
 
   const addNote = useCallback((id: string, body: string) => {
-    setOverlay((o) => ({ ...o, notes: { ...o.notes, [id]: [{ body, when: "just now" }, ...(o.notes[id] ?? [])] } }));
+    // A real date, not the literal "just now" — the note is rendered weeks later.
+    setOverlay((o) => ({ ...o, notes: { ...o.notes, [id]: [{ body, when: localIsoDate(Date.now()) }, ...(o.notes[id] ?? [])] } }));
   }, [setOverlay]);
 
   const setTaskLane = useCallback((id: string, lane: "todo" | "doing" | "done") => {
@@ -257,12 +293,13 @@ export function App() {
 
   const addDoc = useCallback((file: File) => {
     const ext = (file.name.split(".").pop() ?? "").toUpperCase().slice(0, 3) || "DOC";
+    // Current LOCAL date — not the UTC date of a nowMs frozen at mount.
     setOverlay((o) => ({
       ...o,
-      docs: [{ id: uid("d"), name: file.name, type: ext.startsWith("PDF") ? "PDF" : ext, size: humanSize(file.size), date: shortDate(new Date(nowMs).toISOString().slice(0, 10)) }, ...o.docs],
+      docs: [{ id: uid("d"), name: file.name, type: ext.startsWith("PDF") ? "PDF" : ext, size: humanSize(file.size), date: shortDate(localIsoDate(Date.now())) }, ...o.docs],
     }));
     flash(`Added ${file.name}`);
-  }, [setOverlay, flash, nowMs]);
+  }, [setOverlay, flash]);
 
   const exportCsv = useCallback(() => {
     const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
@@ -287,10 +324,26 @@ export function App() {
     flash("Your local data was cleared.");
   }, [flash]);
 
-  const disconnect = useCallback(() => {
-    setOverlay((o) => ({ ...o, disconnected: true }));
-    setSelectedId(null);
-  }, [setOverlay]);
+  // A REAL disconnect: delete the connection server-side (tokens + cursor go with
+  // it, background sync stops reading the account), then reflect the new state.
+  // The overlay flag alone would only hide the UI while the server kept syncing.
+  const disconnect = useCallback((connectionId?: string) => {
+    void (async () => {
+      try {
+        const targets = connectionId ? mailboxes.filter((m) => m.id === connectionId) : mailboxes;
+        for (const m of targets) await deleteConnection(m.id);
+        const next = await getConnections();
+        setMailboxes(next.mailboxes);
+        if (next.count === 0) {
+          setOverlay((o) => ({ ...o, disconnected: true }));
+          setSelectedId(null);
+        }
+        if (targets.length) flash("Mailbox disconnected — Pipeline no longer reads it.");
+      } catch {
+        flash("Couldn't disconnect the mailbox. Is the API running?");
+      }
+    })();
+  }, [mailboxes, setOverlay, flash]);
 
   const copyTemplate = useCallback((title: string, snippet: string) => {
     try {
@@ -303,29 +356,28 @@ export function App() {
 
   const saveNewApp = useCallback((f: NewAppForm) => {
     const id = uid("m");
-    const createdIso = new Date(nowMs).toISOString().slice(0, 10);
+    // The date the user picked drives BOTH the label and the metrics (calendar,
+    // trend, streaks) — falling back to the current LOCAL date, not the UTC date
+    // of a nowMs frozen at mount.
+    const createdIso = f.dateIso || localIsoDate(Date.now());
     setOverlay((o) => ({
       ...o,
-      manual: [...o.manual, { id, company: f.company, role: f.role, status: f.status, dateLabel: f.dateLabel, source: f.source, createdIso }],
+      manual: [...o.manual, { id, company: f.company, role: f.role, status: f.status, dateLabel: "", source: f.source, createdIso }],
       meta: { ...o.meta, [id]: { workType: f.workType ?? null, location: f.location?.trim() || null, salary: f.salary ?? null, resumeVersion: f.resumeVersion?.trim() || null } },
     }));
     setModalOpen(false);
     setNav("applications");
-    setAppTab("all");
-    flagNew([id]);
     flash(`Added ${f.company}`);
-  }, [setOverlay, nowMs, flagNew, flash]);
+  }, [setOverlay, flash]);
 
   const ctx: Ctx = {
     apps,
     overlay,
-    newIds,
     nowMs,
     me,
     email,
+    mailboxes,
     q,
-    appTab,
-    setAppTab,
     goto,
     openDetail,
     onNewApp,
@@ -368,7 +420,7 @@ export function App() {
           title={screenTitle(nav)}
           q={q}
           onSearch={setQ}
-          connectedCount={connCount}
+          connectedCount={mailboxes.length}
           syncLabel={syncing ? "syncing…" : syncedLabel(lastSync)}
           syncing={syncing}
           onSync={onSync}

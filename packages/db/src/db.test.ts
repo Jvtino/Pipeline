@@ -17,6 +17,7 @@ import {
   addContact,
   listContacts,
   rebuildSyncedApplications,
+  deleteMailConnection,
   saveCursor,
   getCursor,
 } from "./repo";
@@ -162,5 +163,28 @@ describe("@pipeline/db", () => {
     expect(left).toEqual(["t-manual", "t-real"]);
     expect(await listNotes(h.db, "u1", "u1:t-real")).toHaveLength(1); // annotation survived
     expect(await getCursor(h.db, "c1")).toBeNull(); // next sync is a full backfill
+  });
+
+  it("rebuild also keeps thread ids the client annotated in its local overlay", async () => {
+    await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
+    await upsertApplications(h.db, "u1", [
+      appFixture("t-junk", "Netflix", "applied"), // no annotations anywhere → cleared
+      appFixture("t-local", "Stripe", "interview"), // annotated only in the browser overlay → kept
+    ]);
+    const { removed } = await rebuildSyncedApplications(h.db, "u1", ["t-local"]);
+    expect(removed).toBe(1);
+    expect((await getApplicationsForUser(h.db, "u1")).map((a) => a.threadId)).toEqual(["t-local"]);
+  });
+
+  it("deleteMailConnection removes the mailbox (and its cursor) only for its owner", async () => {
+    const mk = masterKey();
+    await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
+    await saveMailConnection(h.db, mk, { id: "c1", userId: "u1", provider: "google", email: "u1@gmail.com", secret: { access_token: "x" } });
+    await saveCursor(h.db, "c1", "h1");
+
+    expect(await deleteMailConnection(h.db, "someone-else", "c1")).toBe(false); // scoped: not theirs
+    expect(await deleteMailConnection(h.db, "u1", "c1")).toBe(true);
+    expect((await h.db.select().from(mailConnections).where(eq(mailConnections.id, "c1"))).length).toBe(0);
+    expect(await getCursor(h.db, "c1")).toBeNull(); // sync_state cascaded away
   });
 });

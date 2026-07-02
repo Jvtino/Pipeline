@@ -1,7 +1,7 @@
 // Thin client for the Pipeline API. Same-origin paths (the Vite dev server
-// proxies /api and /auth to the Fastify API on :3001). The redesign keeps the
-// server contract untouched — it reads the board, triggers sync, and starts
-// OAuth connect; everything else the UI needs is derived client-side.
+// proxies /api and /auth to the Fastify API on :3001). It reads the board,
+// triggers sync/rebuild, lists and disconnects mailboxes, and starts OAuth
+// connect; everything else the UI needs is derived client-side.
 import type { Board } from "@pipeline/contracts";
 import type { Plan } from "./types";
 
@@ -42,26 +42,52 @@ export function getBoard(): Promise<Board> {
   return getJson<Board>("/api/applications");
 }
 
+/** Per-mailbox outcome of a sync round. `error` set means that mailbox did NOT sync. */
+export interface SyncOutcome {
+  email: string;
+  provider: string;
+  error?: string;
+  result?: { cursor: string; fetched: number; relevant: number; upserted: number };
+}
+
+export interface SyncSummary {
+  connections: number;
+  results: SyncOutcome[];
+}
+
 /** Trigger an incremental sync of connected mailboxes. */
-export function runSync(): Promise<{ connections: number }> {
-  return postJson<{ connections: number }>("/api/sync");
+export function runSync(): Promise<SyncSummary> {
+  return postJson<SyncSummary>("/api/sync");
 }
 
 /**
  * Rebuild the board from the connected mailboxes: clear auto-synced applications
- * (manual + annotated ones are kept), reset cursors, then re-scan from scratch.
- * `removed` is how many stale synced rows were cleared.
+ * (manual + annotated ones are kept — `keepThreadIds` carries the ids annotated
+ * in the client-side overlay, which the server can't see), reset cursors, then
+ * re-scan from scratch. `removed` is how many stale synced rows were cleared.
  */
-export function resync(): Promise<{ removed: number; connections: number }> {
-  return postJson<{ removed: number; connections: number }>("/api/resync");
+export function resync(keepThreadIds: string[]): Promise<{ removed: number } & SyncSummary> {
+  return postJson<{ removed: number } & SyncSummary>("/api/resync", { keepThreadIds });
+}
+
+export interface Mailbox {
+  id: string;
+  provider: string;
+  email: string;
 }
 
 export interface Connections {
   count: number;
-  mailboxes: { provider: string; email: string }[];
+  mailboxes: Mailbox[];
 }
 
-/** How many mailboxes are connected (metadata only) — for the header chip. */
+/** Connected mailboxes (metadata only) — the header chip + the Settings list. */
 export function getConnections(): Promise<Connections> {
   return getJson<Connections>("/api/connections");
+}
+
+/** Disconnect a mailbox for real: the server deletes the connection + its tokens. */
+export async function deleteConnection(id: string): Promise<void> {
+  const r = await fetch(`/api/connections/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`/api/connections/${id} → ${r.status}`);
 }

@@ -1,10 +1,10 @@
 // The ten content screens of the redesign. Each reads the shared Ctx (derived
 // from the real Board + overlay) and renders the warm-light design. Per-screen
 // layout uses design-system classes from styles.css plus a few inline grids.
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import type { Ctx } from "./ctx";
 import type { UiApplication } from "./types";
-import { STATUS, STATUS_ORDER, NEW_APP_STATUSES, type UiStatus } from "./lib/status";
+import { STATUS, type UiStatus } from "./lib/status";
 import {
   buildNudges,
   statusCounts,
@@ -29,7 +29,7 @@ import {
   type DerivedTask,
 } from "./lib/derive";
 import { MONTHS } from "./lib/format";
-import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip, NeedsReviewBadge } from "./components";
+import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip, NeedsReviewBadge, ExpandMorph } from "./components";
 import { IconBolt, IconChevronRight, IconSearch, IconMail, IconDownload, IconPlus, IconShield, IconCheck, IconX } from "./lib/icons";
 
 const CARD = "card card-pad";
@@ -44,7 +44,7 @@ function StatCard({ label, value, color, sub, delta }: { label: string; value: n
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginTop: 9 }}>
         <div style={{ font: "700 28px/1 var(--sans)", letterSpacing: "-.02em", color }}>{value}</div>
         {delta && (
-          <div style={{ font: "600 11px var(--mono)", color: delta.pct >= 0 ? "#1f7a52" : "#a85544", marginBottom: 2 }}>
+          <div style={{ font: "600 11px var(--mono)", color: delta.pct >= 0 ? STATUS.offer.fg : STATUS.rejected.fg, marginBottom: 2 }}>
             {delta.pct >= 0 ? "↑" : "↓"} {Math.abs(delta.pct)}%
           </div>
         )}
@@ -100,10 +100,10 @@ export function Dashboard(ctx: Ctx) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 13 }}>
         <StatCard label="Total Applications" value={counts.total} sub="vs last month" delta={totalDelta} />
-        <StatCard label="In Interview" value={counts.interview} color="#9a6a16" sub="in your pipeline" />
-        <StatCard label="Offers" value={counts.offer} color="#1f7a52" sub="in play" />
-        <StatCard label="Rejected" value={counts.rejected} color="#a85544" sub={`${pct(counts.rejected)}% of total`} />
-        <StatCard label="No Response" value={counts.no_response} color="#857a64" sub={`${pct(counts.no_response)}% awaiting reply`} />
+        <StatCard label="In Interview" value={counts.interview} color={STATUS.interview.fg} sub="in your pipeline" />
+        <StatCard label="Offers" value={counts.offer} color={STATUS.offer.fg} sub="in play" />
+        <StatCard label="Rejected" value={counts.rejected} color={STATUS.rejected.fg} sub={`${pct(counts.rejected)}% of total`} />
+        <StatCard label="No Response" value={counts.no_response} color={STATUS.no_response.fg} sub={`${pct(counts.no_response)}% awaiting reply`} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 14, marginTop: 14 }}>
@@ -170,14 +170,22 @@ type CompanyFilter = "all" | "active" | "offer" | "interview" | "needsReview";
 // How "far along" a status is, for the "Furthest along" sort.
 const PROGRESS_RANK: Record<UiStatus, number> = { offer: 5, interview: 4, screening: 3, applied: 2, no_response: 1, wishlist: 1, rejected: 0 };
 const maxIso = (xs: (string | null)[]): string => xs.reduce<string>((m, s) => (s && s > m ? s : m), "");
-const bestRank = (c: CompanyCardData): number => c.apps.reduce((m, a) => Math.max(m, PROGRESS_RANK[a.status] ?? 0), 0);
 
-const COMPANY_SORTERS: Record<CompanySort, (a: CompanyCardData, b: CompanyCardData) => number> = {
-  updated: (a, b) => maxIso(b.apps.map((x) => x.lastActivityIso)).localeCompare(maxIso(a.apps.map((x) => x.lastActivityIso))),
-  applied: (a, b) => maxIso(b.apps.map((x) => x.appliedIso)).localeCompare(maxIso(a.apps.map((x) => x.appliedIso))),
-  positions: (a, b) => b.apps.length - a.apps.length,
-  furthest: (a, b) => bestRank(b) - bestRank(a),
-  name: (a, b) => a.company.localeCompare(b.company),
+// Sort keys are computed ONCE per card (a comparator runs O(C log C) times, so
+// deriving them inside it would rescan every application on every comparison).
+interface SortableCard {
+  card: CompanyCardData;
+  updated: string;
+  applied: string;
+  rank: number;
+}
+
+const COMPANY_SORTERS: Record<CompanySort, (a: SortableCard, b: SortableCard) => number> = {
+  updated: (a, b) => b.updated.localeCompare(a.updated),
+  applied: (a, b) => b.applied.localeCompare(a.applied),
+  positions: (a, b) => b.card.apps.length - a.card.apps.length,
+  furthest: (a, b) => b.rank - a.rank,
+  name: (a, b) => a.card.company.localeCompare(b.card.company),
 };
 
 function matchesCompanyFilter(c: CompanyCardData, f: CompanyFilter): boolean {
@@ -199,6 +207,21 @@ export function Applications(ctx: Ctx) {
   const [filter, setFilter] = useState<CompanyFilter>("all");
   const query = q.trim().toLowerCase();
 
+  // Group → filter → sort only when the inputs change, not on every render.
+  const cards = useMemo(() => {
+    let cs = companyCards(apps);
+    if (query) cs = cs.filter((c) => c.company.toLowerCase().includes(query) || c.apps.some((a) => a.role.toLowerCase().includes(query)));
+    cs = cs.filter((c) => matchesCompanyFilter(c, filter));
+    const sortable: SortableCard[] = cs.map((card) => ({
+      card,
+      updated: maxIso(card.apps.map((x) => x.lastActivityIso)),
+      applied: maxIso(card.apps.map((x) => x.appliedIso)),
+      rank: card.apps.reduce((m, a) => Math.max(m, PROGRESS_RANK[a.status] ?? 0), 0),
+    }));
+    sortable.sort(COMPANY_SORTERS[sort]);
+    return sortable.map((s) => s.card);
+  }, [apps, query, filter, sort]);
+
   if (apps.length === 0) {
     return (
       <EmptyInline
@@ -212,10 +235,6 @@ export function Applications(ctx: Ctx) {
     );
   }
 
-  let cards = companyCards(apps);
-  if (query) cards = cards.filter((c) => c.company.toLowerCase().includes(query) || c.apps.some((a) => a.role.toLowerCase().includes(query)));
-  cards = cards.filter((c) => matchesCompanyFilter(c, filter));
-  cards = [...cards].sort(COMPANY_SORTERS[sort]);
   const totalApps = cards.reduce((n, c) => n + c.apps.length, 0);
 
   const selStyle: CSSProperties = { padding: "8px 11px", fontSize: 12.5 };
@@ -297,86 +316,47 @@ export function Applications(ctx: Ctx) {
 }
 
 /** Apple-style "open from the square": the tapped company card morphs into a
- *  centered panel listing its positions, over a dimmed backdrop, using the iOS
- *  easing curve. Closing reverses back into the square. Each position opens the
- *  existing detail drawer — this is what ties Companies ↔ Applications together. */
+ *  centered panel listing its positions (via the shared ExpandMorph). Each
+ *  position opens the existing detail drawer — this is what ties
+ *  Companies ↔ Applications together. */
 function CompanyExpand({ card, from, onClose, onOpenApp }: { card: CompanyCardData; from: DOMRect; onClose: () => void; onOpenApp: (id: string, rect: DOMRect) => void }) {
-  const [enter, setEnter] = useState(false);
-  const closing = useRef(false);
-  const raf = useRef(0);
-  const beginClose = () => { closing.current = true; setEnter(false); };
-
-  useEffect(() => {
-    // Paint the start (square) geometry for one frame, then transition open.
-    raf.current = requestAnimationFrame(() => { raf.current = requestAnimationFrame(() => setEnter(true)); });
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") beginClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => { cancelAnimationFrame(raf.current); window.removeEventListener("keydown", onKey); };
-  }, []);
-
-  const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-  const W = Math.min(560, vw - 40);
-  const H = Math.min(560, vh - 80);
-  const EASE = "cubic-bezier(.32,.72,0,1)";
-  const geo: CSSProperties = enter
-    ? { top: Math.max(24, (vh - H) / 2), left: (vw - W) / 2, width: W, height: H, borderRadius: 22 }
-    : { top: from.top, left: from.left, width: from.width, height: from.height, borderRadius: 12 };
-
   return (
-    <>
-      <div
-        onClick={beginClose}
-        style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(34,31,26,.34)", opacity: enter ? 1 : 0, transition: `opacity .44s ${EASE}` }}
-      />
-      <div
-        onTransitionEnd={(e) => { if (closing.current && e.propertyName === "width") onClose(); }}
-        style={{
-          position: "fixed",
-          zIndex: 46,
-          background: "#fffdf8",
-          border: "1px solid rgba(34,31,26,.08)",
-          overflow: "hidden",
-          boxShadow: enter ? "0 40px 90px rgba(34,31,26,.30)" : "0 2px 8px rgba(34,31,26,.10)",
-          transition: `top .46s ${EASE}, left .46s ${EASE}, width .46s ${EASE}, height .46s ${EASE}, border-radius .46s ${EASE}, box-shadow .46s ${EASE}`,
-          willChange: "top,left,width,height",
-          display: "flex",
-          flexDirection: "column",
-          ...geo,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 18px", borderBottom: "1px solid rgba(34,31,26,.07)", flex: "0 0 auto" }}>
-          <CompanyLogo name={card.company} domain={card.domain} size={42} radius={12} font={17} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ font: "700 16.5px var(--sans)", letterSpacing: "-.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.company}</div>
-            <div style={{ font: "500 12px var(--sans)", color: "var(--muted-2)", marginTop: 1 }}>{card.sub}</div>
-          </div>
-          <button onClick={beginClose} aria-label="Close" className="iconbtn" style={{ width: 32, height: 32, border: "none", background: "transparent", color: "var(--muted-2)", cursor: "pointer" }}>
-            <IconX size={17} />
-          </button>
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px 12px", opacity: enter ? 1 : 0, transition: `opacity .28s ease ${enter ? ".14s" : "0s"}` }}>
-          {card.apps.map((a) => (
-            <div
-              key={a.id}
-              className="hover-row"
-              onClick={(e) => onOpenApp(a.id, e.currentTarget.getBoundingClientRect())}
-              style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 12px", borderRadius: 12, cursor: "pointer" }}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <span style={{ font: "600 13.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.role}</span>
-                  {a.needsReview && <NeedsReviewBadge compact />}
-                </div>
-                <div style={{ font: "500 11.5px var(--mono)", color: "var(--muted-2)", marginTop: 3 }}>{a.dateLabel} · {a.source}</div>
-              </div>
-              <StatusPill status={a.status} sm />
-              <span style={{ color: "var(--faint-2)", flex: "0 0 auto" }}>›</span>
+    <ExpandMorph from={from} height={560} vhMargin={80} zIndex={45} onClosed={onClose}>
+      {(beginClose, enter) => (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 18px", borderBottom: "1px solid rgba(34,31,26,.07)", flex: "0 0 auto" }}>
+            <CompanyLogo name={card.company} domain={card.domain} size={42} radius={12} font={17} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ font: "700 16.5px var(--sans)", letterSpacing: "-.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.company}</div>
+              <div style={{ font: "500 12px var(--sans)", color: "var(--muted-2)", marginTop: 1 }}>{card.sub}</div>
             </div>
-          ))}
-        </div>
-      </div>
-    </>
+            <button onClick={beginClose} aria-label="Close" className="iconbtn" style={{ width: 32, height: 32, border: "none", background: "transparent", color: "var(--muted-2)", cursor: "pointer" }}>
+              <IconX size={17} />
+            </button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px 12px", opacity: enter ? 1 : 0, transition: `opacity .28s ease ${enter ? ".14s" : "0s"}` }}>
+            {card.apps.map((a) => (
+              <div
+                key={a.id}
+                className="hover-row"
+                onClick={(e) => onOpenApp(a.id, e.currentTarget.getBoundingClientRect())}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 12px", borderRadius: 12, cursor: "pointer" }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ font: "600 13.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.role}</span>
+                    {a.needsReview && <NeedsReviewBadge compact />}
+                  </div>
+                  <div style={{ font: "500 11.5px var(--mono)", color: "var(--muted-2)", marginTop: 3 }}>{a.dateLabel} · {a.source}</div>
+                </div>
+                <StatusPill status={a.status} sm />
+                <span style={{ color: "var(--faint-2)", flex: "0 0 auto" }}>›</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </ExpandMorph>
   );
 }
 
@@ -602,23 +582,33 @@ export function Tasks(ctx: Ctx) {
    STATISTICS
    ========================================================================== */
 export function Statistics(ctx: Ctx) {
-  const s = computeStats(ctx.apps, ctx.nowMs);
+  const { apps, nowMs } = ctx;
+  // ~30 whole-list passes; compute them once per board change, not on every
+  // render (App re-renders on each header-search keystroke, toast, etc.).
+  const derived = useMemo(
+    () => ({
+      s: computeStats(apps, nowMs),
+      vol: volumeStats(apps, nowMs),
+      src: sourcePerformance(apps),
+      role: rolePerformance(apps),
+      comp: companyInsights(apps),
+      timing: timingStats(apps, nowMs),
+      work: workTypePerformance(apps),
+      loc: locationPerformance(apps),
+      sal: salaryStats(apps),
+      resume: resumePerformance(apps),
+      wk: responseByWeek(apps, nowMs, 6),
+    }),
+    [apps, nowMs],
+  );
+  const { s, vol, src, role, comp, timing, work, loc, sal, resume, wk } = derived;
   if (s.sent === 0) return <EmptyInline title="No data yet" sub="Statistics appear once you’ve applied to a few roles. Add an application or run a sync to begin." />;
-  const vol = volumeStats(ctx.apps, ctx.nowMs);
-  const src = sourcePerformance(ctx.apps);
-  const role = rolePerformance(ctx.apps);
-  const comp = companyInsights(ctx.apps);
-  const timing = timingStats(ctx.apps, ctx.nowMs);
-  const work = workTypePerformance(ctx.apps);
-  const loc = locationPerformance(ctx.apps);
-  const sal = salaryStats(ctx.apps);
-  const resume = resumePerformance(ctx.apps);
-  const wk = responseByWeek(ctx.apps, ctx.nowMs, 6);
   const hasMeta = work.length > 0 || loc.length > 0 || sal.count > 0 || resume.rows.length > 0;
   const dDays = (n: number | null) => (n == null ? "—" : String(n));
   const ratePct = Math.round(s.responseRate * 100);
   const healthLabel = s.health === "healthy" ? "healthy" : s.health === "ok" ? "okay" : "needs work";
-  const healthColor = s.health === "healthy" ? "#1f7a52" : s.health === "ok" ? "#9a6a16" : "#a85544";
+  // Green/amber/red = the offer/interview/rejected palette entries.
+  const healthColor = s.health === "healthy" ? STATUS.offer.fg : s.health === "ok" ? STATUS.interview.fg : STATUS.rejected.fg;
   const advText = (i: number) => {
     const adv = s.advance[i];
     if (adv == null) return "";
@@ -1213,30 +1203,51 @@ export function Templates(ctx: Ctx) {
 /* ============================================================================
    SETTINGS
    ========================================================================== */
+const PROVIDER_LABEL: Record<string, string> = { google: "Gmail", microsoft: "Outlook", imap: "IMAP" };
+const PROVIDER_COLOR: Record<string, string> = { google: "#c06a57", microsoft: "#6c7d96", imap: "#857a64" };
+
 export function Settings(ctx: Ctx) {
-  const { overlay, setSetting, exportCsv, deleteAll, disconnect, email, onRebuild } = ctx;
+  const { overlay, setSetting, exportCsv, deleteAll, disconnect, mailboxes, onRebuild } = ctx;
   return (
     <div style={{ maxWidth: 720 }}>
       <div className="card" style={{ padding: 20, marginBottom: 14 }}>
         <div style={{ font: "600 15px var(--sans)" }}>Connected mailboxes</div>
         <div style={{ font: "500 12.5px var(--sans)", color: "var(--muted-2)", marginTop: 3 }}>Pipeline reads these inboxes read-only to find your applications.</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 15, padding: "13px 15px", border: "1px solid rgba(34,31,26,.09)", borderRadius: 12, background: "#fdfbf6" }}>
-          <span style={{ width: 36, height: 36, borderRadius: 10, background: "#fff", border: "1px solid rgba(34,31,26,.1)", display: "grid", placeItems: "center", flex: "0 0 auto" }}>
-            <IconMail size={18} color="#c06a57" />
-          </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ font: "600 13.5px var(--sans)" }}>{email}</div>
-            <div style={{ font: "500 11.5px var(--sans)", color: "#2f9266", display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2f9266" }} />
-              Connected
+        {mailboxes.length === 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 15, padding: "13px 15px", border: "1px dashed rgba(34,31,26,.18)", borderRadius: 12 }}>
+            <span style={{ width: 36, height: 36, borderRadius: 10, background: "#fff", border: "1px solid rgba(34,31,26,.1)", display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+              <IconMail size={18} color="#b3ab9e" />
+            </span>
+            <div style={{ font: "500 12.5px var(--sans)", color: "var(--muted-2)" }}>
+              No mailbox connected — the board shows sample data until you connect one below.
             </div>
           </div>
-          <span style={{ font: "600 10.5px var(--mono)", color: "#857a64", background: "#efe9df", padding: "3px 8px", borderRadius: 6 }}>PRIMARY</span>
-          <button className="btn btn-danger" onClick={disconnect}>Disconnect</button>
-        </div>
-        <div onClick={() => (window.location.href = "/auth/google/start")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 11, padding: 12, border: "1px dashed rgba(34,31,26,.18)", borderRadius: 12, color: "var(--primary)", font: "600 12.5px var(--sans)", cursor: "pointer" }}>
-          <IconPlus size={15} />
-          Connect another mailbox
+        )}
+        {mailboxes.map((m) => (
+          <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 15, padding: "13px 15px", border: "1px solid rgba(34,31,26,.09)", borderRadius: 12, background: "#fdfbf6" }}>
+            <span style={{ width: 36, height: 36, borderRadius: 10, background: "#fff", border: "1px solid rgba(34,31,26,.1)", display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+              <IconMail size={18} color={PROVIDER_COLOR[m.provider] ?? "#857a64"} />
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ font: "600 13.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email}</div>
+              <div style={{ font: "500 11.5px var(--sans)", color: "#2f9266", display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2f9266" }} />
+                Connected
+              </div>
+            </div>
+            <span style={{ font: "600 10.5px var(--mono)", color: "#857a64", background: "#efe9df", padding: "3px 8px", borderRadius: 6 }}>{(PROVIDER_LABEL[m.provider] ?? m.provider).toUpperCase()}</span>
+            <button className="btn btn-danger" onClick={() => disconnect(m.id)}>Disconnect</button>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 10, marginTop: 11 }}>
+          <a href="/auth/google/start" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: 12, border: "1px dashed rgba(34,31,26,.18)", borderRadius: 12, color: "var(--primary)", font: "600 12.5px var(--sans)", cursor: "pointer", textDecoration: "none" }}>
+            <IconPlus size={15} />
+            Connect Gmail
+          </a>
+          <a href="/auth/microsoft/start" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: 12, border: "1px dashed rgba(34,31,26,.18)", borderRadius: 12, color: "var(--primary)", font: "600 12.5px var(--sans)", cursor: "pointer", textDecoration: "none" }}>
+            <IconPlus size={15} />
+            Connect Outlook
+          </a>
         </div>
       </div>
 

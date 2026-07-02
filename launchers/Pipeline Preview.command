@@ -12,7 +12,7 @@
 # ============================================================================
 
 REPO_URL="https://github.com/Jvtino/Pipeline.git"
-BRANCH="claude/ui-pipeline-merge-o2duyr"   # the branch with the new UI + sync
+BRANCH="main"                               # the redesign ships on main
 APP_DIR="$HOME/Pipeline"                    # local working copy (managed for you)
 WEB_URL="http://localhost:5173"
 
@@ -55,8 +55,8 @@ fi
 cd "$APP_DIR" || die "Could not open $APP_DIR."
 
 say "Getting the latest preview from GitHub…"
-# Force this checkout ONTO the preview branch (the redesign isn't on main yet);
-# handles a copy previously left on main or on an older commit.
+# Force this checkout onto the release branch; handles a copy previously left on
+# an old preview branch or an older commit.
 if git fetch origin "$BRANCH" --quiet; then
   git checkout -q -B "$BRANCH" "origin/$BRANCH" 2>/dev/null || git checkout -q "$BRANCH" 2>/dev/null || true
   git reset --hard "origin/$BRANCH" --quiet 2>/dev/null
@@ -104,8 +104,10 @@ API_PID=$!
 pnpm_run --filter @pipeline/web dev > /tmp/pipeline-web.log 2>&1 &
 WEB_PID=$!
 
-# Stop both servers when this window is closed / interrupted.
-trap 'echo; echo "Stopping…"; kill "$API_PID" "$WEB_PID" 2>/dev/null; pkill -f "tsx src/server.ts" 2>/dev/null; pkill -f "vite" 2>/dev/null; exit 0' INT TERM
+# Stop both servers when this window is closed / interrupted. The pkill patterns
+# are scoped to THIS checkout's node_modules so another project's vite/tsx dev
+# servers are never touched.
+trap 'echo; echo "Stopping…"; kill "$API_PID" "$WEB_PID" 2>/dev/null; pkill -f "$APP_DIR/.*tsx.*src/server.ts" 2>/dev/null; pkill -f "$APP_DIR/.*vite" 2>/dev/null; exit 0' INT TERM
 
 # 7) Wait for BOTH servers, then open the browser.
 echo "   Waiting for the servers to be ready…"

@@ -29,7 +29,7 @@ export type { InterviewInfo, CompensationInfo, LocationInfo, LocationKind, Recru
    ========================================================================== */
 
 const OFFER_RE =
-  /\b(pleased to offer|happy to offer|delighted to offer|excited to offer|we(?:'?d| would) like to offer|extend(?:ing)? (?:to )?you (?:an|our|a formal) offer|extend(?:ing)? an offer|offer of employment|formal (?:job )?offer|verbal offer|offer letter|we(?:'?re| are) (?:thrilled|excited|pleased|delighted) to extend|congratulations[^.]{0,40}\b(offer|join|aboard|team)\b|welcome (?:to the team|aboard)|your (?:start date|compensation package|signing bonus))\b/;
+  /\b(pleased to offer|happy to offer|delighted to offer|excited to offer|we(?:'?d| would) like to offer|extend(?:ing)? (?:to )?you (?:an|our|a formal) offer|extend(?:ing)? an offer|offer of employment|formal (?:job )?offer|verbal offer|offer letter|employment agreement|appointment letter|official offer|written offer|offer package|acceptance deadline|review and sign|attached offer|offer (?:letter )?(?:is )?attached|(?:contingent|conditional) offer|(?:preparing|drafting) (?:your|an|the) offer|offer is (?:in|pending) approval|moving to (?:the )?offer stage|new hire paperwork|onboarding (?:documents|portal|paperwork|process)|benefits enrollment|i-9|w-4|we(?:'?re| are) (?:thrilled|excited|pleased|delighted) to extend|congratulations[^.]{0,40}\b(offer|join|aboard|team)\b|welcome (?:to the team|aboard)|your (?:start date|compensation package|signing bonus))\b/;
 // rejection that contains the word "offer" in a NEGATED form ("unable to offer", "cannot offer you")
 const NEG_OFFER_RE =
   /\b(cannot|can'?t|could ?n'?t|unable to|not able to|won'?t be able to|will not be able to|regret(?:tably)?[^.]{0,20})\b[^.]{0,25}\boffer\b/;
@@ -105,6 +105,8 @@ export function scoreStatus(text: string | null | undefined): Record<Status, num
   // rejections carry a decisive phrase of their own, while interview invitations
   // also open with it ("After careful consideration, we'd like to invite you…").
   if (/\bafter (?:careful|much|thorough) (?:consideration|thought|review|deliberation)\b/.test(t)) score.rejected += 2;
+  // Background screening is usually POST-offer, but sometimes pre-offer — weak cue only.
+  if (/\b(background (?:check|screening)|pre-employment screening)\b/.test(t)) score.offer += 2;
   if (/\b(congratulations|congrats)\b/.test(t)) score.offer += 1;
 
   return score;

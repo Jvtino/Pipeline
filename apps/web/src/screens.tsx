@@ -15,6 +15,7 @@ import {
   deriveContacts,
   mergeContacts,
   calendarFor,
+  calendarEntryMap,
   computeStats,
   volumeStats,
   sourcePerformance,
@@ -433,26 +434,78 @@ const CAL_BUCKETS: { key: "applied" | "interview" | "rejected"; label: string; s
   { key: "rejected", label: "Rejected", status: "rejected" },
 ];
 
+type CalView = "month" | "week" | "list";
+const CAL_DAY_MS = 86_400_000;
+
 export function Calendar(ctx: Ctx) {
   const now = new Date(ctx.nowMs);
+  const todayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString().slice(0, 10);
+  const startOfWeek = (ms: number) => {
+    const d = new Date(ms);
+    const day = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    return day - new Date(day).getUTCDay() * CAL_DAY_MS; // back to Sunday
+  };
+  const [view, setView] = useState<CalView>("month");
   const [ym, setYm] = useState({ y: now.getUTCFullYear(), m: now.getUTCMonth() });
+  const [weekMs, setWeekMs] = useState(() => startOfWeek(ctx.nowMs));
   const [openDay, setOpenDay] = useState<{ cell: number; bucket: string } | null>(null);
   const cells = useMemo(() => calendarFor(ctx.apps, ym.y, ym.m), [ctx.apps, ym]);
+  const byDate = useMemo(() => calendarEntryMap(ctx.apps), [ctx.apps]);
+
+  const goToday = () => { setYm({ y: now.getUTCFullYear(), m: now.getUTCMonth() }); setWeekMs(startOfWeek(ctx.nowMs)); setOpenDay(null); };
   const shift = (d: number) => {
-    const next = new Date(Date.UTC(ym.y, ym.m + d, 1));
-    setYm({ y: next.getUTCFullYear(), m: next.getUTCMonth() });
+    if (view === "week") setWeekMs((w) => w + d * 7 * CAL_DAY_MS);
+    else {
+      const next = new Date(Date.UTC(ym.y, ym.m + d, 1));
+      setYm({ y: next.getUTCFullYear(), m: next.getUTCMonth() });
+    }
     setOpenDay(null);
   };
+
   const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const iso = new Date(weekMs + i * CAL_DAY_MS).toISOString().slice(0, 10);
+    return { iso, counts: byDate.get(iso) };
+  });
+  const weekTitle = `${shortDate(weekDays[0]!.iso)} – ${shortDate(weekDays[6]!.iso)}`;
+  const monthPrefix = `${ym.y}-${String(ym.m + 1).padStart(2, "0")}`;
+  const listDays = [...byDate.keys()].filter((d) => d.startsWith(monthPrefix)).sort();
+
+  // One clickable chip per bucket with an in-place expansion for multi-app days.
+  const bucketChips = (counts: (typeof cells)[number]["counts"], cellKey: number) =>
+    CAL_BUCKETS.map((b) => {
+      const entries = counts[b.key];
+      if (!entries.length) return null;
+      const s = STATUS[b.status];
+      const open = openDay?.cell === cellKey && openDay.bucket === b.key;
+      return (
+        <div key={b.key}>
+          <div
+            onClick={() => (entries.length === 1 ? ctx.openDetail(entries[0]!.id) : setOpenDay(open ? null : { cell: cellKey, bucket: b.key }))}
+            className="pl-lift"
+            style={{ marginTop: 6, padding: "4px 7px", borderRadius: 6, cursor: "pointer", font: "600 10px/1.25 var(--sans)", color: s.fg, background: s.bg, display: "flex", alignItems: "center", gap: 5 }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot, flex: "0 0 auto" }} />
+            {entries.length} {b.label}
+          </div>
+          {open &&
+            entries.map((e) => (
+              <div key={e.id} onClick={() => ctx.openDetail(e.id)} className="pl-lift" style={{ marginTop: 3, padding: "3px 7px 3px 18px", borderRadius: 6, cursor: "pointer", font: "500 9.5px/1.3 var(--sans)", color: s.fg, background: s.bg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {e.company}
+              </div>
+            ))}
+        </div>
+      );
+    });
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <span onClick={() => setYm({ y: now.getUTCFullYear(), m: now.getUTCMonth() })} className="btn" style={{ padding: "8px 14px", color: "#3f4a44" }}>Today</span>
+        <span onClick={goToday} className="btn" style={{ padding: "8px 14px", color: "#3f4a44" }}>Today</span>
         <span onClick={() => shift(-1)} style={{ display: "grid", placeItems: "center", width: 32, height: 32, border: "1px solid rgba(34,31,26,.12)", borderRadius: 9, color: "var(--text-3)", cursor: "pointer" }}>‹</span>
         <span onClick={() => shift(1)} style={{ display: "grid", placeItems: "center", width: 32, height: 32, border: "1px solid rgba(34,31,26,.12)", borderRadius: 9, color: "var(--text-3)", cursor: "pointer" }}>›</span>
-        <div style={{ font: "600 18px var(--sans)", letterSpacing: "-.01em" }}>{MONTHS[ym.m]} {ym.y}</div>
+        <div style={{ font: "600 18px var(--sans)", letterSpacing: "-.01em" }}>{view === "week" ? weekTitle : `${MONTHS[ym.m]} ${ym.y}`}</div>
         <span className="spacer" />
-        {/* legend mirrors the chips */}
         <div style={{ display: "flex", gap: 12 }}>
           {CAL_BUCKETS.map((b) => (
             <span key={b.key} style={{ display: "inline-flex", alignItems: "center", gap: 5, font: "500 11.5px var(--sans)", color: "var(--muted)" }}>
@@ -461,48 +514,91 @@ export function Calendar(ctx: Ctx) {
             </span>
           ))}
         </div>
-      </div>
-      <div className="card" style={{ padding: 16 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7, marginBottom: 8 }}>
-          {days.map((d) => (
-            <span key={d} style={{ textAlign: "center", font: "600 10.5px var(--mono)", letterSpacing: ".05em", color: "var(--faint)" }}>{d}</span>
+        <div className="segmented">
+          {(["month", "week", "list"] as const).map((v) => (
+            <button key={v} className={view === v ? "active" : ""} style={{ textTransform: "capitalize" }} onClick={() => { setView(v); setOpenDay(null); }}>
+              {v}
+            </button>
           ))}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7 }}>
-          {cells.map((c, i) => (
-            <div key={i} style={{ minHeight: 96, border: "1px solid rgba(34,31,26,.06)", borderRadius: 9, padding: "7px 8px", background: c.day ? "#fffefb" : "transparent" }}>
-              {c.day && <div style={{ font: "600 12px var(--mono)", color: "var(--muted-2)" }}>{c.day}</div>}
-              {c.day &&
-                CAL_BUCKETS.map((b) => {
-                  const entries = c.counts[b.key];
-                  if (!entries.length) return null;
-                  const s = STATUS[b.status];
-                  const open = openDay?.cell === i && openDay.bucket === b.key;
-                  return (
-                    <div key={b.key}>
-                      <div
-                        onClick={() => (entries.length === 1 ? ctx.openDetail(entries[0]!.id) : setOpenDay(open ? null : { cell: i, bucket: b.key }))}
-                        className="pl-lift"
-                        style={{ marginTop: 6, padding: "4px 7px", borderRadius: 6, cursor: "pointer", font: "600 10px/1.25 var(--sans)", color: s.fg, background: s.bg, display: "flex", alignItems: "center", gap: 5 }}
-                      >
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot, flex: "0 0 auto" }} />
-                        {entries.length} {b.label}
-                      </div>
-                      {open &&
-                        entries.map((e) => (
-                          <div key={e.id} onClick={() => ctx.openDetail(e.id)} className="pl-lift" style={{ marginTop: 3, padding: "3px 7px 3px 18px", borderRadius: 6, cursor: "pointer", font: "500 9.5px/1.3 var(--sans)", color: s.fg, background: s.bg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {e.company}
+      </div>
+
+      {view === "month" && (
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7, marginBottom: 8 }}>
+            {days.map((d) => (
+              <span key={d} style={{ textAlign: "center", font: "600 10.5px var(--mono)", letterSpacing: ".05em", color: "var(--faint)" }}>{d}</span>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7 }}>
+            {cells.map((c, i) => (
+              <div key={i} style={{ minHeight: 96, border: "1px solid rgba(34,31,26,.06)", borderRadius: 9, padding: "7px 8px", background: c.day ? "#fffefb" : "transparent" }}>
+                {c.day && <div style={{ font: "600 12px var(--mono)", color: isoOfYm(ym, c.day) === todayIso ? "var(--primary)" : "var(--muted-2)" }}>{c.day}</div>}
+                {c.day && bucketChips(c.counts, i)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "week" && (
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7 }}>
+            {weekDays.map((d, i) => {
+              const isToday = d.iso === todayIso;
+              return (
+                <div key={d.iso} style={{ minHeight: 260, border: "1px solid rgba(34,31,26,.06)", borderRadius: 9, padding: "8px 9px", background: isToday ? "#fbf6ea" : "#fffefb" }}>
+                  <div style={{ font: "600 10.5px var(--mono)", letterSpacing: ".05em", color: isToday ? "var(--primary)" : "var(--faint)" }}>{days[i]}</div>
+                  <div style={{ font: `700 15px var(--sans)`, color: isToday ? "var(--primary)" : "#3f3a33", marginTop: 2 }}>{Number(d.iso.slice(8, 10))}</div>
+                  {d.counts &&
+                    CAL_BUCKETS.map((b) =>
+                      d.counts![b.key].map((e) => {
+                        const s = STATUS[b.status];
+                        return (
+                          <div key={`${b.key}-${e.id}`} onClick={() => ctx.openDetail(e.id)} className="pl-lift" style={{ marginTop: 6, padding: "5px 8px", borderRadius: 6, cursor: "pointer", font: "600 10.5px/1.3 var(--sans)", color: s.fg, background: s.bg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {e.company} · {b.label}
                           </div>
-                        ))}
+                        );
+                      }),
+                    )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {view === "list" && (
+        <div className="card" style={{ overflow: "hidden" }}>
+          {listDays.length === 0 ? (
+            <div style={{ padding: "44px 20px", textAlign: "center", font: "500 13px var(--sans)", color: "#a89e8c" }}>Nothing in {MONTHS[ym.m]} — applications and interviews will list here as they land.</div>
+          ) : (
+            listDays.map((iso) => {
+              const counts = byDate.get(iso)!;
+              return CAL_BUCKETS.flatMap((b) =>
+                counts[b.key].map((e) => {
+                  const s = STATUS[b.status];
+                  return (
+                    <div key={`${iso}-${b.key}-${e.id}`} className="hover-row" onClick={() => ctx.openDetail(e.id)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", borderBottom: "1px solid rgba(34,31,26,.05)", cursor: "pointer" }}>
+                      <span style={{ width: 58, font: "600 11.5px var(--mono)", color: iso === todayIso ? "var(--primary)" : "var(--muted-2)", flex: "0 0 auto" }}>{shortDate(iso)}</span>
+                      <span style={{ padding: "3px 9px", borderRadius: 7, font: "600 10.5px var(--sans)", color: s.fg, background: s.bg, flex: "0 0 auto" }}>{b.label}</span>
+                      <span style={{ font: "600 13px var(--sans)", color: "#2a2620", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.company}</span>
+                      <IconChevronRight size={14} color="#c5bdb0" />
                     </div>
                   );
-                })}
-            </div>
-          ))}
+                }),
+              );
+            })
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
+}
+
+/** The ISO date of a day-of-month in the calendar's displayed month. */
+function isoOfYm(ym: { y: number; m: number }, day: number): string {
+  return new Date(Date.UTC(ym.y, ym.m, day)).toISOString().slice(0, 10);
 }
 
 /* ============================================================================

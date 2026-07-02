@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { boardFromApplications } from "@pipeline/contracts";
 import type { Application } from "@pipeline/contracts";
-import { flattenBoard, companyCards, deriveContacts, mergeContacts, buildNotifications, calendarFor } from "./derive";
+import { flattenBoard, companyCards, deriveContacts, mergeContacts, buildNotifications, calendarFor, parseInterviewDate } from "./derive";
 import { defaultOverlay } from "./overlay";
 
 const app = (over: Partial<Application> & { threadId: string }): Application => ({
@@ -146,7 +146,7 @@ describe("flattenBoard — needsReview seam", () => {
         app({ threadId: "a2", firstSeen: "2026-05-04", lastActivity: "2026-05-04", company: "Globex" }),
         // interview with a PARSEABLE enrichment date → lands on that day, not lastActivity
         app({ threadId: "i1", status: "interview", firstSeen: "2026-05-01", lastActivity: "2026-05-06", enrichment: { interviewDateTime: "2026-05-20 14:00" } }),
-        // interview with free-text date → falls back to lastActivity day
+        // free-text weekday resolves to the first Tuesday AFTER the email (Thu May 7 → May 12)
         app({ threadId: "i2", status: "interview", firstSeen: "2026-05-02", lastActivity: "2026-05-07", enrichment: { interviewDateTime: "Tuesday at 2pm PT" } }),
         app({ threadId: "r1", status: "rejected", firstSeen: "2026-05-03", lastActivity: "2026-05-09" }),
       ],
@@ -157,7 +157,7 @@ describe("flattenBoard — needsReview seam", () => {
     const day = (d: number) => cells.find((c) => c.day === d)!;
     expect(day(4).counts.applied).toHaveLength(2); // two applications that day
     expect(day(20).counts.interview.map((e) => e.id)).toEqual(["i1"]); // parseable date wins
-    expect(day(7).counts.interview.map((e) => e.id)).toEqual(["i2"]); // free text → lastActivity
+    expect(day(12).counts.interview.map((e) => e.id)).toEqual(["i2"]); // "Tuesday" → the Tuesday after the email
     expect(day(9).counts.rejected.map((e) => e.id)).toEqual(["r1"]);
     expect(day(9).counts.applied).toHaveLength(0); // applied count sits on its own day (May 3)
     expect(day(3).counts.applied.map((e) => e.id)).toEqual(["r1"]);
@@ -180,6 +180,19 @@ describe("flattenBoard — needsReview seam", () => {
     const cards = companyCards(rows);
     expect(cards).toHaveLength(1); // renamed row merged into the Acme card
     expect(cards[0]!.apps).toHaveLength(2);
+  });
+
+  it("parseInterviewDate resolves the free-text dates recruiters actually write", () => {
+    const ref = "2026-06-05"; // the email's date (a Friday)
+    expect(parseInterviewDate("Tuesday, June 12 at 3:00pm PT", ref)).toBe("2026-06-12");
+    expect(parseInterviewDate("12 June at 14:00 CET", ref)).toBe("2026-06-12");
+    expect(parseInterviewDate("June 12", ref)).toBe("2026-06-12");
+    expect(parseInterviewDate("2026-05-20 14:00", ref)).toBe("2026-05-20");
+    expect(parseInterviewDate("Monday at 2pm", ref)).toBe("2026-06-08"); // first Monday after Fri Jun 5
+    expect(parseInterviewDate("Friday at 10am", ref)).toBe("2026-06-12"); // same weekday → NEXT week, not the email's own day
+    expect(parseInterviewDate("Jan 5", "2026-12-20")).toBe("2027-01-05"); // December mail, January interview → year rolls
+    expect(parseInterviewDate("at 3:00pm PT", ref)).toBeNull(); // time only — no day to place it on
+    expect(parseInterviewDate("", ref)).toBeNull();
   });
 
   it("companyCards groups a company's positions into .apps (drives the expandable card)", () => {

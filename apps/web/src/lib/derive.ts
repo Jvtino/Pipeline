@@ -464,47 +464,96 @@ export interface CalendarCell {
 
 const emptyCounts = (): CalendarCell["counts"] => ({ applied: [], interview: [], rejected: [] });
 
-/** Per-day status counts: Applied on the day you applied (every app), Interview
- *  on the interview's own date when enrichment carries a parseable one (free
- *  text like "Tuesday at 2pm PT" doesn't parse → the last-activity day),
- *  Rejected on the rejection's last-activity day. */
-export function calendarFor(apps: UiApplication[], year: number, month: number): CalendarCell[] {
-  const first = new Date(Date.UTC(year, month, 1));
-  const startWeekday = first.getUTCDay(); // 0 = Sun
-  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+const MONTH_IDX: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+const DOW_IDX: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+const MONTH_NAME_RE = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?!\d)/i;
+const DAY_MONTH_RE = /\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i;
 
-  // The day-of-month for an ISO date/timestamp, or null when outside this month.
-  const dayIn = (iso: string | null | undefined): number | null => {
-    if (!iso) return null;
-    const ms = parseIso(iso);
-    if (Number.isNaN(ms)) return null;
-    const d = new Date(ms);
-    return d.getUTCFullYear() === year && d.getUTCMonth() === month ? d.getUTCDate() : null;
-  };
+/**
+ * Resolve the free-text interview date the classifier extracted ("Tuesday,
+ * June 12 at 3:00pm PT", "12 June at 14:00", "Monday at 2pm") to a calendar
+ * day. `refIso` is the email's date — it anchors the year for month+day forms
+ * (December mail about a January interview rolls forward) and the week for
+ * bare weekdays (the first such weekday AFTER the email). Null when unsure.
+ */
+export function parseInterviewDate(text: string | null | undefined, refIso: string | null): string | null {
+  const t = String(text ?? "").trim();
+  if (!t) return null;
+  const refMs = refIso ? parseIso(refIso) : NaN;
+  const ref = Number.isNaN(refMs) ? null : new Date(refMs);
 
-  const byDay = new Map<number, CalendarCell["counts"]>();
-  const add = (day: number | null, bucket: CalendarBucket, a: UiApplication) => {
-    if (day == null) return;
-    const counts = byDay.get(day) ?? emptyCounts();
-    counts[bucket].push({ id: a.id, company: a.company });
-    byDay.set(day, counts);
-  };
+  // Machine-readable first: ISO date anywhere in the text.
+  const iso = t.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (iso) return iso[1]!;
 
-  for (const a of apps) {
-    add(dayIn(a.appliedIso), "applied", a);
-    if (a.status === "interview" || a.status === "screening") {
-      const enriched = a.enrichment?.interviewDateTime ? Date.parse(a.enrichment.interviewDateTime) : NaN;
-      const day = !Number.isNaN(enriched)
-        ? dayIn(new Date(enriched).toISOString().slice(0, 10))
-        : dayIn(a.lastActivityIso);
-      add(day, "interview", a);
-    }
-    if (a.status === "rejected") add(dayIn(a.lastActivityIso), "rejected", a);
+  // Month + day, either order ("June 12" / "12 June").
+  let mon: number | null = null;
+  let day: number | null = null;
+  const md = t.match(MONTH_NAME_RE);
+  const dm = t.match(DAY_MONTH_RE);
+  if (md) { mon = MONTH_IDX[md[1]!.toLowerCase()]!; day = Number(md[2]); }
+  else if (dm) { day = Number(dm[1]); mon = MONTH_IDX[dm[2]!.toLowerCase()]!; }
+  if (mon != null && day != null && day >= 1 && day <= 31) {
+    const explicitYear = t.match(/\b(20\d{2})\b/);
+    let year = explicitYear ? Number(explicitYear[1]) : (ref ?? new Date(0)).getUTCFullYear();
+    if (!explicitYear && !ref) return null; // no year and nothing to anchor it to
+    if (!explicitYear && ref && Date.UTC(year, mon, day) < refMs - 45 * 86_400_000) year += 1;
+    const d = new Date(Date.UTC(year, mon, day));
+    if (d.getUTCMonth() !== mon) return null; // e.g. "Feb 30"
+    return d.toISOString().slice(0, 10);
   }
 
+  // Bare weekday → the first such weekday strictly after the email date.
+  const w = t.match(/\b(sun|mon|tue|wed|thu|fri|sat)[a-z]*\b/i);
+  if (w && ref) {
+    const target = DOW_IDX[w[1]!.toLowerCase()]!;
+    let delta = (target - ref.getUTCDay() + 7) % 7;
+    if (delta === 0) delta = 7;
+    return new Date(refMs + delta * 86_400_000).toISOString().slice(0, 10);
+  }
+  return null;
+}
+
+/**
+ * Per-day status entries across ALL dates (keyed YYYY-MM-DD): Applied on the day
+ * you applied (every app), Interview on the interview's own date (free-text dates
+ * resolved by parseInterviewDate; unresolvable → the last-activity day), Rejected
+ * on the rejection's last-activity day. Month/Week/List views all consume this.
+ */
+export function calendarEntryMap(apps: UiApplication[]): Map<string, CalendarCell["counts"]> {
+  const byDate = new Map<string, CalendarCell["counts"]>();
+  const dayOf = (iso: string | null | undefined): string | null => {
+    if (!iso) return null;
+    const ms = parseIso(iso);
+    return Number.isNaN(ms) ? null : new Date(ms).toISOString().slice(0, 10);
+  };
+  const add = (date: string | null, bucket: CalendarBucket, a: UiApplication) => {
+    if (!date) return;
+    const counts = byDate.get(date) ?? emptyCounts();
+    counts[bucket].push({ id: a.id, company: a.company });
+    byDate.set(date, counts);
+  };
+  for (const a of apps) {
+    add(dayOf(a.appliedIso), "applied", a);
+    if (a.status === "interview" || a.status === "screening") {
+      const parsed = parseInterviewDate(a.enrichment?.interviewDateTime, a.lastActivityIso);
+      add(parsed ?? dayOf(a.lastActivityIso), "interview", a);
+    }
+    if (a.status === "rejected") add(dayOf(a.lastActivityIso), "rejected", a);
+  }
+  return byDate;
+}
+
+const isoOf = (year: number, month: number, day: number): string => new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
+
+/** The month grid for the Month view (leading/trailing null-day padding cells). */
+export function calendarFor(apps: UiApplication[], year: number, month: number): CalendarCell[] {
+  const byDate = calendarEntryMap(apps);
+  const startWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay(); // 0 = Sun
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const cells: CalendarCell[] = [];
   for (let i = 0; i < startWeekday; i++) cells.push({ day: null, counts: emptyCounts() });
-  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, counts: byDay.get(d) ?? emptyCounts() });
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, counts: byDate.get(isoOf(year, month, d)) ?? emptyCounts() });
   while (cells.length % 7 !== 0) cells.push({ day: null, counts: emptyCounts() });
   return cells;
 }

@@ -242,7 +242,7 @@ function extractRole(subject) {
   const s = String(subject || "");
   for (const re of ROLE_PATS) { const m = s.match(re); if (m && m[1]) return tidy(m[1]); }
   // "Indeed Application: Data Analyst" / "Application - Software Engineer"
-  const mApp = s.match(/\bapplication\s*[:\-–—]\s*(.+?)(?:\s+(?:at|with|on)\b.*)?$/i);
+  const mApp = s.match(/\bapplication(?:\s+(?:received|submitted|confirmation|update))?\s*[:\-–—]\s*(.+?)(?:\s+(?:at|with|on)\b.*)?$/i);
   if (mApp && mApp[1]) return tidy(mApp[1]);
   const m2 = s.match(/(.+?) at .+/i);
   if (m2) return tidy(m2[1]);

@@ -82,7 +82,9 @@
     { "subject": "Indeed Application: Data Analyst", "expected": "Data Analyst" },
     { "subject": "Your application was sent to Initech", "expected": "Application" },
     { "subject": "Thank you for your interest in Initech", "expected": "Application" },
-    { "subject": "Software Engineer", "expected": "Software Engineer" }
+    { "subject": "Software Engineer", "expected": "Software Engineer" },
+    { "subject": "Application received – Data Scientist", "expected": "Data Scientist" },
+    { "subject": "Application submitted: Backend Engineer", "expected": "Backend Engineer" }
   ],
   "_comment_roleClean": "TS-only (cleanRole in aggregate.ts). Not read by the parity gate. Polishes extractRole output; `company` (optional) lets a trailing employer be stripped safely.",
   "roleClean": [
@@ -94,7 +96,11 @@
     { "raw": "Engineer (Platform)", "clean": "Engineer (Platform)" },
     { "raw": "Senior Software Engineer", "company": "Acme", "clean": "Senior Software Engineer" },
     { "raw": "Application", "clean": "Application" },
-    { "raw": "Req #778", "clean": "Req #778" }
+    { "raw": "Req #778", "clean": "Req #778" },
+    { "raw": "Interview Confirmation - Software Engineer II - R-12345", "company": "Acme", "clean": "Software Engineer II" },
+    { "raw": "Java Developer (m/f/d) - Acme", "company": "Acme", "clean": "Java Developer" },
+    { "raw": "Staff Product Manager position", "clean": "Staff Product Manager" },
+    { "raw": "Application Update - Data Engineer", "clean": "Data Engineer" }
   ],
   "_comment_enrich": "TS-only enrichment extractors (extract.ts). Not read by the parity gate. Every field is value-or-null; null cases are as important as positives.",
   "interview": [

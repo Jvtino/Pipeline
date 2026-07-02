@@ -1,11 +1,13 @@
 // Application detail drawer — right-docked, slides in over a scrim. Tabs:
-// Overview (next step + move stage + progress timeline + details), Notes,
-// Contacts, Files. Notes/contacts/files read & write the client overlay.
+// Overview (next step + move stage + progress timeline + details), Email
+// (stored per-message previews from the server), Notes, Contacts, Files.
+// Notes/contacts/files read & write the client overlay.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Ctx } from "./ctx";
-import type { UiApplication, WorkType } from "./types";
+import type { UiApplication, WorkType, DetailTab } from "./types";
 import { STATUS, MOVE_STAGES, type UiStatus } from "./lib/status";
 import { shortDate } from "./lib/format";
+import { getMessages, type ThreadMessage } from "./api";
 import { CompanyAvatar, PersonAvatar, StatusPill, NeedsReviewBadge, ExpandMorph } from "./components";
 import { DocBadge } from "./screens";
 import { IconX, IconClock, IconCheck, IconDownload } from "./lib/icons";
@@ -36,8 +38,35 @@ function timelineFor(a: UiApplication): TLEvent[] {
   }
 }
 
+/** "Jordan Lee <jl@acme.com>" → "Jordan Lee"; a bare address passes through. */
+function senderName(from: string): string {
+  const name = from.replace(/<[^>]*>/g, "").replace(/["']/g, "").trim();
+  return name || from.replace(/[<>]/g, "").trim();
+}
+
+function humanSize(bytes: number | null | undefined): string | null {
+  if (bytes == null || !Number.isFinite(bytes)) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; ctx: Ctx; onClose: () => void; from?: DOMRect | null }) {
-  const [tab, setTab] = useState<"overview" | "notes" | "contacts" | "files">("overview");
+  const [tab, setTab] = useState<DetailTab>("overview");
+  // Email tab: fetched lazily on first open; keyed by app so a reused drawer refetches.
+  const [messages, setMessages] = useState<ThreadMessage[] | null>(null);
+  const [msgState, setMsgState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  useEffect(() => {
+    setMessages(null);
+    setMsgState("idle");
+  }, [app.id]);
+  useEffect(() => {
+    if (tab !== "email" || msgState !== "idle" || !app.threadId) return;
+    setMsgState("loading");
+    getMessages(app.threadId)
+      .then((r) => { setMessages(r.messages); setMsgState("ready"); })
+      .catch(() => setMsgState("error"));
+  }, [tab, msgState, app.threadId]);
   const [noteDraft, setNoteDraft] = useState("");
   const [enter, setEnter] = useState(false);
   // Contact add form (Contacts tab)
@@ -100,7 +129,7 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
         </div>
 
         <div className="drawer-tabs">
-          {(["overview", "notes", "contacts", "files"] as const).map((t) => (
+          {(["overview", "email", "notes", "contacts", "files"] as const).map((t) => (
             <button key={t} className={`pl-dtab${tab === t ? " active" : ""}`} onClick={() => setTab(t)} style={{ textTransform: "capitalize" }}>
               {t}
             </button>
@@ -226,6 +255,42 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
                   <input className="input" style={{ padding: "8px 10px", fontSize: 13 }} defaultValue={app.resumeVersion ?? ""} onBlur={(e) => ctx.setMeta(app.id, { resumeVersion: e.target.value.trim() || null })} placeholder="—" />
                 </MetaField>
               </div>
+            </div>
+          )}
+
+          {tab === "email" && (
+            <div>
+              {!app.threadId ? (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#a89e8c", font: "500 13px var(--sans)" }}>This entry was added by hand — there are no synced emails for it.</div>
+              ) : msgState === "loading" || msgState === "idle" ? (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#a89e8c", font: "500 13px var(--sans)" }}>Loading emails…</div>
+              ) : msgState === "error" ? (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#a89e8c", font: "500 13px var(--sans)" }}>Couldn't load the emails for this application. Try again in a moment.</div>
+              ) : !messages || messages.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#a89e8c", font: "500 13px var(--sans)" }}>No emails stored yet — run a sync and the thread's messages will appear here.</div>
+              ) : (
+                messages.map((m, i) => (
+                  <div key={i} style={{ padding: "13px 15px", background: "var(--card)", border: "1px solid var(--card-border)", borderRadius: 12, marginBottom: 9 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                      <div style={{ font: "650 13px var(--sans)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{senderName(m.from)}</div>
+                      <div style={{ font: "500 11px var(--mono)", color: "var(--faint)", flex: "0 0 auto" }}>{shortDate(m.date)}</div>
+                    </div>
+                    <div style={{ font: "400 12.5px/1.55 var(--sans)", color: "#3f3a33", marginTop: 6 }}>{m.bodyPreview || "(no preview)"}</div>
+                    {m.attachments.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 9 }}>
+                        {m.attachments.map((a, j) => (
+                          <span key={j} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", background: "#f4ede0", border: "1px solid rgba(192,138,42,.22)", borderRadius: 8, font: "600 11px var(--sans)", color: "#6e5a2a" }}>
+                            <IconDownload size={11} color="#a8842f" />
+                            {a.name}
+                            {humanSize(a.size) && <span style={{ color: "#a89e8c", fontWeight: 500 }}>{humanSize(a.size)}</span>}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+              <div style={{ textAlign: "center", marginTop: 4, font: "500 11px var(--sans)", color: "var(--faint)" }}>Pipeline stores short previews only — never your full emails.</div>
             </div>
           )}
 

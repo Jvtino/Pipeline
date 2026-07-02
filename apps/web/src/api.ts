@@ -91,3 +91,32 @@ export async function deleteConnection(id: string): Promise<void> {
   const r = await fetch(`/api/connections/${encodeURIComponent(id)}`, { method: "DELETE" });
   if (!r.ok) throw new Error(`/api/connections/${id} → ${r.status}`);
 }
+
+/** One stored message preview (Email tab): <=600 chars + attachment metadata, never the raw mail. */
+export interface ThreadMessage {
+  date: string;
+  from: string;
+  bodyPreview: string;
+  attachments: { name: string; contentType?: string | null; size?: number | null }[];
+}
+
+/** A thread's stored message previews, oldest first. */
+export function getMessages(threadId: string): Promise<{ messages: ThreadMessage[] }> {
+  return getJson<{ messages: ThreadMessage[] }>(`/api/applications/${encodeURIComponent(threadId)}/messages`);
+}
+
+/** A synced attachment (METADATA only — name/type/size, no file content). */
+export interface SyncedDoc {
+  threadId: string;
+  company: string;
+  role: string;
+  date: string;
+  name: string;
+  contentType: string | null;
+  size: number | null;
+}
+
+/** Every synced attachment across the user's applications, newest first. */
+export function getDocuments(): Promise<{ documents: SyncedDoc[] }> {
+  return getJson<{ documents: SyncedDoc[] }>("/api/documents");
+}

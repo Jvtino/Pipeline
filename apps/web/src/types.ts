@@ -17,7 +17,7 @@ export type Screen =
   | "settings";
 
 export type ViewState = "ready" | "loading" | "empty" | "error";
-export type DetailTab = "overview" | "notes" | "contacts" | "files";
+export type DetailTab = "overview" | "email" | "notes" | "contacts" | "files";
 
 export type WorkType = "remote" | "hybrid" | "onsite";
 

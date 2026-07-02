@@ -427,13 +427,23 @@ export function Contacts(ctx: Ctx) {
 /* ============================================================================
    CALENDAR
    ========================================================================== */
+// Which chip appears for which bucket — the STATUS palette keeps the calendar's
+// colors identical to the pills/donut everywhere else.
+const CAL_BUCKETS: { key: "applied" | "interview" | "rejected"; label: string; status: UiStatus }[] = [
+  { key: "applied", label: "Applied", status: "applied" },
+  { key: "interview", label: "Interview", status: "interview" },
+  { key: "rejected", label: "Rejected", status: "rejected" },
+];
+
 export function Calendar(ctx: Ctx) {
   const now = new Date(ctx.nowMs);
   const [ym, setYm] = useState({ y: now.getUTCFullYear(), m: now.getUTCMonth() });
+  const [openDay, setOpenDay] = useState<{ cell: number; bucket: string } | null>(null);
   const cells = useMemo(() => calendarFor(ctx.apps, ym.y, ym.m), [ctx.apps, ym]);
   const shift = (d: number) => {
     const next = new Date(Date.UTC(ym.y, ym.m + d, 1));
     setYm({ y: next.getUTCFullYear(), m: next.getUTCMonth() });
+    setOpenDay(null);
   };
   const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   return (
@@ -444,10 +454,14 @@ export function Calendar(ctx: Ctx) {
         <span onClick={() => shift(1)} style={{ display: "grid", placeItems: "center", width: 32, height: 32, border: "1px solid rgba(34,31,26,.12)", borderRadius: 9, color: "var(--text-3)", cursor: "pointer" }}>›</span>
         <div style={{ font: "600 18px var(--sans)", letterSpacing: "-.01em" }}>{MONTHS[ym.m]} {ym.y}</div>
         <span className="spacer" />
-        <div className="segmented">
-          <button className="active">Month</button>
-          <button>Week</button>
-          <button>List</button>
+        {/* legend mirrors the chips */}
+        <div style={{ display: "flex", gap: 12 }}>
+          {CAL_BUCKETS.map((b) => (
+            <span key={b.key} style={{ display: "inline-flex", alignItems: "center", gap: 5, font: "500 11.5px var(--sans)", color: "var(--muted)" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS[b.status].dot }} />
+              {b.label}
+            </span>
+          ))}
         </div>
       </div>
       <div className="card" style={{ padding: 16 }}>
@@ -460,11 +474,31 @@ export function Calendar(ctx: Ctx) {
           {cells.map((c, i) => (
             <div key={i} style={{ minHeight: 96, border: "1px solid rgba(34,31,26,.06)", borderRadius: 9, padding: "7px 8px", background: c.day ? "#fffefb" : "transparent" }}>
               {c.day && <div style={{ font: "600 12px var(--mono)", color: "var(--muted-2)" }}>{c.day}</div>}
-              {c.events.map((e, j) => (
-                <div key={j} onClick={() => ctx.openDetail(e.appId)} className="pl-lift" style={{ marginTop: 6, padding: "4px 7px", borderRadius: 6, cursor: "pointer", font: "600 9.5px/1.25 var(--sans)", color: e.fg, background: e.bg }}>
-                  {e.label}
-                </div>
-              ))}
+              {c.day &&
+                CAL_BUCKETS.map((b) => {
+                  const entries = c.counts[b.key];
+                  if (!entries.length) return null;
+                  const s = STATUS[b.status];
+                  const open = openDay?.cell === i && openDay.bucket === b.key;
+                  return (
+                    <div key={b.key}>
+                      <div
+                        onClick={() => (entries.length === 1 ? ctx.openDetail(entries[0]!.id) : setOpenDay(open ? null : { cell: i, bucket: b.key }))}
+                        className="pl-lift"
+                        style={{ marginTop: 6, padding: "4px 7px", borderRadius: 6, cursor: "pointer", font: "600 10px/1.25 var(--sans)", color: s.fg, background: s.bg, display: "flex", alignItems: "center", gap: 5 }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot, flex: "0 0 auto" }} />
+                        {entries.length} {b.label}
+                      </div>
+                      {open &&
+                        entries.map((e) => (
+                          <div key={e.id} onClick={() => ctx.openDetail(e.id)} className="pl-lift" style={{ marginTop: 3, padding: "3px 7px 3px 18px", borderRadius: 6, cursor: "pointer", font: "500 9.5px/1.3 var(--sans)", color: s.fg, background: s.bg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {e.company}
+                          </div>
+                        ))}
+                    </div>
+                  );
+                })}
             </div>
           ))}
         </div>

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { boardFromApplications } from "@pipeline/contracts";
 import type { Application } from "@pipeline/contracts";
-import { flattenBoard, companyCards, deriveContacts, mergeContacts, buildNotifications } from "./derive";
+import { flattenBoard, companyCards, deriveContacts, mergeContacts, buildNotifications, calendarFor } from "./derive";
 import { defaultOverlay } from "./overlay";
 
 const app = (over: Partial<Application> & { threadId: string }): Application => ({
@@ -137,6 +137,30 @@ describe("flattenBoard — needsReview seam", () => {
     // Full timestamp beats the date-only rows from the same day (it used to parse
     // to NaN and sort dead last); among the date-only ties, later firstSeen wins.
     expect(rows.map((r) => r.id)).toEqual(["m-now", "sameday-new", "sameday-old"]);
+  });
+
+  it("calendarFor buckets per-day counts: applied on firstSeen, interview/rejected on their own days", () => {
+    const board = boardFromApplications(
+      [
+        app({ threadId: "a1", firstSeen: "2026-05-04", lastActivity: "2026-05-04" }),
+        app({ threadId: "a2", firstSeen: "2026-05-04", lastActivity: "2026-05-04", company: "Globex" }),
+        // interview with a PARSEABLE enrichment date → lands on that day, not lastActivity
+        app({ threadId: "i1", status: "interview", firstSeen: "2026-05-01", lastActivity: "2026-05-06", enrichment: { interviewDateTime: "2026-05-20 14:00" } }),
+        // interview with free-text date → falls back to lastActivity day
+        app({ threadId: "i2", status: "interview", firstSeen: "2026-05-02", lastActivity: "2026-05-07", enrichment: { interviewDateTime: "Tuesday at 2pm PT" } }),
+        app({ threadId: "r1", status: "rejected", firstSeen: "2026-05-03", lastActivity: "2026-05-09" }),
+      ],
+      "test",
+    );
+    const rows = flattenBoard(board, defaultOverlay(), now);
+    const cells = calendarFor(rows, 2026, 4); // May 2026
+    const day = (d: number) => cells.find((c) => c.day === d)!;
+    expect(day(4).counts.applied).toHaveLength(2); // two applications that day
+    expect(day(20).counts.interview.map((e) => e.id)).toEqual(["i1"]); // parseable date wins
+    expect(day(7).counts.interview.map((e) => e.id)).toEqual(["i2"]); // free text → lastActivity
+    expect(day(9).counts.rejected.map((e) => e.id)).toEqual(["r1"]);
+    expect(day(9).counts.applied).toHaveLength(0); // applied count sits on its own day (May 3)
+    expect(day(3).counts.applied.map((e) => e.id)).toEqual(["r1"]);
   });
 
   it("companyCards groups a company's positions into .apps (drives the expandable card)", () => {

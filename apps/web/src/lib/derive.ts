@@ -446,36 +446,60 @@ export function deriveTasks(apps: UiApplication[], nowMs: number): DerivedTask[]
   return tasks;
 }
 
+export type CalendarBucket = "applied" | "interview" | "rejected";
+export interface CalendarDayEntry {
+  id: string;
+  company: string;
+}
 export interface CalendarCell {
   day: number | null;
-  events: { label: string; fg: string; bg: string; appId: string }[];
+  counts: Record<CalendarBucket, CalendarDayEntry[]>;
 }
 
+const emptyCounts = (): CalendarCell["counts"] => ({ applied: [], interview: [], rejected: [] });
+
+/** Per-day status counts: Applied on the day you applied (every app), Interview
+ *  on the interview's own date when enrichment carries a parseable one (free
+ *  text like "Tuesday at 2pm PT" doesn't parse → the last-activity day),
+ *  Rejected on the rejection's last-activity day. */
 export function calendarFor(apps: UiApplication[], year: number, month: number): CalendarCell[] {
   const first = new Date(Date.UTC(year, month, 1));
   const startWeekday = first.getUTCDay(); // 0 = Sun
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 
-  const byDay = new Map<number, CalendarCell["events"]>();
-  for (const a of apps) {
-    if (!a.appliedIso) continue;
-    const ms = parseIso(a.appliedIso);
-    if (Number.isNaN(ms)) continue;
+  // The day-of-month for an ISO date/timestamp, or null when outside this month.
+  const dayIn = (iso: string | null | undefined): number | null => {
+    if (!iso) return null;
+    const ms = parseIso(iso);
+    if (Number.isNaN(ms)) return null;
     const d = new Date(ms);
-    if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month) continue;
-    const day = d.getUTCDate();
-    const arr = byDay.get(day) ?? [];
-    if (arr.length < 2) {
-      const s = STATUS[a.status];
-      arr.push({ label: `${a.company} · ${s.label}`, fg: s.fg, bg: s.bg, appId: a.id });
+    return d.getUTCFullYear() === year && d.getUTCMonth() === month ? d.getUTCDate() : null;
+  };
+
+  const byDay = new Map<number, CalendarCell["counts"]>();
+  const add = (day: number | null, bucket: CalendarBucket, a: UiApplication) => {
+    if (day == null) return;
+    const counts = byDay.get(day) ?? emptyCounts();
+    counts[bucket].push({ id: a.id, company: a.company });
+    byDay.set(day, counts);
+  };
+
+  for (const a of apps) {
+    add(dayIn(a.appliedIso), "applied", a);
+    if (a.status === "interview" || a.status === "screening") {
+      const enriched = a.enrichment?.interviewDateTime ? Date.parse(a.enrichment.interviewDateTime) : NaN;
+      const day = !Number.isNaN(enriched)
+        ? dayIn(new Date(enriched).toISOString().slice(0, 10))
+        : dayIn(a.lastActivityIso);
+      add(day, "interview", a);
     }
-    byDay.set(day, arr);
+    if (a.status === "rejected") add(dayIn(a.lastActivityIso), "rejected", a);
   }
 
   const cells: CalendarCell[] = [];
-  for (let i = 0; i < startWeekday; i++) cells.push({ day: null, events: [] });
-  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, events: byDay.get(d) ?? [] });
-  while (cells.length % 7 !== 0) cells.push({ day: null, events: [] });
+  for (let i = 0; i < startWeekday; i++) cells.push({ day: null, counts: emptyCounts() });
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, counts: byDay.get(d) ?? emptyCounts() });
+  while (cells.length % 7 !== 0) cells.push({ day: null, counts: emptyCounts() });
   return cells;
 }
 

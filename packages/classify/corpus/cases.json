@@ -138,7 +138,9 @@
     { "text": "Please reach out to Dana Kim, Talent Acquisition Partner, with any questions.", "name": "Dana Kim", "titleContains": "Talent Acquisition" },
     { "text": "Sent from Greenhouse on behalf of the team. Do not reply to this message.", "null": true },
     { "text": "Thanks,\nThe Hiring Team", "null": true },
-    { "text": "Questions? Contact us at no-reply@greenhouse.io", "null": true }
+    { "text": "Questions? Contact us at no-reply@greenhouse.io", "null": true },
+    { "text": "Please confirm your contact details: John Smith, john.smith@gmail.com, +1 555 0100.", "null": true },
+    { "text": "Best regards,\nAyşe Yılmaz\nSenior Technical Recruiter\nayse.yilmaz@acme.com", "name": "Ayşe Yılmaz", "titleContains": "Recruiter", "email": "ayse.yilmaz@acme.com" }
   ],
   "_comment_matching": "Matching/grouping layer (Known Issue A): threads reduced via threadsToApplications + boardFromApplications. Distinct employers sharing an ATS platform domain must stay DISTINCT groups — never bundle under the platform. expectCompanies (optional) is the exact group-name set, case-insensitive.",
   "matching": [

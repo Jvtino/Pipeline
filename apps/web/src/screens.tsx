@@ -1079,6 +1079,28 @@ export function Documents(ctx: Ctx) {
   const docs = ctx.overlay.docs;
   const synced = ctx.syncedDocs;
   const pick = () => fileRef.current?.click();
+
+  // Group synced attachments per company (synced is newest-first, so group
+  // order = most recently active company first).
+  const groups = useMemo(() => {
+    const m = new Map<string, typeof synced>();
+    for (const d of synced) {
+      const list = m.get(d.company);
+      if (list) list.push(d);
+      else m.set(d.company, [d]);
+    }
+    return [...m.entries()];
+  }, [synced]);
+  // Few companies → everything open; more → collapsed rows the user expands.
+  const [openCos, setOpenCos] = useState<Set<string> | null>(null);
+  const expanded = openCos ?? new Set(groups.length <= 2 ? groups.map(([c]) => c) : []);
+  const toggle = (company: string) => {
+    const next = new Set(expanded);
+    if (next.has(company)) next.delete(company);
+    else next.add(company);
+    setOpenCos(next);
+  };
+
   return (
     <div style={{ maxWidth: 840 }}>
       <input ref={fileRef} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) ctx.addDoc(f); e.target.value = ""; }} />
@@ -1086,20 +1108,38 @@ export function Documents(ctx: Ctx) {
       {synced.length > 0 && (
         <>
           <div className="eyebrow" style={{ margin: "0 0 10px" }}>From your emails</div>
-          <div className="card" style={{ overflow: "hidden", marginBottom: 22 }}>
-            {synced.map((d, i) => (
-              <div key={`${d.threadId}-${d.name}-${i}`} className="hover-row" style={{ display: "flex", alignItems: "center", gap: 14, padding: "15px 18px", borderBottom: "1px solid rgba(34,31,26,.05)", cursor: "pointer" }} onClick={() => ctx.openDetail(d.threadId)}>
-                <DocBadge type={docTypeOf(d.name, d.contentType)} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ font: "600 13.5px var(--sans)" }}>{d.name}</div>
-                  <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", marginTop: 2 }}>{d.company} · {d.role}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {groups.map(([company, list]) => {
+              const open = expanded.has(company);
+              return (
+                <div key={company} className="card" style={{ overflow: "hidden" }}>
+                  <div
+                    className="hover-row"
+                    onClick={() => toggle(company)}
+                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", cursor: "pointer", userSelect: "none" }}
+                  >
+                    <CompanyAvatar name={company} size={30} radius={9} font={12} />
+                    <span style={{ font: "650 13.5px var(--sans)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{company}</span>
+                    <span style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", flex: "0 0 auto" }}>{list.length} file{list.length === 1 ? "" : "s"}</span>
+                    <IconChevronRight size={14} color="#c5bdb0" style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s", flex: "0 0 auto" }} />
+                  </div>
+                  {open &&
+                    list.map((d, i) => (
+                      <div key={`${d.threadId}-${d.name}-${i}`} className="hover-row" style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px 12px 60px", borderTop: "1px solid rgba(34,31,26,.05)", cursor: "pointer" }} onClick={() => ctx.openDetail(d.threadId)}>
+                        <DocBadge type={docTypeOf(d.name, d.contentType)} big={false} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ font: "600 13px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                          <div style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", marginTop: 2 }}>{d.role}</div>
+                        </div>
+                        <span style={{ font: "500 12px var(--mono)", color: "var(--muted-2)" }}>{docSize(d.size)}</span>
+                        <span style={{ font: "500 12px var(--mono)", color: "var(--faint)", width: 54, textAlign: "right" }}>{shortDate(d.date)}</span>
+                      </div>
+                    ))}
                 </div>
-                <span style={{ font: "500 12px var(--mono)", color: "var(--muted-2)" }}>{docSize(d.size)}</span>
-                <span style={{ font: "500 12px var(--mono)", color: "var(--faint)", width: 54, textAlign: "right" }}>{shortDate(d.date)}</span>
-              </div>
-            ))}
-            <div style={{ padding: "10px 18px", font: "500 11px var(--sans)", color: "var(--faint)" }}>Found in your synced mail — names only; open the original email to download the file.</div>
+              );
+            })}
           </div>
+          <div style={{ padding: "9px 4px 0", font: "500 11px var(--sans)", color: "var(--faint)", marginBottom: 22 }}>Found in your synced mail — names only; open the message (Email tab → “Open in mailbox”) to download a file.</div>
         </>
       )}
 

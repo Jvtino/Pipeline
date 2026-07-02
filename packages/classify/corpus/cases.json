@@ -108,7 +108,9 @@
     { "text": "Grab a time that works for you: https://calendly.com/recruiter/30min", "hasDateTime": false, "hasLink": true },
     { "text": "Let's meet Thursday at 2:30pm ET.", "hasDateTime": true, "hasLink": false },
     { "text": "We'll be interviewing candidates over the coming weeks and will be in touch.", "null": true },
-    { "text": "Thanks for taking the time to speak with us yesterday.", "null": true }
+    { "text": "Thanks for taking the time to speak with us yesterday.", "null": true },
+    { "text": "Your interview is scheduled for 12 June at 14:00 CET.", "hasDateTime": true, "hasLink": false },
+    { "text": "Interview confirmed: Thursday 15:30 (Istanbul time).", "hasDateTime": true, "hasLink": false }
   ],
   "compensation": [
     { "text": "The base salary range for this role is $120,000–$150,000.", "expect": "$120,000–$150,000" },

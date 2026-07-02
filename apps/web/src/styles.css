@@ -500,6 +500,52 @@ input, select, button, textarea { font-family: inherit; }
 .stats-more[open] > summary::before { transform: rotate(90deg); }
 .stats-more > summary:hover { background: var(--drawer); }
 
+/* ---- responsive grids ------------------------------------------------------ */
+.rgrid { display: grid; gap: 13px; }
+.rgrid-2 { grid-template-columns: repeat(2, 1fr); }
+.rgrid-3 { grid-template-columns: repeat(3, 1fr); }
+.rgrid-4 { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.rgrid-5 { grid-template-columns: repeat(5, 1fr); }
+.rgrid-6 { grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 1180px) {
+  .rgrid-4, .rgrid-5, .rgrid-6 { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 820px) {
+  .rgrid-3, .rgrid-4, .rgrid-5, .rgrid-6 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .rgrid-2, .rgrid-3, .rgrid-4, .rgrid-5 { grid-template-columns: 1fr; }
+  .rgrid-6 { grid-template-columns: repeat(2, 1fr); }
+}
+/* the calendar keeps its 7 columns — narrow screens scroll it sideways */
+.cal-scroll { overflow-x: auto; }
+.cal-scroll .cal7 { min-width: 640px; }
+
+/* ---- phone shell: sidebar becomes a horizontal top nav ---------------------- */
+@media (max-width: 840px) {
+  .app { flex-direction: column; }
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    padding: 6px 10px;
+    border-right: none;
+    border-bottom: 1px solid var(--chrome-border);
+  }
+  .brand { padding: 4px 6px 4px 2px; }
+  .brand-name { display: none; }
+  .nav { display: flex; flex-direction: row; overflow-x: auto; overflow-y: visible; margin: 0; scrollbar-width: none; }
+  .nav::-webkit-scrollbar { display: none; }
+  .pl-nav { width: auto; white-space: nowrap; padding: 8px 11px; margin-bottom: 0; flex: 0 0 auto; }
+  .userchip-wrap { display: none; }
+  .header { flex-wrap: wrap; padding: 10px 14px; gap: 9px; }
+  .search { order: 9; flex-basis: 100%; max-width: none; }
+  .mailbox-sync { display: none; }
+  .content { padding: 16px 14px 32px; }
+  .screen-title { font-size: 18px; }
+  .bell-pop { width: min(340px, calc(100vw - 24px)); }
+}
+
 /* ---- animations ----------------------------------------------------------- */
 .spin { animation: spin 0.75s linear infinite; transform-origin: center; }
 @keyframes spin { to { transform: rotate(360deg); } }

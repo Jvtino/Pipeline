@@ -556,7 +556,7 @@ export function StateLoading() {
   const sk = (h: number, r = 14): CSSProperties => ({ height: h, borderRadius: r });
   return (
     <div className="state-overlay">
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 13 }}>
+      <div className="rgrid rgrid-5">
         {[0, 1, 2, 3, 4].map((i) => (
           <div key={i} className="pl-sk" style={sk(84)} />
         ))}

@@ -76,7 +76,7 @@ export function Dashboard(ctx: Ctx) {
             <span style={{ font: "600 14px var(--sans)" }}>Needs you today</span>
             <CountChip>{nudges.length}</CountChip>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(3, nudges.length)},1fr)`, gap: 13, marginBottom: 18 }}>
+          <div className={`rgrid rgrid-${Math.min(3, nudges.length)}`} style={{ marginBottom: 18 }}>
             {nudges.map((z) => (
               <div
                 key={z.appId + z.tag}
@@ -99,7 +99,7 @@ export function Dashboard(ctx: Ctx) {
         </>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 13 }}>
+      <div className="rgrid rgrid-5">
         <StatCard label="Total Applications" value={counts.total} sub="vs last month" delta={totalDelta} />
         <StatCard label="In Interview" value={counts.interview} color={STATUS.interview.fg} sub="in your pipeline" />
         <StatCard label="Offers" value={counts.offer} color={STATUS.offer.fg} sub="in play" />
@@ -286,7 +286,7 @@ export function Applications(ctx: Ctx) {
           <div style={{ font: "500 12.5px var(--sans)", color: "var(--muted-2)", marginTop: 4 }}>Try a different filter or clear your search.</div>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
+        <div className="rgrid rgrid-4">
           {cards.map((c) => {
             const top = STATUS[c.topStatus];
             return (
@@ -554,13 +554,13 @@ export function Calendar(ctx: Ctx) {
       </div>
 
       {view === "month" && (
-        <div className="card" style={{ padding: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7, marginBottom: 8 }}>
+        <div className="card cal-scroll" style={{ padding: 16 }}>
+          <div className="cal7" style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7, marginBottom: 8 }}>
             {days.map((d) => (
               <span key={d} style={{ textAlign: "center", font: "600 10.5px var(--mono)", letterSpacing: ".05em", color: "var(--faint)" }}>{d}</span>
             ))}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7 }}>
+          <div className="cal7" style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7 }}>
             {cells.map((c, i) => (
               <div key={i} style={{ minHeight: 96, border: "1px solid rgba(34,31,26,.06)", borderRadius: 9, padding: "7px 8px", background: c.day ? "#fffefb" : "transparent" }}>
                 {c.day && <div style={{ font: "600 12px var(--mono)", color: isoOfYm(ym, c.day) === todayIso ? "var(--primary)" : "var(--muted-2)" }}>{c.day}</div>}
@@ -572,8 +572,8 @@ export function Calendar(ctx: Ctx) {
       )}
 
       {view === "week" && (
-        <div className="card" style={{ padding: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7 }}>
+        <div className="card cal-scroll" style={{ padding: 16 }}>
+          <div className="cal7" style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7 }}>
             {weekDays.map((d, i) => {
               const isToday = d.iso === todayIso;
               return (
@@ -701,7 +701,7 @@ export function Tasks(ctx: Ctx) {
           <div style={{ font: "500 12.5px var(--sans)", color: "var(--muted-2)", marginTop: 4 }}>You’ve cleared every task. Use “Restore” above to bring them back.</div>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, alignItems: "start" }}>
+        <div className="rgrid rgrid-3" style={{ gap: 14, alignItems: "start" }}>
           {TASK_LANES.map(({ key, label, empty }) => {
         const items = byLane[key];
         const isOver = overLane === key;
@@ -837,7 +837,7 @@ export function Statistics(ctx: Ctx) {
       </div>
 
       {/* KPI row — the six numbers that drive action this week */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 13, marginTop: 14 }}>
+      <div className="rgrid rgrid-6" style={{ marginTop: 14 }}>
         <VolTile value={String(vol.thisWeek)} label="This week" sub="applications" delta={vol.lastWeek ? vol.thisWeek - vol.lastWeek : undefined} />
         <VolTile value={String(vol.perWeek)} label="Per week" sub="average pace" />
         <VolTile value={String(s.activePipeline)} label="Active pipeline" sub="still in play" color="#1f7a52" />
@@ -1312,7 +1312,7 @@ export function Templates(ctx: Ctx) {
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16 }}>
+    <div className="rgrid rgrid-2" style={{ gap: 16 }}>
       {TEMPLATES.map((tp) => {
         const body = edits[tp.title] ?? tp.body;
         const isEditing = editing === tp.title;

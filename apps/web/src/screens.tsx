@@ -18,13 +18,10 @@ import {
   computeStats,
   volumeStats,
   sourcePerformance,
-  rolePerformance,
   workTypePerformance,
   locationPerformance,
   resumePerformance,
-  companyInsights,
   timingStats,
-  salaryStats,
   responseByWeek,
   type PerfRow,
   type CompanyCardData,
@@ -646,28 +643,24 @@ export function Tasks(ctx: Ctx) {
    ========================================================================== */
 export function Statistics(ctx: Ctx) {
   const { apps, nowMs } = ctx;
-  // ~30 whole-list passes; compute them once per board change, not on every
+  // Whole-list passes; compute them once per board change, not on every
   // render (App re-renders on each header-search keystroke, toast, etc.).
   const derived = useMemo(
     () => ({
       s: computeStats(apps, nowMs),
       vol: volumeStats(apps, nowMs),
       src: sourcePerformance(apps),
-      role: rolePerformance(apps),
-      comp: companyInsights(apps),
       timing: timingStats(apps, nowMs),
       work: workTypePerformance(apps),
       loc: locationPerformance(apps),
-      sal: salaryStats(apps),
       resume: resumePerformance(apps),
       wk: responseByWeek(apps, nowMs, 6),
     }),
     [apps, nowMs],
   );
-  const { s, vol, src, role, comp, timing, work, loc, sal, resume, wk } = derived;
+  const { s, vol, src, timing, work, loc, resume, wk } = derived;
   if (s.sent === 0) return <EmptyInline title="No data yet" sub="Statistics appear once you’ve applied to a few roles. Add an application or run a sync to begin." />;
-  const hasMeta = work.length > 0 || loc.length > 0 || sal.count > 0 || resume.rows.length > 0;
-  const dDays = (n: number | null) => (n == null ? "—" : String(n));
+  const hasMeta = work.length > 0 || loc.length > 0 || resume.rows.length > 0;
   const ratePct = Math.round(s.responseRate * 100);
   const healthLabel = s.health === "healthy" ? "healthy" : s.health === "ok" ? "okay" : "needs work";
   // Green/amber/red = the offer/interview/rejected palette entries.
@@ -680,7 +673,7 @@ export function Statistics(ctx: Ctx) {
 
   return (
     <div>
-      {/* A — response rate hero */}
+      {/* Hero — the one number, with the health band and the weekly reply trend beside it */}
       <div className="card" style={{ padding: "20px 22px" }}>
         <div style={{ display: "flex", alignItems: "stretch", gap: 28 }}>
           <div style={{ flex: "0 0 auto", display: "flex", flexDirection: "column", justifyContent: "center" }}>
@@ -697,74 +690,30 @@ export function Statistics(ctx: Ctx) {
               <div style={{ position: "absolute", left: `${s.markerPct}%`, top: -3, transform: "translateX(-50%)", width: 2.5, height: 24, background: "#1f3d33", borderRadius: 2 }} />
               <div style={{ position: "absolute", left: `${s.markerPct}%`, top: -13, transform: "translateX(-50%)", font: "700 10px var(--mono)", color: "#1f3d33" }}>YOU</div>
             </div>
-            <div style={{ height: 13, borderRadius: 7, overflow: "hidden", display: "flex" }}>
+            <div style={{ height: 13, borderRadius: 7, overflow: "hidden", display: "flex", gap: 2 }}>
               <span style={{ width: "20%", background: "#dca596" }} />
               <span style={{ width: "30%", background: "#e6cd97" }} />
               <span style={{ width: "50%", background: "#9ec7b1" }} />
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7, font: "600 10.5px var(--sans)" }}>
-              <span style={{ color: "#c06a57" }}>Broken &lt; 10%</span>
-              <span style={{ color: "#9a6a16" }}>OK 10–25%</span>
-              <span style={{ color: "#1f7a52" }}>Healthy 25%+</span>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7, font: "500 10.5px var(--sans)", color: "var(--muted)" }}>
+              <span>Broken &lt; 10%</span>
+              <span>OK 10–25%</span>
+              <span>Healthy 25%+</span>
             </div>
-            <div style={{ font: "500 12.5px/1.5 var(--sans)", color: "#5a5446", marginTop: 13, padding: "11px 13px", background: "#f4f6f2", borderRadius: 10, border: "1px solid rgba(47,146,102,.16)" }}>
-              {s.health === "healthy" ? (
-                <>You’re converting replies well. <b style={{ color: "var(--primary)" }}>Volume isn’t the problem</b> — keep the quality of each application high.</>
-              ) : s.health === "ok" ? (
-                <>You’re above the broken line, but there’s room. <b style={{ color: "var(--primary)" }}>Tighten targeting</b> to lift the reply rate before adding volume.</>
-              ) : (
-                <>Replies are scarce. That’s a <b style={{ color: "var(--primary)" }}>resume / targeting</b> signal — fix the top of the funnel before sending more.</>
-              )}
-            </div>
+            <div className="eyebrow" style={{ margin: "14px 0 8px" }}>Reply rate by week</div>
+            <WeekBars points={wk} />
           </div>
         </div>
       </div>
 
-      {/* A1 — highlights (moved off the dashboard, redesigned with an extra context line each) */}
-      <div className="hl-row">
-        <HighlightCard
-          accent="#2a4a40"
-          label="This week"
-          value={String(vol.thisWeek)}
-          unit="apps"
-          delta={vol.lastWeek ? vol.thisWeek - vol.lastWeek : undefined}
-          context={`${vol.thisMonth} this month · ~${vol.perWeek}/wk pace`}
-        />
-        <HighlightCard
-          accent={timing.followUpsDue ? "#9a6a16" : "#3f7363"}
-          label="Follow-ups due"
-          value={String(timing.followUpsDue)}
-          context={timing.noResponse14 ? `${timing.noResponse14} silent 14+ days` : "you’re on top of it"}
-        />
-        <HighlightCard
-          accent="#1f7a52"
-          label="Best source"
-          value={src.best ? src.best.key : "—"}
-          context={src.best ? `${Math.round(src.best.interviewRate * 100)}% interview · ${Math.round(src.best.responseRate * 100)}% reply` : "needs more data"}
-        />
-        <HighlightCard
-          accent="#3f7363"
-          label="Best role"
-          value={role.best ? role.best.key : "—"}
-          context={role.best ? `${Math.round(role.best.responseRate * 100)}% reply · ${Math.round(role.best.interviewRate * 100)}% interview` : "needs more data"}
-        />
-        <HighlightCard
-          accent="#6c7d96"
-          label="Reply time"
-          value={timing.medianResponseDays == null ? "—" : String(timing.medianResponseDays)}
-          unit={timing.medianResponseDays == null ? "" : "d median"}
-          context={timing.medianInterviewDays == null ? "no interviews yet" : `${timing.medianInterviewDays}d to interview`}
-        />
-      </div>
-
-      {/* A2 — volume & momentum */}
+      {/* KPI row — the six numbers that drive action this week */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 13, marginTop: 14 }}>
         <VolTile value={String(vol.thisWeek)} label="This week" sub="applications" delta={vol.lastWeek ? vol.thisWeek - vol.lastWeek : undefined} />
-        <VolTile value={String(vol.thisMonth)} label="This month" sub="last 30 days" />
         <VolTile value={String(vol.perWeek)} label="Per week" sub="average pace" />
-        <VolTile value={vol.bestDay ? vol.bestDay.label : "—"} label="Best day" sub={vol.bestDay ? `${vol.bestDay.count} applied` : "no pattern yet"} />
-        <VolTile value={String(vol.streakDays)} label="Day streak" sub="keep it going" color="#9a6a16" />
-        <VolTile value={String(vol.wishlist)} label="Saved" sub="not applied yet" color="#6b5e86" />
+        <VolTile value={String(s.activePipeline)} label="Active pipeline" sub="still in play" color="#1f7a52" />
+        <VolTile value={String(timing.followUpsDue)} label="Follow-ups due" sub="quiet 7+ days" color={timing.followUpsDue ? "#9a6a16" : undefined} />
+        <VolTile value={timing.medianResponseDays == null ? "—" : `${timing.medianResponseDays}d`} label="Reply time" sub="median to first reply" />
+        <VolTile value={`${Math.round(s.ghostRate * 100)}%`} label="Ghost rate" sub="no reply at all" color="#a85544" />
       </div>
 
       {/* B — funnel */}
@@ -806,24 +755,7 @@ export function Statistics(ctx: Ctx) {
         </div>
       </div>
 
-      {/* C — aging & stale */}
-      <div className="card" style={{ padding: "20px 22px", marginTop: 14 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 22, alignItems: "center" }}>
-          <div>
-            <div className="cardtitle">Aging &amp; stale</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, padding: "13px 15px", background: "#f9ecea", border: "1px solid rgba(192,106,87,.22)", borderRadius: 12 }}>
-              <div style={{ font: "700 30px/1 var(--sans)", color: "#a85544", flex: "0 0 auto" }}>{s.aging.silent21}</div>
-              <div>
-                <div style={{ font: "600 12.5px var(--sans)", color: "#2a2620" }}>apps silent 21+ days</div>
-                <div style={{ font: "500 11.5px var(--sans)", color: "#9b8278", marginTop: 1 }}>Most are silent rejections — treat as dead, move on.</div>
-              </div>
-            </div>
-          </div>
-          <AgingBars buckets={s.aging.buckets} />
-        </div>
-      </div>
-
-      {/* D — source performance (full table) */}
+      {/* Source performance — the one breakdown that changes where you apply */}
       <div className="card" style={{ padding: "20px 22px", marginTop: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 14 }}>
           <span className="cardtitle">Source performance</span>
@@ -837,68 +769,26 @@ export function Statistics(ctx: Ctx) {
         )}
       </div>
 
-      {/* E — role performance */}
-      <div className="card" style={{ padding: "20px 22px", marginTop: 14 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 14 }}>
-          <span className="cardtitle">Role / title performance</span>
-          <span style={{ font: "500 12px var(--sans)", color: "var(--muted-2)" }}>what the market actually responds to</span>
-        </div>
-        <PerfTable rows={role.rows} keyHeader="Role" best={role.best} worst={role.worst} />
-        {role.best && (
-          <Takeaway>
-            <b style={{ color: "var(--primary)" }}>{role.best.key}</b> is where you’re strongest ({Math.round(role.best.responseRate * 100)}% reply).{role.worst && role.worst.key !== role.best.key ? <> {role.worst.key} is the weakest — consider whether it’s worth chasing.</> : null}
-          </Takeaway>
-        )}
-      </div>
-
-      {/* F — company insights + speed/follow-up */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 14 }}>
-        <div className="card" style={{ padding: "20px 22px" }}>
-          <div className="cardtitle">Company insights</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, marginTop: 14 }}>
-            <ContextCard value={String(comp.companiesAppliedTo)} unit="" color="#3f3a33" title="Companies" sub="distinct employers applied to" />
-            <ContextCard value={String(comp.multiple.length)} unit="" color="#6b5e86" title="Applied 2+ times" sub="multiple roles at one company" />
-          </div>
-          {comp.bestResponders.length > 0 && (
-            <>
-              <div className="eyebrow" style={{ margin: "16px 0 9px" }}>Best responders</div>
-              {comp.bestResponders.slice(0, 4).map((c) => (
-                <div key={c.company} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderTop: "1px solid rgba(34,31,26,.05)" }}>
-                  <span style={{ font: "600 12.5px var(--sans)", color: "#3f3a33" }}>{c.company}</span>
-                  <span style={{ font: "500 11px var(--mono)", color: "var(--muted-2)" }}><b style={{ color: "#1f7a52" }}>{Math.round(c.responseRate * 100)}%</b> · {c.applied} app{c.applied > 1 ? "s" : ""}</span>
-                </div>
-              ))}
-            </>
-          )}
-          {comp.neverResponded.length > 0 && (
-            <div style={{ font: "500 12px/1.5 var(--sans)", color: "var(--text-3)", marginTop: 13, paddingTop: 11, borderTop: "1px solid rgba(34,31,26,.07)" }}>
-              <b style={{ color: "#a85544" }}>{comp.neverResponded.length}</b> compan{comp.neverResponded.length > 1 ? "ies" : "y"} never replied — treat them as dead ends.
+      {/* Aging — one compressed strip */}
+      <div className="card" style={{ padding: "16px 22px", marginTop: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 22, alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 13px", background: "#f9ecea", border: "1px solid rgba(192,106,87,.22)", borderRadius: 12 }}>
+            <div style={{ font: "700 28px/1 var(--sans)", color: "#a85544", flex: "0 0 auto" }}>{s.aging.silent21}</div>
+            <div>
+              <div style={{ font: "600 12.5px var(--sans)", color: "#2a2620" }}>apps silent 21+ days</div>
+              <div style={{ font: "500 11.5px var(--sans)", color: "#9b8278", marginTop: 1 }}>Most are silent rejections — treat as dead, move on.</div>
             </div>
-          )}
-        </div>
-
-        <div className="card" style={{ padding: "20px 22px" }}>
-          <div className="cardtitle">Speed &amp; follow-up</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 11, marginTop: 14 }}>
-            <ContextCard value={dDays(timing.medianResponseDays)} unit={timing.medianResponseDays == null ? "" : "d"} color="#3f3a33" title="To first reply" sub="median" />
-            <ContextCard value={dDays(timing.medianInterviewDays)} unit={timing.medianInterviewDays == null ? "" : "d"} color="#9a6a16" title="To interview" sub="median" />
-            <ContextCard value={dDays(timing.medianRejectionDays)} unit={timing.medianRejectionDays == null ? "" : "d"} color="#a85544" title="To rejection" sub="median" />
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, padding: "12px 14px", background: "#f8f1e8", border: "1px solid rgba(192,138,42,.2)", borderRadius: 12 }}>
-            <div style={{ font: "700 26px/1 var(--sans)", color: "#9a6a16", flex: "0 0 auto" }}>{timing.followUpsDue}</div>
-            <div style={{ font: "500 12px/1.45 var(--sans)", color: "#6f685d" }}>application{timing.followUpsDue === 1 ? "" : "s"} need a follow-up (quiet 7+ days). <b>{timing.noResponse14}</b> have had no reply after 14 days.</div>
-          </div>
-          <div className="eyebrow" style={{ margin: "16px 0 9px" }}>Reply rate by week</div>
-          <WeekBars points={wk} />
+          <AgingBars buckets={s.aging.buckets} />
         </div>
       </div>
 
-      {/* G — tracking-based breakdowns (work type / location / résumé / salary) */}
+      {/* Tracking-based breakdowns, tucked behind a disclosure */}
       {hasMeta ? (
-        <>
-          <div className="eyebrow" style={{ margin: "20px 2px 11px" }}>From your tracking</div>
+        <details className="stats-more" style={{ marginTop: 14 }}>
+          <summary>More breakdowns — work type, location, résumé version</summary>
           {(work.length > 0 || loc.length > 0) && (
-            <div style={{ display: "grid", gridTemplateColumns: work.length > 0 && loc.length > 0 ? "1fr 1fr" : "1fr", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: work.length > 0 && loc.length > 0 ? "1fr 1fr" : "1fr", gap: 14, marginTop: 12 }}>
               {work.length > 0 && (
                 <div className="card" style={{ padding: "20px 22px" }}>
                   <div className="cardtitle" style={{ marginBottom: 12 }}>Work arrangement</div>
@@ -923,47 +813,17 @@ export function Statistics(ctx: Ctx) {
               {resume.best && <Takeaway>Your <b style={{ color: "var(--primary)" }}>{resume.best.key}</b> résumé performs best — use it as your default and retire the weak ones.</Takeaway>}
             </div>
           )}
-          {sal.count > 0 && (
-            <div className="card" style={{ padding: "20px 22px", marginTop: 14 }}>
-              <div className="cardtitle" style={{ marginBottom: 14 }}>Salary snapshot</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 11 }}>
-                <ContextCard value={sal.median == null ? "—" : money(sal.median)} unit="" color="#1f7a52" title="Median (applied)" sub={`${sal.count} with salary`} />
-                <ContextCard value={sal.min == null ? "—" : money(sal.min)} unit="" color="#3f3a33" title="Lowest" sub="floor" />
-                <ContextCard value={sal.max == null ? "—" : money(sal.max)} unit="" color="#3f3a33" title="Highest" sub="ceiling" />
-              </div>
-              {sal.byRole.length > 1 && (
-                <div style={{ marginTop: 12 }}>
-                  {sal.byRole.slice(0, 5).map((r) => (
-                    <div key={r.role} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderTop: "1px solid rgba(34,31,26,.05)" }}>
-                      <span style={{ font: "600 12.5px var(--sans)", color: "#3f3a33" }}>{r.role}</span>
-                      <span style={{ font: "500 11.5px var(--mono)", color: "var(--muted)" }}>{money(r.median)} · {r.count}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </>
+        </details>
       ) : (
         <div className="card" style={{ padding: "16px 18px", marginTop: 14, display: "flex", gap: 11, alignItems: "center" }}>
           <span style={{ font: "500 12.5px/1.5 var(--sans)", color: "var(--text-3)" }}>
-            <b style={{ color: "var(--primary)" }}>Unlock more breakdowns:</b> add a work type, location, salary or résumé version to an application — in the <b>New Application</b> form or any application’s <b>Tracking</b> panel — and you’ll get response rates by remote/hybrid/onsite, by location, by pay, and by résumé version here.
+            <b style={{ color: "var(--primary)" }}>Unlock more breakdowns:</b> add a work type, location or résumé version to an application — in the <b>New Application</b> form or any application’s <b>Tracking</b> panel — and you’ll get response rates by remote/hybrid/onsite, by location, and by résumé version here.
           </span>
         </div>
       )}
-
-      {/* H — context */}
-      <div className="eyebrow" style={{ margin: "20px 2px 11px" }}>For context, not action</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 13 }}>
-        <ContextCard value={s.timeToFirstReply == null ? "—" : String(s.timeToFirstReply)} unit={s.timeToFirstReply == null ? "" : "days"} color="#3f3a33" title="Time to first reply" sub="Median time a reply takes to land. After this, an app is going quiet." />
-        <ContextCard value={`${Math.round(s.ghostRate * 100)}%`} unit="" color="#a85544" title="Ghost rate" sub="Died with zero reply. Normal — it’s a volume + targeting game." />
-        <ContextCard value={String(s.activePipeline)} unit="" color="#1f7a52" title="Active pipeline" sub="Genuinely in play right now — not ghosted or rejected." />
-      </div>
     </div>
   );
 }
-
-const money = (n: number) => "$" + Math.round(n).toLocaleString();
 
 function VolTile({ value, label, sub, color, delta, small }: { value: string; label: string; sub?: string; color?: string; delta?: number; small?: boolean }) {
   const ell: CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
@@ -984,26 +844,6 @@ function VolTile({ value, label, sub, color, delta, small }: { value: string; la
 function Takeaway({ children }: { children: ReactNode }) {
   return (
     <div style={{ font: "500 12px/1.55 var(--sans)", color: "var(--text-3)", marginTop: 14, paddingTop: 13, borderTop: "1px solid rgba(34,31,26,.07)" }}>{children}</div>
-  );
-}
-
-// A richer, redesigned metric card for the Statistics "Highlights" band (the
-// stats that used to sit on the dashboard, now with an extra context line).
-function HighlightCard({ accent, label, value, unit, delta, context }: { accent: string; label: string; value: string; unit?: string; delta?: number; context: string }) {
-  const numeric = /^[\d.]+$/.test(value);
-  return (
-    <div style={{ position: "relative", overflow: "hidden", background: "var(--card)", border: "1px solid var(--card-border)", borderRadius: 14, padding: "15px 16px 14px 18px", boxShadow: "var(--card-shadow)" }}>
-      <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: accent, opacity: 0.85 }} />
-      <div style={{ font: "600 10px var(--mono)", letterSpacing: ".05em", textTransform: "uppercase", color: "var(--faint)" }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 9, minWidth: 0 }}>
-        <span title={value} style={{ font: `700 ${numeric ? 29 : 17}px/1 var(--sans)`, letterSpacing: "-.02em", color: accent, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</span>
-        {unit ? <span style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", flex: "0 0 auto" }}>{unit}</span> : null}
-        {delta != null && delta !== 0 && (
-          <span style={{ font: "600 11px var(--mono)", color: delta > 0 ? "#1f7a52" : "#a85544", marginLeft: "auto", flex: "0 0 auto" }}>{delta > 0 ? "↑" : "↓"}{Math.abs(delta)}</span>
-        )}
-      </div>
-      <div style={{ font: "500 11.5px/1.4 var(--sans)", color: "var(--text-3)", marginTop: 8 }}>{context}</div>
-    </div>
   );
 }
 
@@ -1075,19 +915,6 @@ function AgingBars({ buckets }: { buckets: { label: string; count: number; stale
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function ContextCard({ value, unit, color, title, sub }: { value: string; unit: string; color: string; title: string; sub: string }) {
-  return (
-    <div style={{ background: "var(--card-subtle)", border: "1px solid rgba(34,31,26,.07)", borderRadius: 14, padding: 16 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
-        <div style={{ font: "700 24px var(--sans)", letterSpacing: "-.02em", color }}>{value}</div>
-        {unit && <div style={{ font: "500 12px var(--sans)", color: "var(--muted)" }}>{unit}</div>}
-      </div>
-      <div style={{ font: "600 12px var(--sans)", color: "#5f5a51", marginTop: 6 }}>{title}</div>
-      <div style={{ font: "500 11px/1.45 var(--sans)", color: "var(--muted-2)", marginTop: 3 }}>{sub}</div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 {
   "_comment": "Golden corpus for the classifier. Seeded from the legacy test/classify.test.js. Drives BOTH the TS unit tests (expected outputs) and the parity test (legacy classify.js must agree with @pipeline/classify on every case). Grow this file with every real-world misclassification — see plan §14.",
+  "_comment_lang": "Cases may carry a `lang` tag (default 'en') for the eval's per-language breakdown. The 'tr' cases are ASSUMED-representative renderings of well-known Turkish ATS/LinkedIn templates, NOT captured user mail — replace/extend them with real misclassified emails as they appear.",
   "status": [
     { "text": "Thank you for applying to the Backend Engineer role. We've received your application.", "expected": "applied" },
     { "text": "Your application has been received and is currently under review.", "expected": "applied" },
@@ -26,6 +27,13 @@
     { "text": "After careful consideration, we have decided to move forward with your application to the interview stage.", "expected": "interview" },
     { "text": "After careful consideration, we have decided not to move forward with your application.", "expected": "rejected" },
     { "text": "We have decided to proceed with a different candidate.", "expected": "rejected" },
+    { "text": "Maalesef başvurunuzla ilgili olumsuz bir karar aldık.", "expected": "rejected", "lang": "tr" },
+    { "text": "Ne yazık ki bu pozisyon için başka bir aday ile ilerleme kararı aldık.", "expected": "rejected", "lang": "tr" },
+    { "text": "Değerlendirme sonucunda başvurunuz olumsuz sonuçlanmıştır.", "expected": "rejected", "lang": "tr" },
+    { "text": "Başvurunuz alınmıştır ve değerlendirmeye alınmıştır.", "expected": "applied", "lang": "tr" },
+    { "text": "Başvurunuz için teşekkür ederiz. En kısa sürede size dönüş yapacağız.", "expected": "applied", "lang": "tr" },
+    { "text": "Sizi mülakata davet etmek istiyoruz. Uygun olduğunuz zamanları paylaşır mısınız?", "expected": "interview", "lang": "tr" },
+    { "text": "Size iş teklifi sunmaktan mutluluk duyuyoruz. Teklif mektubunuz ektedir.", "expected": "offer", "lang": "tr" },
     { "text": "Here's our company newsletter for June.", "expected": null },
     { "text": "Your package has shipped and will arrive tomorrow.", "expected": null },
     { "text": "Your application was viewed by the recruiter.", "expected": null },
@@ -57,7 +65,8 @@
     { "domain": "myworkday.com", "from": "Workday <initech@myworkday.com>", "subject": "Application Update", "body": "There is an update on your application. Sign in to the portal to view it.", "expected": "Initech" },
     { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Update on your application", "body": "Your application to Acme Corp was viewed by the hiring team.", "expected": "Acme Corp" },
     { "domain": "greenhouse.io", "from": "no-reply@greenhouse.io", "subject": "Update", "body": "Your application to Globex has been received.", "expected": "Globex" },
-    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was sent", "body": "Your application was sent to Acme Corp.", "expected": "Acme Corp" }
+    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was sent", "body": "Your application was sent to Acme Corp.", "expected": "Acme Corp" },
+    { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Başvurunuz Acme şirketine gönderildi", "body": "", "expected": "Acme", "lang": "tr" }
   ],
   "_comment_companySmart": "TS-only (resolveCompanySmart in aggregate.ts) — signals the parity-gated base resolver does not have (ATS apply/tenant URLs). Not read by the parity gate.",
   "companySmart": [

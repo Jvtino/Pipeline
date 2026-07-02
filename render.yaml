@@ -1,0 +1,49 @@
+# Render Blueprint — deploys the Pipeline API (apps/api) plus a managed Postgres.
+# The web app deploys separately to Vercel (see vercel.json + DEPLOY.md); Vercel
+# rewrites /api/* and /auth/* to this service so the browser sees one origin.
+services:
+  - type: web
+    name: pipeline-api
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && corepack prepare pnpm@10.33.0 --activate && pnpm install --filter "@pipeline/api..." && pnpm --filter "@pipeline/api..." build
+    startCommand: pnpm --filter @pipeline/api start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pipeline-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      # 32 random bytes, base64 — generate with:  openssl rand -base64 32
+      # Wraps the per-user keys that encrypt mail tokens at rest. Losing it
+      # invalidates stored mailbox connections (users just reconnect).
+      - key: PIPELINE_MASTER_KEY
+        sync: false
+      # Both point at the VERCEL domain (e.g. https://pipeline-xyz.vercel.app).
+      # OAuth callbacks and post-connect redirects flow through Vercel's
+      # /auth rewrite, so the browser stays on one origin end to end.
+      - key: PUBLIC_URL
+        sync: false
+      - key: WEB_URL
+        sync: false
+      # Mailbox connect (see CONNECT-MAILBOX.md). Leave unset to deploy the
+      # demo-data experience first and add real connect later.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: MS_CLIENT_ID
+        sync: false
+      # Background mailbox re-sync every 5 minutes.
+      - key: SYNC_INTERVAL_MS
+        value: "300000"
+
+databases:
+  - name: pipeline-db
+    plan: free # NOTE: Render's free Postgres expires after 30 days — upgrade or recreate.

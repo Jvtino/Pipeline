@@ -133,6 +133,80 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
   return apps;
 }
 
+/** One bell-popover item. `appId` is what clicking opens. */
+export interface Notification {
+  id: string;
+  appId: string;
+  tag: string;
+  color: string;
+  bg: string;
+  title: string;
+  sub: string;
+}
+
+const FOLLOWUP_DAYS = 7; // quiet this long → worth a nudge notification
+
+/** What the bell shows: offers awaiting a decision, upcoming interviews,
+ *  overdue follow-ups, and a needs-review summary. Derived, capped at 6. */
+export function buildNotifications(apps: UiApplication[], nowMs: number): Notification[] {
+  const out: Notification[] = [];
+  for (const a of apps.filter((x) => x.status === "offer").slice(0, 2)) {
+    out.push({
+      id: `offer-${a.id}`,
+      appId: a.id,
+      tag: "Offer",
+      color: STATUS.offer.dot,
+      bg: "rgba(47,146,102,.13)",
+      title: `${a.company} is waiting on your decision`,
+      sub: `${a.role} · respond soon`,
+    });
+  }
+  for (const a of apps.filter((x) => x.status === "interview" || x.status === "screening").slice(0, 2)) {
+    out.push({
+      id: `int-${a.id}`,
+      appId: a.id,
+      tag: "Interview",
+      color: STATUS.interview.dot,
+      bg: "rgba(192,138,42,.14)",
+      title: `${a.company} · ${a.nextStep}`,
+      sub: a.role,
+    });
+  }
+  const quiet = apps
+    .filter((a) => a.status === "no_response" || a.status === "applied")
+    .map((a) => {
+      const ms = a.lastActivityIso ? parseIso(a.lastActivityIso) : NaN;
+      return { a, days: Number.isNaN(ms) ? 0 : daysBetween(nowMs, ms) };
+    })
+    .filter((q) => q.days >= FOLLOWUP_DAYS)
+    .sort((p, q) => q.days - p.days)
+    .slice(0, 2);
+  for (const { a, days } of quiet) {
+    out.push({
+      id: `quiet-${a.id}`,
+      appId: a.id,
+      tag: "Follow-up",
+      color: STATUS.rejected.dot,
+      bg: "rgba(192,106,87,.13)",
+      title: `${a.company} has been quiet ${days} days`,
+      sub: `${a.role} · a gentle nudge often helps`,
+    });
+  }
+  const review = apps.filter((a) => a.needsReview);
+  if (review.length) {
+    out.push({
+      id: "review",
+      appId: review[0]!.id,
+      tag: "Review",
+      color: "#c08a2a",
+      bg: "rgba(192,138,42,.14)",
+      title: `${review.length} application${review.length === 1 ? "" : "s"} need${review.length === 1 ? "s" : ""} a quick check`,
+      sub: "The classifier wasn't fully sure — confirm the stage",
+    });
+  }
+  return out.slice(0, 6);
+}
+
 /** Contacts found in synced mail (enrichment.recruiter*), one per unique person.
  *  Dedup key: email, else name|company — the same recruiter across two roles at
  *  one company stays a single card. */

@@ -12,7 +12,7 @@ import type { UiStatus } from "./lib/status";
 import { STATUS } from "./lib/status";
 import { ensureSession, getMe, getBoard, getDocuments, runSync, resync, getConnections, deleteConnection, postJson, type Mailbox, type SyncedDoc, type SyncSummary } from "./api";
 import { loadOverlay, saveOverlay, defaultOverlay } from "./lib/overlay";
-import { flattenBoard } from "./lib/derive";
+import { flattenBoard, buildNotifications } from "./lib/derive";
 import { shortDate, syncedLabel, localIsoDate } from "./lib/format";
 import { Sidebar, Header, Toast, StateLoading, StateError, screenTitle } from "./components";
 import type { Ctx } from "./ctx";
@@ -156,6 +156,7 @@ export function App() {
   }, [toast]);
 
   const apps = useMemo(() => flattenBoard(board, overlay, nowMs), [board, overlay, nowMs]);
+  const notifications = useMemo(() => buildNotifications(apps, nowMs), [apps, nowMs]);
   const email = me?.email ?? "you@gmail.com";
 
   // ---- actions -------------------------------------------------------------
@@ -442,6 +443,8 @@ export function App() {
           syncing={syncing}
           onSync={onSync}
           onNewApp={onNewApp}
+          notifications={notifications}
+          onOpenApp={openDetail}
         />
 
         <div className="content">{viewState === "ready" && <ScreenComp {...ctx} />}</div>

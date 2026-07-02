@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { boardFromApplications } from "@pipeline/contracts";
 import type { Application } from "@pipeline/contracts";
-import { flattenBoard, companyCards, deriveContacts, mergeContacts } from "./derive";
+import { flattenBoard, companyCards, deriveContacts, mergeContacts, buildNotifications } from "./derive";
 import { defaultOverlay } from "./overlay";
 
 const app = (over: Partial<Application> & { threadId: string }): Application => ({
@@ -94,6 +94,31 @@ describe("flattenBoard — needsReview seam", () => {
     const merged = mergeContacts(derived, manual);
     expect(merged.map((c) => c.name).sort()).toEqual(["Jordan L.", "dana"]);
     expect(merged[0]!.id).toBe("m1"); // manual first
+  });
+
+  it("buildNotifications surfaces offers, interviews, overdue follow-ups and a review summary", () => {
+    const board = boardFromApplications(
+      [
+        app({ threadId: "off", status: "offer", lastActivity: "2026-05-09" }),
+        app({ threadId: "int", status: "interview", lastActivity: "2026-05-09" }),
+        app({ threadId: "old", status: "applied", lastActivity: "2026-04-20" }), // quiet 20 days → follow-up (as no_response)
+        app({ threadId: "fresh", status: "applied", lastActivity: "2026-05-09" }), // quiet 1 day → NOT a follow-up
+        app({ threadId: "low", status: "applied", lastActivity: "2026-05-09", confidence: 0.3 }), // → review summary
+      ],
+      "test",
+    );
+    const rows = flattenBoard(board, defaultOverlay(), now);
+    const ns = buildNotifications(rows, now);
+    const tags = ns.map((n) => n.tag);
+    expect(tags).toContain("Offer");
+    expect(tags).toContain("Interview");
+    expect(tags).toContain("Follow-up");
+    expect(tags).toContain("Review");
+    expect(ns.find((n) => n.tag === "Follow-up")!.appId).toBe("old");
+    expect(ns.some((n) => n.appId === "fresh")).toBe(false);
+    expect(ns.length).toBeLessThanOrEqual(6);
+    // Empty pipeline → no notifications (bell shows no dot).
+    expect(buildNotifications([], now)).toEqual([]);
   });
 
   it("companyCards groups a company's positions into .apps (drives the expandable card)", () => {

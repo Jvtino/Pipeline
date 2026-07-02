@@ -6,7 +6,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { Screen, Plan } from "./types";
 import { STATUS, styleFor, type UiStatus } from "./lib/status";
 import { tintFor, monogram, initials } from "./lib/avatar";
-import { donutSegments, DONUT_C, type DonutSegment } from "./lib/derive";
+import { donutSegments, DONUT_C, type DonutSegment, type Notification } from "./lib/derive";
 import type { UiApplication } from "./types";
 import {
   Logo,
@@ -340,6 +340,8 @@ export function Header({
   syncing,
   onSync,
   onNewApp,
+  notifications,
+  onOpenApp,
 }: {
   title: string;
   q: string;
@@ -349,7 +351,26 @@ export function Header({
   syncing: boolean;
   onSync: () => void;
   onNewApp: () => void;
+  notifications: Notification[];
+  onOpenApp: (appId: string) => void;
 }) {
+  const [bellOpen, setBellOpen] = useState(false);
+  const bellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!bellOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setBellOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [bellOpen]);
   const connectedLabel =
     connectedCount > 0 ? `Connected: ${connectedCount} E-mail${connectedCount === 1 ? "" : "s"}` : "No mailbox connected";
   return (
@@ -377,10 +398,30 @@ export function Header({
         <IconPlus size={15} />
         New Application
       </button>
-      <button className="iconbtn" aria-label="Notifications">
-        <IconBell size={17} color="#6f685d" />
-        <span className="bell-dot" />
-      </button>
+      <div ref={bellRef} style={{ position: "relative" }}>
+        <button className="iconbtn" aria-label="Notifications" aria-expanded={bellOpen} onClick={() => setBellOpen((o) => !o)}>
+          <IconBell size={17} color="#6f685d" />
+          {notifications.length > 0 && <span className="bell-dot" />}
+        </button>
+        {bellOpen && (
+          <div className="bell-pop">
+            <div className="bell-pop-head">Notifications</div>
+            {notifications.length === 0 ? (
+              <div style={{ padding: "26px 18px", textAlign: "center", font: "500 12.5px var(--sans)", color: "#a89e8c" }}>You're all caught up.</div>
+            ) : (
+              notifications.map((n) => (
+                <button key={n.id} className="bell-item" onClick={() => { setBellOpen(false); onOpenApp(n.appId); }}>
+                  <span className="bell-tag" style={{ color: n.color, background: n.bg }}>{n.tag}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", font: "600 12.5px var(--sans)", color: "#2a2620", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.title}</span>
+                    <span style={{ display: "block", font: "500 11.5px var(--sans)", color: "var(--muted-2)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.sub}</span>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </header>
   );
 }

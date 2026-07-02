@@ -336,6 +336,38 @@ input, select, button, textarea { font-family: inherit; }
   background: #c06a57; border: 1.5px solid #fff;
 }
 
+/* ---- bell notifications popover ------------------------------------------- */
+.bell-pop {
+  position: absolute; top: 46px; right: 0;
+  width: 340px; max-height: 420px; overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-card);
+  box-shadow: 0 14px 40px rgba(34, 31, 26, 0.16);
+  z-index: 40;
+  padding: 6px;
+}
+.bell-pop-head {
+  padding: 10px 12px 8px;
+  font: 600 10px var(--mono);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted-2);
+}
+.bell-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  width: 100%; text-align: left;
+  padding: 10px 12px;
+  background: transparent; border: none; border-radius: 10px;
+  cursor: pointer;
+}
+.bell-item:hover { background: var(--drawer); }
+.bell-tag {
+  flex: 0 0 auto;
+  padding: 3px 8px; border-radius: 7px;
+  font: 600 10px var(--sans);
+  margin-top: 1px;
+}
+
 /* ---- cards ---------------------------------------------------------------- */
 .card {
   background: var(--card);

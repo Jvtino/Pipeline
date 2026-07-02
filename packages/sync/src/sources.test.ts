@@ -71,21 +71,27 @@ describe("graphSource — Outlook fetch mirrors the desktop $search", () => {
     expect(decodeURIComponent(transport.urls[0]!)).toContain("received>=2026-06-08");
   });
 
-  it("retries once with a smaller page when the tenant rejects a large $top on $search", async () => {
-    let firstCall = true;
+  it("requests attachment metadata via $expand (never content)", async () => {
+    const transport = new FakeTransport((url) => (url.includes("junkemail") ? { value: [] } : { value: [] }));
+    await graphSource("tok", transport).fetch({});
+    const url = decodeURIComponent(transport.urls[0]!);
+    expect(url).toContain("$expand=attachments($select=name,contentType,size,isInline)");
+    expect(url).toContain("hasAttachments");
+  });
+
+  it("recovers in two steps: drops $expand, then shrinks the page — attachments never fail a sync", async () => {
     const transport = new FakeTransport((url) => {
       if (url.includes("junkemail")) return { value: [] };
-      if (firstCall && url.includes("$top=100")) {
-        firstCall = false;
-        return { error: { message: "$top too large for $search" } };
-      }
+      if (url.includes("$expand")) return { error: { message: "$expand is not supported with $search" } };
+      if (url.includes("$top=100")) return { error: { message: "$top too large for $search" } };
       return { value: [msg("1", "c1", "Your application to Acme", "x@greenhouse.io")] };
     });
 
     const { threads } = await graphSource("tok", transport).fetch({});
 
-    expect(transport.urls.some((u) => u.includes("$top=100"))).toBe(true); // tried the big page
-    expect(transport.urls.some((u) => u.includes("$top=25"))).toBe(true); // retried smaller
+    expect(transport.urls.some((u) => u.includes("%24expand") || u.includes("$expand"))).toBe(true); // tried expand
+    expect(transport.urls.some((u) => !u.includes("$expand") && u.includes("$top=100"))).toBe(true); // dropped expand
+    expect(transport.urls.some((u) => !u.includes("$expand") && u.includes("$top=25"))).toBe(true); // then shrank the page
     expect(threads.length).toBe(1); // and still returned the results
   });
 });

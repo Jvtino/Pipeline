@@ -164,7 +164,10 @@ export function gmailSource(token: string, transport: HttpTransport = fetchTrans
 const GRAPH_KEYWORDS =
   "application OR applying OR interview OR candidacy OR candidate OR recruiting OR position OR offer";
 const GRAPH_FROM = SENDER_DOMAINS.map((d) => `from:${d}`).join(" OR ");
-const GRAPH_SELECT = "subject,from,receivedDateTime,bodyPreview,conversationId";
+const GRAPH_SELECT = "subject,from,receivedDateTime,bodyPreview,conversationId,hasAttachments";
+// Attachment METADATA only (never content) for the Files/Documents views. Some
+// tenants reject $expand combined with $search — the fetch retries without it.
+const GRAPH_EXPAND = "attachments($select=name,contentType,size,isInline)";
 const GRAPH_MAX_MESSAGES = 1000;
 const GRAPH_BACKFILL_DAYS = 365;
 const GRAPH_OVERLAP_DAYS = 7; // re-search window behind the cursor (late arrivals, clock skew)
@@ -180,9 +183,10 @@ function graphKql(sinceIso: string): string {
   return `received>=${sinceIso} AND (${GRAPH_KEYWORDS} OR ${GRAPH_FROM})`;
 }
 
-function graphSearchUrl(kql: string, top: number, folderPrefix: string): string {
+function graphSearchUrl(kql: string, top: number, folderPrefix: string, expand = true): string {
   const search = encodeURIComponent(`"${kql}"`);
-  return `https://graph.microsoft.com/v1.0/me/${folderPrefix}messages?$search=${search}&$select=${GRAPH_SELECT}&$top=${top}`;
+  const expandParam = expand ? `&$expand=${GRAPH_EXPAND}` : "";
+  return `https://graph.microsoft.com/v1.0/me/${folderPrefix}messages?$search=${search}&$select=${GRAPH_SELECT}${expandParam}&$top=${top}`;
 }
 
 async function graphSearchMessages(token: string, t: HttpTransport, kql: string): Promise<any[]> {
@@ -197,14 +201,18 @@ async function graphSearchMessages(token: string, t: HttpTransport, kql: string)
     }
   };
   // Whole mailbox, paged via @odata.nextLink.
+  let expand = true;
   let url = graphSearchUrl(kql, 100, "");
   let smalledTop = false;
   while (url && all.length < GRAPH_MAX_MESSAGES) {
     const data = await t.getJson(url, token);
-    // Some tenants reject a large $top on $search — retry the page once smaller.
+    // Errors are recoverable in two steps: some tenants reject $expand with
+    // $search (drop the expand — attachments must never fail a sync), and some
+    // reject a large $top (retry the page once smaller).
     // (fetchTransport doesn't throw on HTTP errors; it returns the error envelope.)
     if (data.error) {
-      if (!smalledTop) { smalledTop = true; url = graphSearchUrl(kql, 25, ""); continue; }
+      if (expand) { expand = false; url = graphSearchUrl(kql, 100, "", false); continue; }
+      if (!smalledTop) { smalledTop = true; url = graphSearchUrl(kql, 25, "", false); continue; }
       break; // return what we have rather than fail the whole sync
     }
     add(data);
@@ -213,7 +221,7 @@ async function graphSearchMessages(token: string, t: HttpTransport, kql: string)
   // Junk folder — consumer (Outlook.com / live / hotmail) accounts often miss it
   // in the main search. Well-known folder id "junkemail" works for personal mailboxes.
   try {
-    const junk = await t.getJson(graphSearchUrl(kql, 50, "mailFolders/junkemail/"), token);
+    const junk = await t.getJson(graphSearchUrl(kql, 50, "mailFolders/junkemail/", expand), token);
     if (!junk.error) add(junk);
   } catch {
     /* non-fatal — junk folder unavailable */

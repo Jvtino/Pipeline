@@ -44,6 +44,7 @@ export function isoFromInternal(ms: string | number | null | undefined, fallback
 }
 
 interface GmailMessage {
+  id?: string;
   internalDate?: string | number;
   snippet?: string;
   payload?: { headers?: { name?: string; value?: string }[] };
@@ -58,6 +59,7 @@ export function mapGmailThread(thread: GmailThread): Thread {
     const hs = m.payload?.headers ?? [];
     const frm = header(hs, "From");
     return {
+      id: m.id,
       date: isoFromInternal(m.internalDate, header(hs, "Date")),
       from: frm || "unknown",
       domain: domainOf(frm),
@@ -67,7 +69,8 @@ export function mapGmailThread(thread: GmailThread): Thread {
   });
   rows.sort((a, b) => a.date.localeCompare(b.date));
   const first = rows[0];
-  const messages: Message[] = rows.map((r) => ({ date: r.date, from: r.from, body: r.body }));
+  // No attachments: the metadata-format fetch carries no MIME parts (Graph does).
+  const messages: Message[] = rows.map((r) => ({ date: r.date, from: r.from, body: r.body, ...(r.id ? { id: r.id } : {}) }));
   return {
     threadId: thread.id ?? "",
     domain: first?.domain ?? "unknown",
@@ -83,6 +86,12 @@ export function isoDate(s: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? isoFromDate(new Date()) : isoFromDate(d);
 }
 
+interface GraphAttachment {
+  name?: string;
+  contentType?: string;
+  size?: number;
+  isInline?: boolean;
+}
 interface GraphMessage {
   id?: string;
   conversationId?: string;
@@ -90,10 +99,19 @@ interface GraphMessage {
   receivedDateTime?: string;
   bodyPreview?: string;
   from?: { emailAddress?: { name?: string; address?: string } };
+  attachments?: GraphAttachment[];
+}
+
+/** Attachment METADATA only; unnamed and inline (signature images…) parts are dropped. */
+function mapAttachments(list: GraphAttachment[] | undefined): Message["attachments"] {
+  const named = (list ?? []).filter((a) => a.name && !a.isInline);
+  if (!named.length) return undefined;
+  return named.map((a) => ({ name: a.name!, contentType: a.contentType ?? null, size: a.size ?? null }));
 }
 
 export function mapGraphMessagesToThreads(messages: GraphMessage[] | null | undefined): Thread[] {
-  const groups = new Map<string, { date: string; from: string; domain: string; subject: string; body: string }[]>();
+  type Row = { date: string; from: string; domain: string; subject: string; body: string; id?: string; attachments?: Message["attachments"] };
+  const groups = new Map<string, Row[]>();
   let counter = 0;
   for (const m of messages ?? []) {
     const conv = m.conversationId || m.id || `g${counter++}`;
@@ -101,12 +119,15 @@ export function mapGraphMessagesToThreads(messages: GraphMessage[] | null | unde
     const addr = ea.address ?? "";
     const name = ea.name ?? addr;
     const from = addr && name && name !== addr ? `${name} <${addr}>` : addr || name || "unknown";
-    const row = {
+    const attachments = mapAttachments(m.attachments);
+    const row: Row = {
       date: isoDate(m.receivedDateTime),
       from,
       domain: domainOf(addr),
       subject: m.subject || "(no subject)",
       body: clean(m.bodyPreview),
+      ...(m.id ? { id: m.id } : {}),
+      ...(attachments ? { attachments } : {}),
     };
     const arr = groups.get(conv);
     if (arr) arr.push(row);
@@ -121,7 +142,13 @@ export function mapGraphMessagesToThreads(messages: GraphMessage[] | null | unde
       threadId: conv,
       domain: first.domain,
       subject: first.subject,
-      messages: rows.map((r) => ({ date: r.date, from: r.from, body: r.body })),
+      messages: rows.map((r) => ({
+        date: r.date,
+        from: r.from,
+        body: r.body,
+        ...(r.id ? { id: r.id } : {}),
+        ...(r.attachments ? { attachments: r.attachments } : {}),
+      })),
     });
   }
   threads.sort((a, b) => {

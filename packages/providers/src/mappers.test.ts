@@ -10,14 +10,19 @@ import {
   mapGraphMessagesToThreads,
 } from "./mappers";
 
-// Every provider must emit exactly { threadId, domain, subject, messages:[{date,from,body}] }.
+// Every provider must emit { threadId, domain, subject, messages:[{date,from,body}] };
+// `id` and `attachments` (metadata only) are the only optional extras allowed.
+const MESSAGE_KEYS = new Set(["body", "date", "from", "id", "attachments"]);
 function assertThreadShape(t: Thread) {
   expect(typeof t.threadId).toBe("string");
   expect(t.threadId.length).toBeGreaterThan(0);
   expect(Array.isArray(t.messages) && t.messages.length > 0).toBe(true);
   for (const m of t.messages) {
     expect(m.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(Object.keys(m).sort()).toEqual(["body", "date", "from"]);
+    const extra = Object.keys(m).filter((k) => !MESSAGE_KEYS.has(k));
+    expect(extra).toEqual([]);
+    expect(typeof m.body).toBe("string");
+    expect(typeof m.from).toBe("string");
   }
 }
 
@@ -58,11 +63,13 @@ describe("Gmail mapper", () => {
       id: "thr1",
       messages: [
         {
+          id: "gm-2",
           internalDate: "1718000000000",
           snippet: "we'd like to schedule a call",
           payload: { headers: [{ name: "From", value: "Recruiting <rec@acme.com>" }, { name: "Subject", value: "Re: Engineer" }] },
         },
         {
+          id: "gm-1",
           internalDate: "1717200000000",
           snippet: "thank you for applying",
           payload: { headers: [{ name: "From", value: "Careers <careers@acme.com>" }, { name: "Subject", value: "Engineer" }] },
@@ -74,6 +81,7 @@ describe("Gmail mapper", () => {
     expect(t.domain).toBe("acme.com");
     expect(t.subject).toBe("Engineer");
     expect(t.messages.map((m) => m.date)).toEqual(["2024-06-01", "2024-06-10"]);
+    expect(t.messages.map((m) => m.id)).toEqual(["gm-1", "gm-2"]); // provider ids ride along
   });
 
   it("handles missing snippet/headers", () => {
@@ -129,5 +137,36 @@ describe("Microsoft Graph mapper", () => {
     const t = mapGraphMessagesToThreads([{ conversationId: "z", receivedDateTime: "2026-01-01T00:00:00Z" }]);
     expect(t[0]!.domain).toBe("unknown");
     expect(t[0]!.subject).toBe("(no subject)");
+  });
+
+  it("carries the message id and attachment METADATA; inline/unnamed parts are dropped", () => {
+    const t = mapGraphMessagesToThreads([
+      {
+        id: "msg-1",
+        conversationId: "c1",
+        subject: "Offer",
+        receivedDateTime: "2026-06-15T10:00:00Z",
+        from: { emailAddress: { address: "talent@contoso.com" } },
+        bodyPreview: "offer attached",
+        attachments: [
+          { name: "Offer Letter.pdf", contentType: "application/pdf", size: 84213 },
+          { name: "logo.png", contentType: "image/png", size: 900, isInline: true }, // signature image
+          { contentType: "application/octet-stream" }, // unnamed
+        ],
+      },
+      {
+        id: "msg-2",
+        conversationId: "c1",
+        subject: "Re: Offer",
+        receivedDateTime: "2026-06-16T10:00:00Z",
+        from: { emailAddress: { address: "talent@contoso.com" } },
+        bodyPreview: "no attachment here",
+      },
+    ]);
+    const [withAtt, without] = t[0]!.messages;
+    expect(withAtt!.id).toBe("msg-1");
+    expect(withAtt!.attachments).toEqual([{ name: "Offer Letter.pdf", contentType: "application/pdf", size: 84213 }]);
+    expect(without!.id).toBe("msg-2");
+    expect(without!.attachments).toBeUndefined(); // absent, not an empty array
   });
 });

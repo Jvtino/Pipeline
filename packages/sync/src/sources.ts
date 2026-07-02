@@ -5,7 +5,7 @@
 // structured to match providers.py / the desktop fetchers. A token is passed in;
 // the caller refreshes via @pipeline/providers.validAccessToken first.
 import { mapGmailThread, mapGraphMessagesToThreads, fetchTransport, type HttpTransport } from "@pipeline/providers";
-import { ATS_SENDER_DOMAINS } from "@pipeline/classify";
+import { ATS_SENDER_DOMAINS, STAFFING_SENDER_DOMAINS } from "@pipeline/classify";
 import type { Thread } from "@pipeline/contracts";
 import type { MailSource, FetchResult } from "./engine";
 
@@ -22,7 +22,10 @@ const DAY_MS = 86_400_000;
 // plus application-context phrases, including the offer/position-filled wording
 // the gate keeps (JOB_APPLICATION_RE has "offer letter" / "pleased to offer" /
 // "position has been filled").
-const GMAIL_FROM = ATS_SENDER_DOMAINS.map((d) => `from:${d}`).join(" OR ");
+// Staffing agencies join the from: net too — their application mail comes from
+// their own domain and often carries none of the phrase keywords below.
+const SENDER_DOMAINS = [...ATS_SENDER_DOMAINS, ...STAFFING_SENDER_DOMAINS];
+const GMAIL_FROM = SENDER_DOMAINS.map((d) => `from:${d}`).join(" OR ");
 const GMAIL_Q =
   "in:anywhere newer_than:1y (" +
   GMAIL_FROM + " OR " +
@@ -160,7 +163,7 @@ export function gmailSource(token: string, transport: HttpTransport = fetchTrans
 // of old keyword matches from crowding new mail out of the result cap.
 const GRAPH_KEYWORDS =
   "application OR applying OR interview OR candidacy OR candidate OR recruiting OR position OR offer";
-const GRAPH_FROM = ATS_SENDER_DOMAINS.map((d) => `from:${d}`).join(" OR ");
+const GRAPH_FROM = SENDER_DOMAINS.map((d) => `from:${d}`).join(" OR ");
 const GRAPH_SELECT = "subject,from,receivedDateTime,bodyPreview,conversationId";
 const GRAPH_MAX_MESSAGES = 1000;
 const GRAPH_BACKFILL_DAYS = 365;

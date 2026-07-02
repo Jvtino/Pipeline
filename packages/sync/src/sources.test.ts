@@ -56,6 +56,7 @@ describe("graphSource — Outlook fetch mirrors the desktop $search", () => {
     const kql = decodeURIComponent(transport.urls[0]!);
     expect(kql).toContain("from:greenhouse.io");
     expect(kql).toContain("from:recruitee.com"); // one of the previously-missing platforms
+    expect(kql).toContain("from:roberthalf.com"); // staffing agencies mail from their own domain
   });
 
   it("date-bounds the search: 1y on backfill, from the saved cursor (minus overlap) after", async () => {

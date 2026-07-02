@@ -241,6 +241,7 @@ export function looksLikeJobApplication(thread: Pick<Thread, "domain" | "subject
 const NAME_MAP: Record<string, string> = {
   datadoghq: "Datadog", notion: "Notion", spotify: "Spotify", figma: "Figma",
   vercel: "Vercel", airbnb: "Airbnb", amazon: "Amazon", google: "Google", stripe: "Stripe",
+  roberthalf: "Robert Half", rhi: "Robert Half", teksystems: "TEKsystems", kellyservices: "Kelly Services",
 };
 
 // Two-level public suffixes, so the registrable label is taken correctly for ccTLDs.
@@ -295,6 +296,30 @@ export const ATS_SENDER_DOMAINS: readonly string[] = [
   "jobscore.com", "freshteam.com", "zohorecruit.com",
   "indeed.com", "linkedin.com", "glassdoor.com", "ziprecruiter.com",
   "wellfound.com", "angellist.com",
+];
+
+/**
+ * Staffing / recruiting agencies. Unlike ATS platforms, the agency IS the
+ * counterparty the candidate corresponds with, so the company card should be
+ * named after the agency itself — deliberately NOT in ATS_DOMAINS (the smart
+ * cascade must not override the agency with a client-company name). They join
+ * the sync prefilter via STAFFING_SENDER_DOMAINS so their mail is fetched at
+ * all; relevance is still decided by the content gate (agencies also send
+ * job-alert digests that must not become applications). Superset rule as with
+ * ATS_SENDER_DOMAINS: every sender domain must satisfy isStaffingDomain()
+ * (asserted in relevance.test.ts).
+ */
+const STAFFING_DOMAINS = new Set([
+  "roberthalf", "rhi", "hays", "randstad", "adecco", "kellyservices", "aerotek", "teksystems",
+]);
+
+export function isStaffingDomain(domain: string | null | undefined): boolean {
+  return STAFFING_DOMAINS.has(rootName(domain));
+}
+
+export const STAFFING_SENDER_DOMAINS: readonly string[] = [
+  "roberthalf.com", "rhi.com", "hays.com", "randstad.com",
+  "adecco.com", "kellyservices.com", "aerotek.com", "teksystems.com",
 ];
 
 // Platform brand words that must never be returned as a company name.

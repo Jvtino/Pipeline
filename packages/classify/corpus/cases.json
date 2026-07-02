@@ -88,7 +88,8 @@
     { "domain": "greenhouse.io", "from": "no-reply@greenhouse.io", "subject": "Update", "body": "Your application to Globex has been received.", "expected": "Globex" },
     { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was sent", "body": "Your application was sent to Acme Corp.", "expected": "Acme Corp" },
     { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Başvurunuz Acme şirketine gönderildi", "body": "", "expected": "Acme", "lang": "tr" },
-    { "domain": "initech.fa.us2.oraclecloud.com", "from": "Initech Careers <no-reply@initech.fa.us2.oraclecloud.com>", "subject": "Thank you for applying to Initech - Software Engineer", "body": "Your application has been received.", "expected": "Initech" }
+    { "domain": "initech.fa.us2.oraclecloud.com", "from": "Initech Careers <no-reply@initech.fa.us2.oraclecloud.com>", "subject": "Thank you for applying to Initech - Software Engineer", "body": "Your application has been received.", "expected": "Initech" },
+    { "domain": "email.roberthalf.com", "from": "Robert Half <donotreply@email.roberthalf.com>", "subject": "Thank you for applying to Senior Accountant", "body": "Your application has been received and a recruiter will review it shortly.", "expected": "Robert Half" }
   ],
   "_comment_companySmart": "TS-only (resolveCompanySmart in aggregate.ts) — signals the parity-gated base resolver does not have (ATS apply/tenant URLs). Not read by the parity gate.",
   "companySmart": [
@@ -101,7 +102,11 @@
     { "domain": "careers.acme.co.uk", "expected": "Acme" },
     { "domain": "jobs.acme.com.au", "expected": "Acme" },
     { "domain": "mail.notion.so", "expected": "Notion" },
-    { "domain": "oraclecloud.com", "expected": "Oraclecloud" }
+    { "domain": "oraclecloud.com", "expected": "Oraclecloud" },
+    { "domain": "email.roberthalf.com", "expected": "Robert Half" },
+    { "domain": "rhi.com", "expected": "Robert Half" },
+    { "domain": "teksystems.com", "expected": "TEKsystems" },
+    { "domain": "kellyservices.com", "expected": "Kelly Services" }
   ],
   "companyFromSenderName_null": [
     { "from": "Greenhouse <no-reply@greenhouse.io>" },

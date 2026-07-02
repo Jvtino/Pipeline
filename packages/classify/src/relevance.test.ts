@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { looksLikeJobApplication, isAtsDomain, ATS_SENDER_DOMAINS } from "./index";
+import { looksLikeJobApplication, isAtsDomain, ATS_SENDER_DOMAINS, isStaffingDomain, STAFFING_SENDER_DOMAINS } from "./index";
 import type { Thread } from "./index";
 
 const thread = (domain: string, subject: string, ...bodies: string[]): Thread => ({
@@ -56,6 +56,20 @@ describe("@pipeline/classify — looksLikeJobApplication", () => {
     for (const domain of ATS_SENDER_DOMAINS) {
       expect(isAtsDomain(domain), `${domain} is not an ATS domain the gate recognises`).toBe(true);
     }
+  });
+
+  // Staffing agencies (Robert Half, Hays, …) correspond from their own domain, so
+  // the prefilter must fetch them — but like job boards they also send job-alert
+  // digests, so their domain alone can't imply an application: content decides.
+  it("STAFFING_SENDER_DOMAINS stays aligned with isStaffingDomain", () => {
+    for (const domain of STAFFING_SENDER_DOMAINS) {
+      expect(isStaffingDomain(domain), `${domain} is not a staffing domain the code recognises`).toBe(true);
+    }
+  });
+
+  it("keeps staffing-agency application mail, drops their job-alert digests", () => {
+    expect(looksLikeJobApplication(thread("email.roberthalf.com", "Thank you for applying", "Your application has been received and a recruiter will review it shortly."))).toBe(true);
+    expect(looksLikeJobApplication(thread("email.roberthalf.com", "New jobs for you", "12 new jobs match your saved search. Browse them now."))).toBe(false);
   });
 
   // Job boards (LinkedIn, Indeed, …) email heavy NON-application content — profile

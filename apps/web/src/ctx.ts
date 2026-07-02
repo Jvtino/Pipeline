@@ -7,16 +7,13 @@ import type { Mailbox } from "./api";
 export interface Ctx {
   apps: UiApplication[]; // flattened + overlaid, newest activity first
   overlay: Overlay;
-  newIds: Set<string>; // ids flagged NEW (post-sync / post-add), auto-clears
   nowMs: number;
   me: Plan | null;
   email: string;
   mailboxes: Mailbox[]; // really-connected mailboxes from /api/connections
 
-  // header search + applications filter
+  // header search
   q: string;
-  appTab: UiStatus | "all";
-  setAppTab: (t: UiStatus | "all") => void;
 
   // navigation / overlays
   goto: (s: Screen) => void;

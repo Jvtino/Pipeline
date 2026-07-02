@@ -10,7 +10,7 @@
 # ============================================================================
 
 REPO_URL="https://github.com/Jvtino/Pipeline.git"
-BRANCH="claude/ui-pipeline-merge-o2duyr"   # the branch with the new UI + sync
+BRANCH="main"                               # the redesign ships on main
 APP_DIR="$HOME/Pipeline"
 WEB_URL="http://localhost:5173"
 DESK_APP="$HOME/Desktop/Pipeline.app"
@@ -111,7 +111,9 @@ API_PID=$!
 pnpm_run --filter @pipeline/web dev > "$HOME/Library/Logs/PipelinePreview-web.log" 2>&1 &
 WEB_PID=$!
 
-cleanup() { echo "=== stopping ==="; kill "$API_PID" "$WEB_PID" 2>/dev/null; pkill -f "tsx src/server.ts" 2>/dev/null; pkill -f "vite" 2>/dev/null; exit 0; }
+# pkill patterns are scoped to THIS checkout's node_modules so another project's
+# vite/tsx dev servers are never touched.
+cleanup() { echo "=== stopping ==="; kill "$API_PID" "$WEB_PID" 2>/dev/null; pkill -f "$APP_DIR/.*tsx.*src/server.ts" 2>/dev/null; pkill -f "$APP_DIR/.*vite" 2>/dev/null; exit 0; }
 trap cleanup EXIT INT TERM
 
 # ---- Wait for both servers, then open the browser ---------------------------

@@ -1,12 +1,12 @@
 // Application detail drawer — right-docked, slides in over a scrim. Tabs:
 // Overview (next step + move stage + progress timeline + details), Notes,
 // Contacts, Files. Notes/contacts/files read & write the client overlay.
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Ctx } from "./ctx";
 import type { UiApplication, WorkType } from "./types";
 import { STATUS, MOVE_STAGES, type UiStatus } from "./lib/status";
 import { shortDate } from "./lib/format";
-import { CompanyAvatar, PersonAvatar, StatusPill, NeedsReviewBadge } from "./components";
+import { CompanyAvatar, PersonAvatar, StatusPill, NeedsReviewBadge, ExpandMorph } from "./components";
 import { DocBadge } from "./screens";
 import { IconX, IconClock, IconCheck, IconDownload } from "./lib/icons";
 
@@ -45,34 +45,20 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
   const [cTitle, setCTitle] = useState("");
   const [cEmail, setCEmail] = useState("");
   const raf = useRef(0);
-  const closing = useRef(false); // expand mode: a reverse-morph is in flight
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
-  // In expand mode (opened from a card) we collapse back into the source rect
-  // before unmounting; the right-docked drawer just unmounts. Backdrop + close
-  // button + Escape all route through here.
-  const beginClose = () => {
-    if (from) { closing.current = true; setEnter(false); }
-    else closeRef.current();
-  };
-
-  const EASE = "cubic-bezier(.32,.72,0,1)"; // iOS panel easing (matches the company card)
-  const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-
+  // The right-docked mode drives its own enter class + Escape handling; in
+  // expand mode the shared ExpandMorph owns geometry, Escape and the reverse
+  // morph, so this effect only handles the docked case.
   useEffect(() => {
-    // paint the start (square) geometry for one frame, then transition open
     raf.current = requestAnimationFrame(() => { raf.current = requestAnimationFrame(() => setEnter(true)); });
+    if (from) return () => cancelAnimationFrame(raf.current);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (from) { closing.current = true; setEnter(false); e.stopImmediatePropagation(); } // don't also close the company panel behind us
-      else closeRef.current();
+      if (e.key === "Escape") closeRef.current();
     };
-    // capture phase so we win over the company panel's own Escape handler
-    const opts: AddEventListenerOptions | undefined = from ? { capture: true } : undefined;
-    window.addEventListener("keydown", onKey, opts);
-    return () => { cancelAnimationFrame(raf.current); window.removeEventListener("keydown", onKey, opts); };
+    window.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(raf.current); window.removeEventListener("keydown", onKey); };
   }, [from]);
 
   const s = STATUS[app.status];
@@ -99,7 +85,7 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
     setCEmail("");
   };
 
-  const content = (
+  const content = (close: () => void) => (
     <>
       <div className="drawer-head">
           <CompanyAvatar name={app.company} size={46} radius={13} font={18} />
@@ -108,7 +94,7 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
             <div style={{ font: "500 13px var(--sans)", color: "#7a7468", marginTop: 1 }}>{app.role}</div>
           </div>
           <StatusPill status={app.status} />
-          <button className="iconbtn" style={{ width: 32, height: 32, border: "none", background: "transparent", color: "var(--muted-2)" }} onClick={beginClose} aria-label="Close">
+          <button className="iconbtn" style={{ width: 32, height: 32, border: "none", background: "transparent", color: "var(--muted-2)" }} onClick={close} aria-label="Close">
             <IconX size={17} />
           </button>
         </div>
@@ -166,7 +152,7 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
               {/* timeline */}
               <div className="eyebrow" style={{ margin: "22px 0 14px" }}>Application progress</div>
               {timelineFor(app).map((e, i, arr) => {
-                const color = e.state === "done" ? "#2f9266" : e.state === "rejected" ? "#c06a57" : e.state === "current" ? s.dot : null;
+                const color = e.state === "done" ? STATUS.offer.dot : e.state === "rejected" ? STATUS.rejected.dot : e.state === "current" ? s.dot : null;
                 return (
                   <div key={i} style={{ display: "flex", gap: 14 }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "0 0 auto" }}>
@@ -314,48 +300,26 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
     </>
   );
 
-  // Opened from a card (Applications) → Apple-style expand: the tapped row
-  // morphs into a centered panel over a dimmed backdrop, and collapses back
-  // into the row on close. Matches the company square's open animation.
+  // Opened from a card (Applications) → Apple-style expand via the shared
+  // ExpandMorph (the same animation as the company square, so they can't drift).
   if (from) {
-    const W = Math.min(560, vw - 40);
-    const H = Math.min(760, vh - 56);
-    const geo: CSSProperties = enter
-      ? { top: Math.max(24, (vh - H) / 2), left: (vw - W) / 2, width: W, height: H, borderRadius: 22 }
-      : { top: from.top, left: from.left, width: from.width, height: from.height, borderRadius: 12 };
     return (
-      <>
-        <div onClick={beginClose} style={{ position: "fixed", inset: 0, zIndex: 47, background: "rgba(34,31,26,.34)", opacity: enter ? 1 : 0, transition: `opacity .44s ${EASE}` }} />
-        <div
-          onTransitionEnd={(e) => { if (closing.current && e.propertyName === "width") closeRef.current(); }}
-          style={{
-            position: "fixed",
-            zIndex: 48,
-            background: "var(--drawer)",
-            border: "1px solid rgba(34,31,26,.08)",
-            overflow: "hidden",
-            boxShadow: enter ? "0 40px 90px rgba(34,31,26,.30)" : "0 2px 8px rgba(34,31,26,.10)",
-            transition: `top .46s ${EASE}, left .46s ${EASE}, width .46s ${EASE}, height .46s ${EASE}, border-radius .46s ${EASE}, box-shadow .46s ${EASE}`,
-            willChange: "top,left,width,height",
-            display: "flex",
-            flexDirection: "column",
-            ...geo,
-          }}
-        >
-          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", opacity: enter ? 1 : 0, transition: `opacity .28s ease ${enter ? ".14s" : "0s"}` }}>
-            {content}
+      <ExpandMorph from={from} height={760} vhMargin={56} zIndex={47} background="var(--drawer)" captureEscape onClosed={() => closeRef.current()}>
+        {(beginClose, morphEnter) => (
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", opacity: morphEnter ? 1 : 0, transition: `opacity .28s ease ${morphEnter ? ".14s" : "0s"}` }}>
+            {content(beginClose)}
           </div>
-        </div>
-      </>
+        )}
+      </ExpandMorph>
     );
   }
 
   // Default (Dashboard, Calendar, …) → the familiar right-docked drawer.
   return (
     <>
-      <div className={`scrim pl-fade${enter ? " enter" : ""}`} style={{ zIndex: 35, background: "rgba(34,31,26,.3)" }} onClick={beginClose} />
+      <div className={`scrim pl-fade${enter ? " enter" : ""}`} style={{ zIndex: 35, background: "rgba(34,31,26,.3)" }} onClick={() => closeRef.current()} />
       <div className={`drawer pl-drawer${enter ? " enter" : ""}`} style={{ zIndex: 36 }}>
-        {content}
+        {content(() => closeRef.current())}
       </div>
     </>
   );

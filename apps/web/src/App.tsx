@@ -58,11 +58,9 @@ export function App() {
 
   const [nav, setNav] = useState<Screen>("dashboard");
   const [q, setQ] = useState("");
-  const [appTab, setAppTab] = useState<UiStatus | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailFrom, setDetailFrom] = useState<DOMRect | null>(null); // when set, the detail expands from this rect (Apple-style); null → right-docked drawer
   const [modalOpen, setModalOpen] = useState(false);
-  const [newIds, setNewIds] = useState<Set<string>>(new Set());
 
   const [viewState, setViewState] = useState<ViewState>("loading");
   const [syncing, setSyncing] = useState(false);
@@ -168,16 +166,6 @@ export function App() {
   }, []);
   const onNewApp = useCallback(() => setModalOpen(true), []);
 
-  const flagNew = useCallback((ids: string[]) => {
-    if (!ids.length) return;
-    setNewIds((prev) => new Set([...prev, ...ids]));
-    window.setTimeout(() => setNewIds((prev) => {
-      const next = new Set(prev);
-      for (const id of ids) next.delete(id);
-      return next;
-    }), 5000);
-  }, []);
-
   // A sync round is only a success for the mailboxes that actually synced — the
   // API returns per-connection outcomes, and "reauth required" must never read
   // as "Synced 1 mailbox(es)." while the board quietly goes stale.
@@ -197,13 +185,9 @@ export function App() {
       const res = await runSync();
       const nextBoard = await getBoard();
       setBoard(nextBoard);
-      // Flag rows that appeared as a result of the sync.
+      // Jump to Applications when the sync produced new rows.
       const found = nextBoard.groups.flatMap((g) => g.applications.map((a) => a.threadId)).filter((id) => !before.has(id));
-      if (found.length) {
-        flagNew(found);
-        setNav("applications");
-        setAppTab("all");
-      }
+      if (found.length) setNav("applications");
       if (!res.connections) {
         flash("No mailbox connected yet — connect one in Settings.");
       } else {
@@ -218,7 +202,7 @@ export function App() {
     } finally {
       setSyncing(false);
     }
-  }, [syncing, apps, flash, flagNew]);
+  }, [syncing, apps, flash]);
   onSyncRef.current = () => void onSync();
 
   // Clear synced applications and re-scan the mailbox from scratch — recovery for
@@ -241,7 +225,6 @@ export function App() {
         const { ok, failText } = describeFailures(res);
         if (ok > 0) setLastSync(Date.now());
         setNav("applications");
-        setAppTab("all");
         if (!failText) flash(`Rebuilt your board — cleared ${res.removed} stale item(s) and re-scanned ${res.connections} mailbox(es).`);
         else flash(`Cleared ${res.removed} stale item(s), but the re-scan hit a problem — ${failText}.`);
       } else {
@@ -384,22 +367,17 @@ export function App() {
     }));
     setModalOpen(false);
     setNav("applications");
-    setAppTab("all");
-    flagNew([id]);
     flash(`Added ${f.company}`);
-  }, [setOverlay, flagNew, flash]);
+  }, [setOverlay, flash]);
 
   const ctx: Ctx = {
     apps,
     overlay,
-    newIds,
     nowMs,
     me,
     email,
     mailboxes,
     q,
-    appTab,
-    setAppTab,
     goto,
     openDetail,
     onNewApp,

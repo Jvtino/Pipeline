@@ -103,7 +103,12 @@ const NAME_MAP = { datadoghq: "Datadog", notion: "Notion", spotify: "Spotify", f
   roberthalf: "Robert Half", rhi: "Robert Half", teksystems: "TEKsystems", kellyservices: "Kelly Services",
   insightglobal: "Insight Global", michaelpage: "Michael Page", pagegroup: "PageGroup", manpowergroup: "ManpowerGroup",
   ms: "Morgan Stanley", morganstanley: "Morgan Stanley", americanexpress: "American Express",
-  openai: "OpenAI", blackrock: "BlackRock", brownadvisory: "Brown Advisory", fanaticsinc: "Fanatics" };
+  openai: "OpenAI", blackrock: "BlackRock", brownadvisory: "Brown Advisory", fanaticsinc: "Fanatics",
+  mckinsey: "McKinsey", generalatlantic: "General Atlantic", td: "TD", rsm: "RSM", rsmus: "RSM",
+  dhs: "DHS", jetblue: "JetBlue", lvmh: "LVMH", adp: "ADP", beamliving: "Beam Living",
+  bestfriends: "Best Friends Animal Society", busancapital: "Busan Capital",
+  welcometothejungle: "Welcome to the Jungle", capitalone: "Capital One", eliseai: "EliseAI",
+  usastaffing: "USA Staffing", mokahr: "Moka" };
 
 // Two-level public suffixes, so the registrable label is taken correctly for
 // ccTLDs (e.g. "acme.co.uk" → "acme", not "co"; "acme.com.au" → "acme").
@@ -128,6 +133,7 @@ function companyFromDomain(domain) {
 const ATS_DOMAINS = new Set([
   "greenhouse", "greenhouse-mail", "lever", "workday", "myworkday", "myworkdaysite", "workdayjobs", "myworkdayjobs",
   "linkedin", "jobvite", "icims", "taleo", "oraclecloud", "oracle", "clearcompany", "smartrecruiters", "ashbyhq",
+  "adp", "csod", "mokahr", "usastaffing",
   "breezy", "recruitee", "workable", "bamboohr", "personio",
   "jazzhr", "successfactors", "dayforce", "rippling", "teamtailor",
   "comeet", "dover", "gem", "jobscore", "freshteam", "zohorecruit",
@@ -136,8 +142,17 @@ const ATS_DOMAINS = new Set([
 function isAtsDomain(domain) {
   return ATS_DOMAINS.has(rootName(domain));
 }
+// Freemail + meeting platforms: never the employer — the text cascade decides.
+const NON_EMPLOYER_DOMAINS = new Set([
+  "gmail", "googlemail", "outlook", "hotmail", "live", "yahoo", "ymail",
+  "icloud", "aol", "protonmail", "proton", "gmx", "msn", "mail",
+  "zoom", "calendly",
+]);
+function isNonEmployerDomain(domain) {
+  return NON_EMPLOYER_DOMAINS.has(rootName(domain));
+}
 // Platform brand words that must never be returned as a company name.
-const PLATFORM_WORDS = new Set([...ATS_DOMAINS, "workday", "greenhouse", "lever", "linkedin",
+const PLATFORM_WORDS = new Set([...ATS_DOMAINS, ...NON_EMPLOYER_DOMAINS, "workday", "greenhouse", "lever", "linkedin",
   "indeed", "glassdoor", "ashby", "smartrecruiters", "icims", "taleo", "jobvite", "myworkday",
   "oracle"]); // "Oracle Recruiting" sender on oraclecloud.com mail is the platform, not the employer
 
@@ -147,9 +162,14 @@ function tidy(s) { return String(s || "").replace(/\s+/g, " ").replace(/[\s,;:�
 // to the same display name (so its mail groups into one card).
 function cleanCompanyName(raw) {
   let s = tidy(raw).replace(/[‘’'"]/g, "");
+  // ATS tenant slugs: underscores become spaces ("deutsche_bank_workday"), and a
+  // camelCase platform suffix is dropped ("CapitalOneHRWorkday" → "CapitalOne").
+  s = s.replace(/_+/g, " ").trim();
+  s = s.replace(/(?:HR)?(?:Workday|Greenhouse|Taleo|Icims)$/, "");
   // Strip only unambiguous legal forms (keep "Corp"/"Company"/"Co" — they're often
   // part of the brand, e.g. "Umbrella Corp", "Trader Joe's Company").
   s = s.replace(/\b(inc|incorporated|llc|l\.l\.c|ltd|limited|gmbh|plc|s\.?a\.?|pty|ag|b\.?v\.?|n\.?v\.?|s\.?r\.?l)\.?\b/ig, " ");
+  s = s.replace(/\b(workday|myworkday|greenhouse|lever|taleo|icims|smartrecruiters)\b/ig, " ");
   s = s.replace(/\b(careers?|recruit(?:ing|ment)?|talent(?: acquisition)?|hiring(?: team)?|jobs?|people(?: team| ops)?|human resources|hr|team|notifications?|no[- ]?reply|do[- ]?not[- ]?reply)\b/ig, " ");
   s = s.replace(/[|•·]+/g, " ").replace(/\s{2,}/g, " ").trim();
   s = s.replace(/^[\s.,'"&|•·\-]+|[\s.,'"&|•·\-]+$/g, "");   // trim stray edge punctuation ("Acme, Inc." → "Acme")
@@ -191,9 +211,13 @@ function companyFromAtsLocalPart(from) {
   const m = String(from || "").match(/([A-Za-z0-9][A-Za-z0-9._+-]*)@([A-Za-z0-9.-]+)/);
   if (!m) return null;
   if (!TENANT_LOCAL_ROOTS.has(rootName(m[2]))) return null;
-  const local = m[1].toLowerCase().replace(/\+.*$/, "");
-  if (GENERIC_LOCAL_RE.test(local) || /\d{4,}/.test(local)) return null; // mailbox role or an id, not a name
-  const words = local.replace(/[._-]+/g, " ").trim();
+  // Strip a trailing platform suffix and split camelCase BEFORE case folding —
+  // tenant slugs ("CapitalOneHRWorkday", "deutsche_bank_workday") carry their
+  // word boundaries in the casing.
+  let local = m[1].replace(/\+.*$/, "").replace(/[._-]*(?:hr)?(?:workday|greenhouse|taleo|icims)$/i, "");
+  if (GENERIC_LOCAL_RE.test(local.toLowerCase()) || /\d{4,}/.test(local)) return null; // mailbox role or an id, not a name
+  local = local.replace(/([a-z\d])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+  const words = local.toLowerCase().replace(/[._-]+/g, " ").trim();
   if (!words) return null;
   const pretty = words.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   return acceptCompany(pretty);
@@ -250,7 +274,9 @@ function guessCompanyDomain(company) {
 // Resolve the employer for a whole thread → { company, domain }.
 function resolveCompany(th) {
   const domain = (th && th.domain) || "";
-  if (!isAtsDomain(domain)) {
+  // ATS platforms AND non-employer senders (freemail, meeting platforms) route
+  // through the text cascade — their domain name is never the employer.
+  if (!isAtsDomain(domain) && !isNonEmployerDomain(domain)) {
     return { company: companyFromDomain(domain), domain };
   }
   const msgs = (th && th.messages) || [];

@@ -204,9 +204,9 @@ const JOB_CONTEXT_RE =
 // domain alone doesn't imply an application, so we still require a content signal.
 const NOISY_JOB_BOARDS = new Set([
   "linkedin", "indeed", "glassdoor", "ziprecruiter", "wellfound", "angellist",
-  // oracle.com hosts Oracle Recruiting mail BUT also cloud receipts/newsletters —
-  // recognized as a platform for company resolution, content-gated for relevance.
-  "oracle",
+  // oracle.com and adp.com host recruiting mail BUT also cloud receipts / payroll
+  // mail — recognized as platforms for company resolution, content-gated here.
+  "oracle", "adp",
 ]);
 
 // Alert/digest mail a staffing agency blasts alongside real correspondence.
@@ -267,6 +267,11 @@ const NAME_MAP: Record<string, string> = {
   insightglobal: "Insight Global", michaelpage: "Michael Page", pagegroup: "PageGroup", manpowergroup: "ManpowerGroup",
   ms: "Morgan Stanley", morganstanley: "Morgan Stanley", americanexpress: "American Express",
   openai: "OpenAI", blackrock: "BlackRock", brownadvisory: "Brown Advisory", fanaticsinc: "Fanatics",
+  mckinsey: "McKinsey", generalatlantic: "General Atlantic", td: "TD", rsm: "RSM", rsmus: "RSM",
+  dhs: "DHS", jetblue: "JetBlue", lvmh: "LVMH", adp: "ADP", beamliving: "Beam Living",
+  bestfriends: "Best Friends Animal Society", busancapital: "Busan Capital",
+  welcometothejungle: "Welcome to the Jungle", capitalone: "Capital One", eliseai: "EliseAI",
+  usastaffing: "USA Staffing", mokahr: "Moka",
 };
 
 // Two-level public suffixes, so the registrable label is taken correctly for ccTLDs.
@@ -292,6 +297,7 @@ export function companyFromDomain(domain: string | null | undefined): string {
 const ATS_DOMAINS = new Set([
   "greenhouse", "greenhouse-mail", "lever", "workday", "myworkday", "myworkdaysite", "workdayjobs", "myworkdayjobs",
   "linkedin", "jobvite", "icims", "taleo", "oraclecloud", "oracle", "clearcompany", "smartrecruiters", "ashbyhq",
+  "adp", "csod", "mokahr", "usastaffing",
   "breezy", "recruitee", "workable", "bamboohr", "personio",
   "jazzhr", "successfactors", "dayforce", "rippling", "teamtailor",
   "comeet", "dover", "gem", "jobscore", "freshteam", "zohorecruit",
@@ -314,6 +320,7 @@ export const ATS_SENDER_DOMAINS: readonly string[] = [
   "greenhouse.io", "greenhouse-mail.io", "lever.co", "hire.lever.co",
   "myworkday.com", "myworkdayjobs.com", "myworkdaysite.com", "workday.com",
   "icims.com", "taleo.net", "oraclecloud.com", "oracle.com", "clearcompany.com", "successfactors.com", "smartrecruiters.com",
+  "adp.com", "csod.com", "mokahr.com", "usastaffing.gov",
   "ashbyhq.com", "workable.com", "jobvite.com", "bamboohr.com",
   "breezy.hr", "recruitee.com", "personio.de", "personio.com",
   "jazzhr.com", "applytojob.com", "dayforce.com", "rippling.com",
@@ -322,6 +329,22 @@ export const ATS_SENDER_DOMAINS: readonly string[] = [
   "indeed.com", "linkedin.com", "glassdoor.com", "ziprecruiter.com",
   "wellfound.com", "angellist.com",
 ];
+
+/**
+ * Domains that can never BE the employer: freemail (a recruiter mailing from a
+ * personal address) and meeting platforms (Zoom/Calendly notifications about an
+ * interview). The employer must come from the text; when it can't, the resolver
+ * falls back to the platform name flagged as a fallback — never a merged card.
+ */
+const NON_EMPLOYER_DOMAINS = new Set([
+  "gmail", "googlemail", "outlook", "hotmail", "live", "yahoo", "ymail",
+  "icloud", "aol", "protonmail", "proton", "gmx", "msn", "mail",
+  "zoom", "calendly",
+]);
+
+export function isNonEmployerDomain(domain: string | null | undefined): boolean {
+  return NON_EMPLOYER_DOMAINS.has(rootName(domain));
+}
 
 /**
  * Staffing / recruiting agencies. Unlike ATS platforms, the agency IS the
@@ -337,6 +360,7 @@ export const ATS_SENDER_DOMAINS: readonly string[] = [
 const STAFFING_DOMAINS = new Set([
   "roberthalf", "rhi", "hays", "randstad", "adecco", "kellyservices", "aerotek", "teksystems",
   "manpower", "manpowergroup", "insightglobal", "michaelpage", "pagegroup",
+  "lawrenceharvey", "leveluphcs", "spencerstuart",
 ]);
 
 export function isStaffingDomain(domain: string | null | undefined): boolean {
@@ -347,11 +371,12 @@ export const STAFFING_SENDER_DOMAINS: readonly string[] = [
   "roberthalf.com", "rhi.com", "hays.com", "randstad.com",
   "adecco.com", "kellyservices.com", "aerotek.com", "teksystems.com",
   "manpower.com", "manpowergroup.com", "insightglobal.com", "michaelpage.com", "pagegroup.com",
+  "lawrenceharvey.com", "leveluphcs.com", "spencerstuart.com",
 ];
 
 // Platform brand words that must never be returned as a company name.
 const PLATFORM_WORDS = new Set([
-  ...ATS_DOMAINS, "workday", "greenhouse", "lever", "linkedin",
+  ...ATS_DOMAINS, ...NON_EMPLOYER_DOMAINS, "workday", "greenhouse", "lever", "linkedin",
   "indeed", "glassdoor", "ashby", "smartrecruiters", "icims", "taleo", "jobvite", "myworkday",
   "oracle", // "Oracle Recruiting" sender on oraclecloud.com mail is the platform, not the employer
 ]);
@@ -362,7 +387,12 @@ export function tidy(s: string | null | undefined): string {
 
 export function cleanCompanyName(raw: string | null | undefined): string {
   let s = tidy(raw).replace(/[‘’'"]/g, "");
+  // ATS tenant slugs: underscores become spaces ("deutsche_bank_workday"), and a
+  // camelCase platform suffix is dropped ("CapitalOneHRWorkday" → "CapitalOne").
+  s = s.replace(/_+/g, " ").trim();
+  s = s.replace(/(?:HR)?(?:Workday|Greenhouse|Taleo|Icims)$/, "");
   s = s.replace(/\b(inc|incorporated|llc|l\.l\.c|ltd|limited|gmbh|plc|s\.?a\.?|pty|ag|b\.?v\.?|n\.?v\.?|s\.?r\.?l)\.?\b/gi, " ");
+  s = s.replace(/\b(workday|myworkday|greenhouse|lever|taleo|icims|smartrecruiters)\b/gi, " ");
   s = s.replace(/\b(careers?|recruit(?:ing|ment)?|talent(?: acquisition)?|hiring(?: team)?|jobs?|people(?: team| ops)?|human resources|hr|team|notifications?|no[- ]?reply|do[- ]?not[- ]?reply)\b/gi, " ");
   s = s.replace(/[|•·]+/g, " ").replace(/\s{2,}/g, " ").trim();
   s = s.replace(/^[\s.,'"&|•·\-]+|[\s.,'"&|•·\-]+$/g, "");
@@ -410,9 +440,13 @@ export function companyFromAtsLocalPart(from: string | null | undefined): string
   const m = String(from || "").match(/([A-Za-z0-9][A-Za-z0-9._+-]*)@([A-Za-z0-9.-]+)/);
   if (!m || m[1] === undefined || m[2] === undefined) return null;
   if (!TENANT_LOCAL_ROOTS.has(rootName(m[2]))) return null;
-  const local = m[1].toLowerCase().replace(/\+.*$/, "");
-  if (GENERIC_LOCAL_RE.test(local) || /\d{4,}/.test(local)) return null; // mailbox role or an id, not a name
-  const words = local.replace(/[._-]+/g, " ").trim();
+  // Strip a trailing platform suffix and split camelCase BEFORE case folding —
+  // tenant slugs ("CapitalOneHRWorkday", "deutsche_bank_workday") carry their
+  // word boundaries in the casing.
+  let local = m[1].replace(/\+.*$/, "").replace(/[._-]*(?:hr)?(?:workday|greenhouse|taleo|icims)$/i, "");
+  if (GENERIC_LOCAL_RE.test(local.toLowerCase()) || /\d{4,}/.test(local)) return null; // mailbox role or an id, not a name
+  local = local.replace(/([a-z\d])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+  const words = local.toLowerCase().replace(/[._-]+/g, " ").trim();
   if (!words) return null;
   const pretty = words.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   return acceptCompany(pretty);
@@ -469,7 +503,9 @@ export function guessCompanyDomain(company: string | null | undefined): string {
 /** Resolve the employer for a whole thread → { company, domain }. */
 export function resolveCompany(th: Pick<Thread, "domain" | "subject" | "messages"> | null | undefined): ResolvedCompany {
   const domain = (th && th.domain) || "";
-  if (!isAtsDomain(domain)) {
+  // ATS platforms AND non-employer senders (freemail, meeting platforms) route
+  // through the text cascade — their domain name is never the employer.
+  if (!isAtsDomain(domain) && !isNonEmployerDomain(domain)) {
     return { company: companyFromDomain(domain), domain };
   }
   const msgs: Message[] = (th && th.messages) || [];

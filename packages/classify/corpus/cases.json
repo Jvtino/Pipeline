@@ -91,7 +91,11 @@
     { "domain": "initech.fa.us2.oraclecloud.com", "from": "Initech Careers <no-reply@initech.fa.us2.oraclecloud.com>", "subject": "Thank you for applying to Initech - Software Engineer", "body": "Your application has been received.", "expected": "Initech" },
     { "domain": "email.roberthalf.com", "from": "Robert Half <donotreply@email.roberthalf.com>", "subject": "Thank you for applying to Senior Accountant", "body": "Your application has been received and a recruiter will review it shortly.", "expected": "Robert Half" },
     { "domain": "oracle.com", "from": "Oracle <no-reply@oracle.com>", "subject": "Thank you for applying to Initech - Software Engineer", "body": "Your application has been received.", "expected": "Initech" },
-    { "domain": "clearcompany.com", "from": "Initech Talent <careers@clearcompany.com>", "subject": "Your application to Initech", "body": "Thanks for applying.", "expected": "Initech" }
+    { "domain": "clearcompany.com", "from": "Initech Talent <careers@clearcompany.com>", "subject": "Your application to Initech", "body": "Thanks for applying.", "expected": "Initech" },
+    { "domain": "outlook.com", "from": "jane.recruiter@outlook.com", "subject": "Your application to Initech", "body": "Thanks for applying, we'll be in touch.", "expected": "Initech" },
+    { "domain": "myworkday.com", "from": "Workday <deutsche_bank_workday@myworkday.com>", "subject": "Application Update", "body": "There is an update on your application. Sign in to the portal to view it.", "expected": "Deutsche Bank" },
+    { "domain": "myworkday.com", "from": "Workday <CapitalOneHRWorkday@myworkday.com>", "subject": "Application Update", "body": "There is an update on your application. Sign in to the portal to view it.", "expected": "Capital One" },
+    { "domain": "adp.com", "from": "ADP Recruiting <noreply@adp.com>", "subject": "Thank you for applying to Initech", "body": "Your application was received.", "expected": "Initech" }
   ],
   "_comment_companySmart": "TS-only (resolveCompanySmart in aggregate.ts) — signals the parity-gated base resolver does not have (ATS apply/tenant URLs). Not read by the parity gate.",
   "companySmart": [
@@ -117,7 +121,21 @@
     { "domain": "openai.com", "expected": "OpenAI" },
     { "domain": "blackrock.com", "expected": "BlackRock" },
     { "domain": "brownadvisory.com", "expected": "Brown Advisory" },
-    { "domain": "fanaticsinc.com", "expected": "Fanatics" }
+    { "domain": "fanaticsinc.com", "expected": "Fanatics" },
+    { "domain": "mckinsey.com", "expected": "McKinsey" },
+    { "domain": "generalatlantic.com", "expected": "General Atlantic" },
+    { "domain": "td.com", "expected": "TD" },
+    { "domain": "rsmus.com", "expected": "RSM" },
+    { "domain": "dhs.gov", "expected": "DHS" },
+    { "domain": "jetblue.com", "expected": "JetBlue" },
+    { "domain": "lvmh.com", "expected": "LVMH" },
+    { "domain": "beamliving.com", "expected": "Beam Living" },
+    { "domain": "bestfriends.org", "expected": "Best Friends Animal Society" },
+    { "domain": "busancapital.com", "expected": "Busan Capital" },
+    { "domain": "welcometothejungle.com", "expected": "Welcome to the Jungle" },
+    { "domain": "capitalone.com", "expected": "Capital One" },
+    { "domain": "eliseai.com", "expected": "EliseAI" },
+    { "domain": "usastaffing.gov", "expected": "USA Staffing" }
   ],
   "companyFromSenderName_null": [
     { "from": "Greenhouse <no-reply@greenhouse.io>" },

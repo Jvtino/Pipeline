@@ -3,7 +3,7 @@
 // lives next to the classifier because "turn a thread into a record" is the
 // classifier's job applied across a whole thread. Shared by the API and the
 // sync engine so the live-mail and incremental paths derive identically.
-import { resolveCompany, detectStatus, classifyStatus, extractRole, isAtsDomain, companyFromDomain, guessCompanyDomain, acceptCompany, tidy } from "./index";
+import { resolveCompany, detectStatus, classifyStatus, extractRole, isAtsDomain, isNonEmployerDomain, companyFromDomain, guessCompanyDomain, acceptCompany, tidy } from "./index";
 import {
   extractInterview,
   extractCompensation,
@@ -195,7 +195,7 @@ function firstCompanyMatch(res: RegExp[], text: string): string | null {
 export function resolveCompanySmart(thread: Pick<Thread, "domain" | "subject" | "messages">): ResolvedCompany {
   const base = resolveCompany(thread);
   const domain = thread?.domain || "";
-  if (!isAtsDomain(domain)) return base;
+  if (!isAtsDomain(domain) && !isNonEmployerDomain(domain)) return base;
 
   // Did the base resolver find a REAL employer, or just echo the platform / a
   // garbage email fragment (e.g. "@greenhouse.io" from a sender with no name)?
@@ -363,7 +363,7 @@ export function classifyThread(thread: Thread): Classification {
   // Company — flag the ATS platform-fallback (employer couldn't be recovered).
   const resolved = resolveCompanySmart(thread);
   const isPlatformFallback =
-    isAtsDomain(domain) && resolved.company.toLowerCase() === companyFromDomain(domain).toLowerCase();
+    (isAtsDomain(domain) || isNonEmployerDomain(domain)) && resolved.company.toLowerCase() === companyFromDomain(domain).toLowerCase();
   const companyConf = isPlatformFallback ? 0.3 : isAtsDomain(domain) ? 0.8 : 0.85;
 
   // Role — flag the generic fallback ("Application" / echoed subject).

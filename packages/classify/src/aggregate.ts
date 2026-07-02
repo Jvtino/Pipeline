@@ -248,6 +248,9 @@ export function threadToApplication(thread: Thread): Application {
     snippet: (last?.body ?? "").slice(0, 600),
     confidence: c.confidence,
     enrichment: enrichmentFrom(c),
+    // Only set when true (additive, like `manual`): a shared-platform identity
+    // must never become a grouping key downstream.
+    ...(c.company.isPlatformFallback ? { platformFallback: true } : {}),
   };
 }
 

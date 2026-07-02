@@ -202,7 +202,16 @@ const JOB_CONTEXT_RE =
 // views, "people you may know", saved-search digests, connection requests). Unlike
 // pure ATS senders — which email almost exclusively about applications — their
 // domain alone doesn't imply an application, so we still require a content signal.
-const NOISY_JOB_BOARDS = new Set(["linkedin", "indeed", "glassdoor", "ziprecruiter", "wellfound", "angellist"]);
+const NOISY_JOB_BOARDS = new Set([
+  "linkedin", "indeed", "glassdoor", "ziprecruiter", "wellfound", "angellist",
+  // oracle.com hosts Oracle Recruiting mail BUT also cloud receipts/newsletters —
+  // recognized as a platform for company resolution, content-gated for relevance.
+  "oracle",
+]);
+
+// Alert/digest mail a staffing agency blasts alongside real correspondence.
+const STAFFING_DIGEST_RE =
+  /\b(?:job alerts?|jobs? (?:for you|matching|near you)|new jobs?|saved search|recommended (?:jobs?|for you)|weekly digest|newsletter|unsubscribe from these alerts)\b/i;
 
 /**
  * Whether a thread looks like a real job application (so it belongs on the board).
@@ -223,6 +232,10 @@ const NOISY_JOB_BOARDS = new Set(["linkedin", "indeed", "glassdoor", "ziprecruit
  */
 export function looksLikeJobApplication(thread: Pick<Thread, "domain" | "subject" | "messages">): boolean {
   if (isAtsDomain(thread.domain) && !NOISY_JOB_BOARDS.has(rootName(thread.domain))) return true;
+  // A staffing agency is the counterparty itself: outreach ("I have a contract
+  // role for you") is real correspondence even without application phrasing —
+  // keep everything from them except their job-alert digests.
+  if (isStaffingDomain(thread.domain) && !STAFFING_DIGEST_RE.test(thread.subject ?? "")) return true;
   const subject = thread.subject ?? "";
   if (JOB_APPLICATION_RE.test(subject)) return true;
   for (const m of thread.messages ?? []) {
@@ -243,6 +256,8 @@ const NAME_MAP: Record<string, string> = {
   vercel: "Vercel", airbnb: "Airbnb", amazon: "Amazon", google: "Google", stripe: "Stripe",
   roberthalf: "Robert Half", rhi: "Robert Half", teksystems: "TEKsystems", kellyservices: "Kelly Services",
   insightglobal: "Insight Global", michaelpage: "Michael Page", pagegroup: "PageGroup", manpowergroup: "ManpowerGroup",
+  ms: "Morgan Stanley", morganstanley: "Morgan Stanley", americanexpress: "American Express",
+  openai: "OpenAI", blackrock: "BlackRock", brownadvisory: "Brown Advisory",
 };
 
 // Two-level public suffixes, so the registrable label is taken correctly for ccTLDs.
@@ -267,7 +282,7 @@ export function companyFromDomain(domain: string | null | undefined): string {
 // ATS / recruiting platforms — the real company is in the sender name/subject/body.
 const ATS_DOMAINS = new Set([
   "greenhouse", "greenhouse-mail", "lever", "workday", "myworkday", "myworkdaysite", "workdayjobs", "myworkdayjobs",
-  "linkedin", "jobvite", "icims", "taleo", "oraclecloud", "smartrecruiters", "ashbyhq",
+  "linkedin", "jobvite", "icims", "taleo", "oraclecloud", "oracle", "clearcompany", "smartrecruiters", "ashbyhq",
   "breezy", "recruitee", "workable", "bamboohr", "personio",
   "jazzhr", "successfactors", "dayforce", "rippling", "teamtailor",
   "comeet", "dover", "gem", "jobscore", "freshteam", "zohorecruit",
@@ -289,7 +304,7 @@ export function isAtsDomain(domain: string | null | undefined): boolean {
 export const ATS_SENDER_DOMAINS: readonly string[] = [
   "greenhouse.io", "greenhouse-mail.io", "lever.co", "hire.lever.co",
   "myworkday.com", "myworkdayjobs.com", "myworkdaysite.com", "workday.com",
-  "icims.com", "taleo.net", "oraclecloud.com", "successfactors.com", "smartrecruiters.com",
+  "icims.com", "taleo.net", "oraclecloud.com", "oracle.com", "clearcompany.com", "successfactors.com", "smartrecruiters.com",
   "ashbyhq.com", "workable.com", "jobvite.com", "bamboohr.com",
   "breezy.hr", "recruitee.com", "personio.de", "personio.com",
   "jazzhr.com", "applytojob.com", "dayforce.com", "rippling.com",

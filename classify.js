@@ -101,7 +101,9 @@ function detectStatus(text) {
 const NAME_MAP = { datadoghq: "Datadog", notion: "Notion", spotify: "Spotify", figma: "Figma",
   vercel: "Vercel", airbnb: "Airbnb", amazon: "Amazon", google: "Google", stripe: "Stripe",
   roberthalf: "Robert Half", rhi: "Robert Half", teksystems: "TEKsystems", kellyservices: "Kelly Services",
-  insightglobal: "Insight Global", michaelpage: "Michael Page", pagegroup: "PageGroup", manpowergroup: "ManpowerGroup" };
+  insightglobal: "Insight Global", michaelpage: "Michael Page", pagegroup: "PageGroup", manpowergroup: "ManpowerGroup",
+  ms: "Morgan Stanley", morganstanley: "Morgan Stanley", americanexpress: "American Express",
+  openai: "OpenAI", blackrock: "BlackRock", brownadvisory: "Brown Advisory" };
 
 // Two-level public suffixes, so the registrable label is taken correctly for
 // ccTLDs (e.g. "acme.co.uk" → "acme", not "co"; "acme.com.au" → "acme").
@@ -125,7 +127,7 @@ function companyFromDomain(domain) {
 // sender name / subject / body, NOT in the sender domain.
 const ATS_DOMAINS = new Set([
   "greenhouse", "greenhouse-mail", "lever", "workday", "myworkday", "myworkdaysite", "workdayjobs", "myworkdayjobs",
-  "linkedin", "jobvite", "icims", "taleo", "oraclecloud", "smartrecruiters", "ashbyhq",
+  "linkedin", "jobvite", "icims", "taleo", "oraclecloud", "oracle", "clearcompany", "smartrecruiters", "ashbyhq",
   "breezy", "recruitee", "workable", "bamboohr", "personio",
   "jazzhr", "successfactors", "dayforce", "rippling", "teamtailor",
   "comeet", "dover", "gem", "jobscore", "freshteam", "zohorecruit",

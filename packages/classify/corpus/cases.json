@@ -89,7 +89,9 @@
     { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was sent", "body": "Your application was sent to Acme Corp.", "expected": "Acme Corp" },
     { "domain": "linkedin.com", "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Başvurunuz Acme şirketine gönderildi", "body": "", "expected": "Acme", "lang": "tr" },
     { "domain": "initech.fa.us2.oraclecloud.com", "from": "Initech Careers <no-reply@initech.fa.us2.oraclecloud.com>", "subject": "Thank you for applying to Initech - Software Engineer", "body": "Your application has been received.", "expected": "Initech" },
-    { "domain": "email.roberthalf.com", "from": "Robert Half <donotreply@email.roberthalf.com>", "subject": "Thank you for applying to Senior Accountant", "body": "Your application has been received and a recruiter will review it shortly.", "expected": "Robert Half" }
+    { "domain": "email.roberthalf.com", "from": "Robert Half <donotreply@email.roberthalf.com>", "subject": "Thank you for applying to Senior Accountant", "body": "Your application has been received and a recruiter will review it shortly.", "expected": "Robert Half" },
+    { "domain": "oracle.com", "from": "Oracle <no-reply@oracle.com>", "subject": "Thank you for applying to Initech - Software Engineer", "body": "Your application has been received.", "expected": "Initech" },
+    { "domain": "clearcompany.com", "from": "Initech Talent <careers@clearcompany.com>", "subject": "Your application to Initech", "body": "Thanks for applying.", "expected": "Initech" }
   ],
   "_comment_companySmart": "TS-only (resolveCompanySmart in aggregate.ts) — signals the parity-gated base resolver does not have (ATS apply/tenant URLs). Not read by the parity gate.",
   "companySmart": [
@@ -109,7 +111,12 @@
     { "domain": "kellyservices.com", "expected": "Kelly Services" },
     { "domain": "insightglobal.com", "expected": "Insight Global" },
     { "domain": "michaelpage.com", "expected": "Michael Page" },
-    { "domain": "manpowergroup.com", "expected": "ManpowerGroup" }
+    { "domain": "manpowergroup.com", "expected": "ManpowerGroup" },
+    { "domain": "ms.com", "expected": "Morgan Stanley" },
+    { "domain": "americanexpress.com", "expected": "American Express" },
+    { "domain": "openai.com", "expected": "OpenAI" },
+    { "domain": "blackrock.com", "expected": "BlackRock" },
+    { "domain": "brownadvisory.com", "expected": "Brown Advisory" }
   ],
   "companyFromSenderName_null": [
     { "from": "Greenhouse <no-reply@greenhouse.io>" },

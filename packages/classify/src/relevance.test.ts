@@ -70,6 +70,16 @@ describe("@pipeline/classify — looksLikeJobApplication", () => {
   it("keeps staffing-agency application mail, drops their job-alert digests", () => {
     expect(looksLikeJobApplication(thread("email.roberthalf.com", "Thank you for applying", "Your application has been received and a recruiter will review it shortly."))).toBe(true);
     expect(looksLikeJobApplication(thread("email.roberthalf.com", "New jobs for you", "12 new jobs match your saved search. Browse them now."))).toBe(false);
+    // Outreach IS the correspondence with a staffing agency — no application
+    // phrasing required (this is how Robert Half mail actually reads).
+    expect(looksLikeJobApplication(thread("email.roberthalf.com", "Senior Accountant contract opportunity", "I'm with Robert Half and would love to discuss a contract opening with one of our clients. Are you available for a quick call this week?"))).toBe(true);
+  });
+
+  // oracle.com carries Oracle Recruiting mail AND cloud receipts/newsletters —
+  // platform for company resolution, but relevance still requires content.
+  it("content-gates oracle.com like the noisy job boards", () => {
+    expect(looksLikeJobApplication(thread("oracle.com", "Thank you for applying to Initech", "Your application has been received."))).toBe(true);
+    expect(looksLikeJobApplication(thread("oracle.com", "Your Oracle Cloud invoice is ready", "View your June invoice in the console."))).toBe(false);
   });
 
   // Job boards (LinkedIn, Indeed, …) email heavy NON-application content — profile

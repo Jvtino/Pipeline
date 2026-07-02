@@ -83,6 +83,7 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
         snippet: a.snippet,
         manual: a.manual ?? false,
         needsReview: a.confidence != null && a.confidence < REVIEW_CONFIDENCE,
+        platformFallback: a.platformFallback ?? false,
         enrichment: a.enrichment ?? null,
         ...metaFor(a.threadId),
       });
@@ -108,6 +109,7 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
       snippet: "",
       manual: true,
       needsReview: false, // user-entered → nothing to confirm
+      platformFallback: false,
       enrichment: null,
       ...metaFor(m.id),
     });
@@ -270,7 +272,9 @@ export interface CompanyCardData {
 export function companyCards(apps: UiApplication[]): CompanyCardData[] {
   const map = new Map<string, UiApplication[]>();
   for (const a of apps) {
-    const key = a.company.toLowerCase();
+    // A platform-fallback "company" is a shared ATS name, not an identity —
+    // each such record stays its own card instead of bundling employers.
+    const key = a.platformFallback ? ` ${a.id}` : a.company.toLowerCase();
     const arr = map.get(key) ?? [];
     arr.push(a);
     map.set(key, arr);

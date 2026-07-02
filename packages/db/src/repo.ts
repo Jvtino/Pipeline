@@ -112,6 +112,7 @@ export async function upsertApplications(db: Database, userId: string, apps: App
       manual: a.manual ?? false,
       confidence: a.confidence ?? null,
       enrichment: a.enrichment ? JSON.stringify(a.enrichment) : null,
+      platformFallback: a.platformFallback ?? null,
     };
     await db
       .insert(applications)
@@ -129,6 +130,7 @@ export async function upsertApplications(db: Database, userId: string, apps: App
           manual: a.manual ?? false,
           confidence: a.confidence ?? null,
           enrichment: a.enrichment ? JSON.stringify(a.enrichment) : null,
+          platformFallback: a.platformFallback ?? null,
           updatedAt: new Date(),
         },
       });
@@ -150,6 +152,7 @@ export async function getApplicationsForUser(db: Database, userId: string): Prom
     manual: r.manual,
     confidence: r.confidence ?? undefined,
     enrichment: r.enrichment ? (JSON.parse(r.enrichment) as Enrichment) : undefined,
+    platformFallback: r.platformFallback ?? undefined,
   }));
 }
 

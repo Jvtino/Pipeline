@@ -52,6 +52,7 @@ export interface UiApplication {
   snippet: string;
   manual: boolean;
   needsReview: boolean; // classifier confidence below the review threshold → "unconfirmed" affordance
+  platformFallback: boolean; // company is only the shared ATS name — never merge on it
   enrichment: Enrichment | null; // facts extracted from the email (value-or-null), shown read-only
   // user-entered tracking fields (from the overlay) — optional
   workType: WorkType | null;

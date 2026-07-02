@@ -672,8 +672,13 @@ function buildApplications(threads){
 function groupByCompany(apps){
   const map = new Map();
   for (const a of apps){
-    if (!map.has(a.company)) map.set(a.company, { company:a.company, domain:a.domain, apps:[] });
-    map.get(a.company).apps.push(a);
+    // When the employer couldn't be recovered, `domain` is still the shared ATS
+    // platform's domain (resolveCompany only guesses a company domain on success).
+    // A shared platform identity must never merge records — distinct companies
+    // flow through one platform — so each fallback record stays its own card.
+    const key = (!a.manual && isAtsDomain(a.domain)) ? " " + a.id : a.company;
+    if (!map.has(key)) map.set(key, { company:a.company, domain:a.domain, apps:[] });
+    map.get(key).apps.push(a);
   }
   const groups = [...map.values()];
   for (const g of groups){

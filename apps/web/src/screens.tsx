@@ -1044,6 +1044,26 @@ const TEMPLATES = [
     purpose: "Bow out of a process",
     body: "Hi [name],\n\nI wanted to let you know that I'm withdrawing my application for the [role] position. After some reflection I've decided it isn't the right fit at this time.\n\nI appreciate the time you and the team invested, and I hope we might connect again down the road.\n\nBest,\n[your name]",
   },
+  {
+    title: "Salary negotiation",
+    purpose: "Counter an offer with a number",
+    body: "Hi [name],\n\nThank you again for the offer — I'm genuinely excited about joining [company] and contributing to [team/project].\n\nHaving looked at the full package and current market data for comparable [role] positions, I was hoping we could land closer to [target range]. Given [one line: your strongest lever — niche skill, competing process, scope of the role], I believe that reflects the value I'd bring from day one.\n\nIs there flexibility to close that gap? I'm happy to talk it through on a quick call.\n\nBest,\n[your name]",
+  },
+  {
+    title: "Reply to recruiter outreach",
+    purpose: "A warm reply to a cold recruiter message",
+    body: "Hi [name],\n\nThanks for reaching out — the role sounds interesting.\n\nBefore we book time, could you share a few details so I can make sure it's a good use of yours: the company and team, the compensation band, whether it's remote/hybrid/onsite, and what the interview process looks like?\n\nIf it lines up, I'd be glad to find 20 minutes this week.\n\nBest,\n[your name]",
+  },
+  {
+    title: "Status inquiry after interview",
+    purpose: "Check in when a decision is overdue",
+    body: "Hi [name],\n\nI hope your week is going well. I wanted to check in on the [role] position — when we spoke on [date], the plan was to hear back around [expected date].\n\nI'm still very interested and would love an updated timeline when you have one. If anything else from my side would help the decision, just let me know.\n\nBest,\n[your name]",
+  },
+  {
+    title: "Referral request",
+    purpose: "Ask a connection to refer you",
+    body: "Hi [name],\n\nHope you're doing well! I saw that [company] is hiring a [role] ([link]) and it looks like a strong fit — [one line on why: relevant experience or project].\n\nWould you be comfortable referring me, or pointing me to the hiring manager? Happy to send over my resume and a short blurb you can paste. And of course, no worries at all if it's not a good time.\n\nThanks either way!\n[your name]",
+  },
 ];
 
 const TEMPLATE_EDITS_KEY = "pipeline.templateEdits";

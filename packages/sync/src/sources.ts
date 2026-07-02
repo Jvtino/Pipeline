@@ -80,10 +80,9 @@ async function gmailFetchThreads(ids: string[], token: string, t: HttpTransport,
   const out: Thread[] = [];
   for (const id of ids.slice(0, limit)) {
     try {
-      const data = await t.getJson(
-        `${GMAIL}/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-        token,
-      );
+      // format=full so MIME parts (attachment names/sizes) are visible; only the
+      // snippet + attachment METADATA leave this function — bodies are dropped.
+      const data = await t.getJson(`${GMAIL}/threads/${id}?format=full`, token);
       if ((data as any).error) continue; // skip a thread we couldn't fetch
       out.push(mapGmailThread(data as any));
     } catch {

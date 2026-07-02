@@ -43,11 +43,30 @@ export function isoFromInternal(ms: string | number | null | undefined, fallback
   return isoFromDate(new Date());
 }
 
+interface GmailPart {
+  filename?: string;
+  mimeType?: string;
+  headers?: { name?: string; value?: string }[];
+  body?: { size?: number; attachmentId?: string };
+  parts?: GmailPart[];
+}
 interface GmailMessage {
   id?: string;
   internalDate?: string | number;
   snippet?: string;
-  payload?: { headers?: { name?: string; value?: string }[] };
+  payload?: GmailPart;
+}
+
+/** Walk the MIME tree for real attachments (named, non-inline). METADATA only —
+ *  filename/type/size; the content is never requested. */
+function gmailAttachments(part: GmailPart | undefined, out: NonNullable<Message["attachments"]> = []): Message["attachments"] {
+  if (!part) return out.length ? out : undefined;
+  const disposition = (part.headers ?? []).find((h) => (h.name ?? "").toLowerCase() === "content-disposition")?.value ?? "";
+  if (part.filename && part.body?.attachmentId && !/^\s*inline/i.test(disposition)) {
+    out.push({ name: part.filename, contentType: part.mimeType ?? null, size: part.body.size ?? null });
+  }
+  for (const p of part.parts ?? []) gmailAttachments(p, out);
+  return out.length ? out : undefined;
 }
 interface GmailThread {
   id?: string;
@@ -65,17 +84,18 @@ export function mapGmailThread(thread: GmailThread): Thread {
       domain: domainOf(frm),
       subject: header(hs, "Subject") || "(no subject)",
       body: clean(m.snippet),
+      attachments: gmailAttachments(m.payload),
     };
   });
   rows.sort((a, b) => a.date.localeCompare(b.date));
   const first = rows[0];
-  // No attachments: the metadata-format fetch carries no MIME parts (Graph does).
   // The Gmail web UI addresses a message directly by its id under #all/.
   const messages: Message[] = rows.map((r) => ({
     date: r.date,
     from: r.from,
     body: r.body,
     ...(r.id ? { id: r.id, webLink: `https://mail.google.com/mail/u/0/#all/${r.id}` } : {}),
+    ...(r.attachments ? { attachments: r.attachments } : {}),
   }));
   return {
     threadId: thread.id ?? "",

@@ -90,6 +90,29 @@ describe("Gmail mapper", () => {
     expect(t.messages[0]!.body).toBe("");
     expect(t.domain).toBe("unknown");
   });
+
+  it("collects attachment METADATA from nested MIME parts; inline/unnamed parts dropped", () => {
+    const t = mapGmailThread({
+      id: "thr",
+      messages: [
+        {
+          id: "g1",
+          internalDate: "1717200000000",
+          snippet: "offer attached",
+          payload: {
+            mimeType: "multipart/mixed",
+            headers: [{ name: "From", value: "Careers <c@acme.com>" }, { name: "Subject", value: "Offer" }],
+            parts: [
+              { mimeType: "multipart/alternative", parts: [{ mimeType: "text/plain", body: { size: 400 } }] },
+              { filename: "Offer Letter.pdf", mimeType: "application/pdf", body: { size: 84213, attachmentId: "att1" } },
+              { filename: "sig.png", mimeType: "image/png", headers: [{ name: "Content-Disposition", value: "inline; filename=sig.png" }], body: { size: 900, attachmentId: "att2" } },
+            ],
+          },
+        },
+      ],
+    });
+    expect(t.messages[0]!.attachments).toEqual([{ name: "Offer Letter.pdf", contentType: "application/pdf", size: 84213 }]);
+  });
 });
 
 describe("Microsoft Graph mapper", () => {

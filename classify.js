@@ -100,7 +100,8 @@ function detectStatus(text) {
 
 const NAME_MAP = { datadoghq: "Datadog", notion: "Notion", spotify: "Spotify", figma: "Figma",
   vercel: "Vercel", airbnb: "Airbnb", amazon: "Amazon", google: "Google", stripe: "Stripe",
-  roberthalf: "Robert Half", rhi: "Robert Half", teksystems: "TEKsystems", kellyservices: "Kelly Services" };
+  roberthalf: "Robert Half", rhi: "Robert Half", teksystems: "TEKsystems", kellyservices: "Kelly Services",
+  insightglobal: "Insight Global", michaelpage: "Michael Page", pagegroup: "PageGroup", manpowergroup: "ManpowerGroup" };
 
 // Two-level public suffixes, so the registrable label is taken correctly for
 // ccTLDs (e.g. "acme.co.uk" → "acme", not "co"; "acme.com.au" → "acme").

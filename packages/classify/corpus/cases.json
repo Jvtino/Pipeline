@@ -106,7 +106,10 @@
     { "domain": "email.roberthalf.com", "expected": "Robert Half" },
     { "domain": "rhi.com", "expected": "Robert Half" },
     { "domain": "teksystems.com", "expected": "TEKsystems" },
-    { "domain": "kellyservices.com", "expected": "Kelly Services" }
+    { "domain": "kellyservices.com", "expected": "Kelly Services" },
+    { "domain": "insightglobal.com", "expected": "Insight Global" },
+    { "domain": "michaelpage.com", "expected": "Michael Page" },
+    { "domain": "manpowergroup.com", "expected": "ManpowerGroup" }
   ],
   "companyFromSenderName_null": [
     { "from": "Greenhouse <no-reply@greenhouse.io>" },

@@ -21,6 +21,7 @@ import {
   workTypePerformance,
   locationPerformance,
   resumePerformance,
+  companyInsights,
   timingStats,
   responseByWeek,
   type PerfRow,
@@ -654,11 +655,12 @@ export function Statistics(ctx: Ctx) {
       work: workTypePerformance(apps),
       loc: locationPerformance(apps),
       resume: resumePerformance(apps),
+      comp: companyInsights(apps),
       wk: responseByWeek(apps, nowMs, 6),
     }),
     [apps, nowMs],
   );
-  const { s, vol, src, timing, work, loc, resume, wk } = derived;
+  const { s, vol, src, timing, work, loc, resume, comp, wk } = derived;
   if (s.sent === 0) return <EmptyInline title="No data yet" sub="Statistics appear once you’ve applied to a few roles. Add an application or run a sync to begin." />;
   const hasMeta = work.length > 0 || loc.length > 0 || resume.rows.length > 0;
   const ratePct = Math.round(s.responseRate * 100);
@@ -781,6 +783,31 @@ export function Statistics(ctx: Ctx) {
           </div>
           <AgingBars buckets={s.aging.buckets} />
         </div>
+      </div>
+
+      {/* Company insights — kept at the user's request */}
+      <div className="card" style={{ padding: "20px 22px", marginTop: 14 }}>
+        <div className="cardtitle">Company insights</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, marginTop: 14 }}>
+          <ContextCard value={String(comp.companiesAppliedTo)} unit="" color="#3f3a33" title="Companies" sub="distinct employers applied to" />
+          <ContextCard value={String(comp.multiple.length)} unit="" color="#6b5e86" title="Applied 2+ times" sub="multiple roles at one company" />
+        </div>
+        {comp.bestResponders.length > 0 && (
+          <>
+            <div className="eyebrow" style={{ margin: "16px 0 9px" }}>Best responders</div>
+            {comp.bestResponders.slice(0, 4).map((c) => (
+              <div key={c.company} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderTop: "1px solid rgba(34,31,26,.05)" }}>
+                <span style={{ font: "600 12.5px var(--sans)", color: "#3f3a33" }}>{c.company}</span>
+                <span style={{ font: "500 11px var(--mono)", color: "var(--muted-2)" }}><b style={{ color: "#1f7a52" }}>{Math.round(c.responseRate * 100)}%</b> · {c.applied} app{c.applied > 1 ? "s" : ""}</span>
+              </div>
+            ))}
+          </>
+        )}
+        {comp.neverResponded.length > 0 && (
+          <div style={{ font: "500 12px/1.5 var(--sans)", color: "var(--text-3)", marginTop: 13, paddingTop: 11, borderTop: "1px solid rgba(34,31,26,.07)" }}>
+            <b style={{ color: "#a85544" }}>{comp.neverResponded.length}</b> compan{comp.neverResponded.length > 1 ? "ies" : "y"} never replied — treat them as dead ends.
+          </div>
+        )}
       </div>
 
       {/* Tracking-based breakdowns, tucked behind a disclosure */}
@@ -915,6 +942,19 @@ function AgingBars({ buckets }: { buckets: { label: string; count: number; stale
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function ContextCard({ value, unit, color, title, sub }: { value: string; unit: string; color: string; title: string; sub: string }) {
+  return (
+    <div style={{ background: "var(--card-subtle)", border: "1px solid rgba(34,31,26,.07)", borderRadius: 14, padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
+        <div style={{ font: "700 24px var(--sans)", letterSpacing: "-.02em", color }}>{value}</div>
+        {unit && <div style={{ font: "500 12px var(--sans)", color: "var(--muted)" }}>{unit}</div>}
+      </div>
+      <div style={{ font: "600 12px var(--sans)", color: "#5f5a51", marginTop: 6 }}>{title}</div>
+      <div style={{ font: "500 11px/1.45 var(--sans)", color: "var(--muted-2)", marginTop: 3 }}>{sub}</div>
     </div>
   );
 }

@@ -242,6 +242,7 @@ const NAME_MAP: Record<string, string> = {
   datadoghq: "Datadog", notion: "Notion", spotify: "Spotify", figma: "Figma",
   vercel: "Vercel", airbnb: "Airbnb", amazon: "Amazon", google: "Google", stripe: "Stripe",
   roberthalf: "Robert Half", rhi: "Robert Half", teksystems: "TEKsystems", kellyservices: "Kelly Services",
+  insightglobal: "Insight Global", michaelpage: "Michael Page", pagegroup: "PageGroup", manpowergroup: "ManpowerGroup",
 };
 
 // Two-level public suffixes, so the registrable label is taken correctly for ccTLDs.
@@ -311,6 +312,7 @@ export const ATS_SENDER_DOMAINS: readonly string[] = [
  */
 const STAFFING_DOMAINS = new Set([
   "roberthalf", "rhi", "hays", "randstad", "adecco", "kellyservices", "aerotek", "teksystems",
+  "manpower", "manpowergroup", "insightglobal", "michaelpage", "pagegroup",
 ]);
 
 export function isStaffingDomain(domain: string | null | undefined): boolean {
@@ -320,6 +322,7 @@ export function isStaffingDomain(domain: string | null | undefined): boolean {
 export const STAFFING_SENDER_DOMAINS: readonly string[] = [
   "roberthalf.com", "rhi.com", "hays.com", "randstad.com",
   "adecco.com", "kellyservices.com", "aerotek.com", "teksystems.com",
+  "manpower.com", "manpowergroup.com", "insightglobal.com", "michaelpage.com", "pagegroup.com",
 ];
 
 // Platform brand words that must never be returned as a company name.

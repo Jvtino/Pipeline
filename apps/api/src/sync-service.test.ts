@@ -81,6 +81,28 @@ describe("syncAllConnections", () => {
     expect((await getBoardForUser(h.db, "u1", "live")).counts.total).toBe(1);
   });
 
+  it("keeps the demo board when the sync fails — never an empty board with no error", async () => {
+    await upsertApplications(h.db, "u1", [
+      { id: "demo:x", threadId: "demo:x", company: "Demo Co", companyDomain: "demo.co", role: "Engineer", status: "applied", firstSeen: "2026-01-01", lastActivity: "2026-01-01", snippet: "demo" },
+    ]);
+    await saveMailConnection(h.db, mk, {
+      id: "conn1",
+      userId: "u1",
+      provider: "google",
+      email: "u1@gmail.com",
+      secret: { access_token: "AT", expires_in: 3600, obtained_at: Date.now() },
+    });
+    const makeSource: SourceFactory = () => ({
+      async fetch(): Promise<never> {
+        throw new Error("gmail search failed: rate limited");
+      },
+    });
+    const summary = await syncAllConnections({ db: h.db, masterKey: mk, userId: "u1", configs: { google: { clientId: "c", clientSecret: "s" } }, makeSource });
+    expect(summary.results[0]!.error).toMatch(/rate limited/);
+    const board = await getBoardForUser(h.db, "u1", "live");
+    expect(board.groups.some((g) => g.company === "Demo Co")).toBe(true); // demo kept until a sync succeeds
+  });
+
   it("reports a clear error for a connected provider that isn't configured", async () => {
     await saveMailConnection(h.db, mk, {
       id: "conn1",

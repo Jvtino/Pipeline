@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import type { Ctx } from "./ctx";
 import type { UiApplication, WorkType } from "./types";
 import { STATUS, MOVE_STAGES, type UiStatus } from "./lib/status";
+import { shortDate } from "./lib/format";
 import { CompanyAvatar, PersonAvatar, StatusPill, NeedsReviewBadge } from "./components";
 import { DocBadge } from "./screens";
 import { IconX, IconClock, IconCheck, IconDownload } from "./lib/icons";
@@ -185,7 +186,7 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11 }}>
                 <DetailBox label="Applied" value={app.dateLabel} />
                 <DetailBox label="Source" value={app.source} />
-                <DetailBox label="Last activity" value={app.lastActivityIso ? app.dateLabel : "—"} />
+                <DetailBox label="Last activity" value={shortDate(app.lastActivityIso)} />
                 <DetailBox label="Stage" value={s.label} />
               </div>
 
@@ -254,10 +255,12 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
                 notes.map((n, i) => (
                   <div key={i} style={{ padding: "13px 15px", background: "var(--card)", border: "1px solid var(--card-border)", borderRadius: 12, marginBottom: 9 }}>
                     <div style={{ font: "400 13px/1.5 var(--sans)", color: "#3f3a33" }}>{n.body}</div>
-                    <div style={{ font: "500 11px var(--mono)", color: "var(--faint)", marginTop: 6 }}>{n.when}</div>
+                    {/* shortDate renders ISO dates; older blobs stored literal strings ("just now") which pass through */}
+                    <div style={{ font: "500 11px var(--mono)", color: "var(--faint)", marginTop: 6 }}>{shortDate(n.when)}</div>
                   </div>
                 ))
               )}
+              <div style={{ textAlign: "center", marginTop: 4, font: "500 11px var(--sans)", color: "var(--faint)" }}>Notes are stored in this browser.</div>
             </div>
           )}
 

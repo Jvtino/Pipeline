@@ -86,6 +86,17 @@ describe("api server (authenticated)", () => {
     }
   });
 
+  it("DELETE /api/connections/:id requires auth and 404s for a connection you don't own", async () => {
+    const app = await buildServer();
+    try {
+      expect((await app.inject({ method: "DELETE", url: "/api/connections/nope" })).statusCode).toBe(401);
+      const cookie = await login(app);
+      expect((await app.inject({ method: "DELETE", url: "/api/connections/nope", headers: { cookie } })).statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("dev upgrade flips the plan and unlocks Pro routes", async () => {
     const app = await buildServer();
     try {

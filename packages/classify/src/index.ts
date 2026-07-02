@@ -241,6 +241,27 @@ export function isAtsDomain(domain: string | null | undefined): boolean {
   return ATS_DOMAINS.has(rootName(domain));
 }
 
+/**
+ * Email sender domains for the ATS/job platforms in ATS_DOMAINS — the SINGLE list
+ * the sync sources use to build their provider prefilter queries (Gmail search,
+ * Graph $search KQL). Superset rule: any sender looksLikeJobApplication() would
+ * keep via isAtsDomain() must be reachable through one of these, otherwise the
+ * prefilter silently starves the gate. Keep in step with ATS_DOMAINS above
+ * (asserted by a test in relevance.test.ts).
+ */
+export const ATS_SENDER_DOMAINS: readonly string[] = [
+  "greenhouse.io", "greenhouse-mail.io", "lever.co", "hire.lever.co",
+  "myworkday.com", "myworkdayjobs.com", "myworkdaysite.com", "workday.com",
+  "icims.com", "taleo.net", "successfactors.com", "smartrecruiters.com",
+  "ashbyhq.com", "workable.com", "jobvite.com", "bamboohr.com",
+  "breezy.hr", "recruitee.com", "personio.de", "personio.com",
+  "jazzhr.com", "applytojob.com", "dayforce.com", "rippling.com",
+  "teamtailor.com", "comeet.co", "dover.com", "gem.com",
+  "jobscore.com", "freshteam.com", "zohorecruit.com",
+  "indeed.com", "linkedin.com", "glassdoor.com", "ziprecruiter.com",
+  "wellfound.com", "angellist.com",
+];
+
 // Platform brand words that must never be returned as a company name.
 const PLATFORM_WORDS = new Set([
   ...ATS_DOMAINS, "workday", "greenhouse", "lever", "linkedin",

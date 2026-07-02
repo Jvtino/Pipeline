@@ -81,6 +81,20 @@ export async function listUserIdsWithConnections(db: Database): Promise<string[]
   return [...new Set(rows.map((r) => r.userId))];
 }
 
+/**
+ * Delete a mailbox connection (scoped to its owner) — the real "Disconnect".
+ * Cascades to sync_state via FK, so the cursor goes with it; the envelope-encrypted
+ * secret row is gone and background sync no longer sees the mailbox. Returns
+ * whether a row was actually removed.
+ */
+export async function deleteMailConnection(db: Database, userId: string, connectionId: string): Promise<boolean> {
+  const rows = await db
+    .delete(mailConnections)
+    .where(and(eq(mailConnections.id, connectionId), eq(mailConnections.userId, userId)))
+    .returning({ id: mailConnections.id });
+  return rows.length > 0;
+}
+
 /** Re-encrypt + store a rotated secret (after a token refresh). */
 export async function updateMailConnectionSecret(
   db: Database,
@@ -255,15 +269,23 @@ export async function deleteDemoApplications(db: Database, userId: string): Prom
  * mail — the derived record alone can't be re-classified (we don't persist the raw
  * thread), so the safe fix is to clear + re-derive from the mailbox.
  *
- * Deliberately preserved: manual entries (added by hand, never came from a sync)
- * and any application the user has ANNOTATED with notes/contacts — deleting those
- * would cascade-delete that work. Re-synced applications return with the same
- * `${userId}:${threadId}` id, so annotations stay attached.
+ * Deliberately preserved: manual entries (added by hand, never came from a sync),
+ * any application the user has ANNOTATED with notes/contacts — deleting those
+ * would cascade-delete that work — and any thread id in `keepThreadIds` (the web
+ * app's client-side overlay keeps its notes/stage-moves/tracking fields in the
+ * browser, so the server can't see those annotations; the client sends the ids).
+ * Re-synced applications return with the same `${userId}:${threadId}` id, so
+ * annotations stay attached.
  */
-export async function rebuildSyncedApplications(db: Database, userId: string): Promise<{ removed: number }> {
+export async function rebuildSyncedApplications(
+  db: Database,
+  userId: string,
+  keepThreadIds: string[] = [],
+): Promise<{ removed: number }> {
   const annotated = new Set<string>([
     ...(await db.select({ id: notes.applicationId }).from(notes).where(eq(notes.userId, userId))).map((r) => r.id),
     ...(await db.select({ id: contacts.applicationId }).from(contacts).where(eq(contacts.userId, userId))).map((r) => r.id),
+    ...keepThreadIds.map((t) => `${userId}:${t}`),
   ]);
   const synced = await db
     .select({ id: applications.id })

@@ -2,6 +2,7 @@
 // Keeps prop-threading flat: screens destructure what they need.
 import type { Screen, Plan, Overlay, UiApplication, OverlaySettings, AppMeta } from "./types";
 import type { UiStatus } from "./lib/status";
+import type { Mailbox } from "./api";
 
 export interface Ctx {
   apps: UiApplication[]; // flattened + overlaid, newest activity first
@@ -10,6 +11,7 @@ export interface Ctx {
   nowMs: number;
   me: Plan | null;
   email: string;
+  mailboxes: Mailbox[]; // really-connected mailboxes from /api/connections
 
   // header search + applications filter
   q: string;
@@ -36,6 +38,6 @@ export interface Ctx {
   addDoc: (file: File) => void;
   exportCsv: () => void;
   deleteAll: () => void;
-  disconnect: () => void;
+  disconnect: (connectionId?: string) => void; // with an id → that mailbox; without → all
   copyTemplate: (title: string, snippet: string) => void;
 }

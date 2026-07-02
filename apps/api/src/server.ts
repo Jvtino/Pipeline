@@ -6,7 +6,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { boardSchema } from "@pipeline/contracts";
-import { getBoardForUser, setUserPlan, getMailConnections, rebuildSyncedApplications } from "@pipeline/db";
+import { getBoardForUser, setUserPlan, getMailConnections, rebuildSyncedApplications, deleteMailConnection } from "@pipeline/db";
 import { issueLicense } from "@pipeline/license";
 import type { HttpTransport } from "@pipeline/providers";
 import { initStore, seedDemoForUser, resolveMasterKey } from "./store";
@@ -99,18 +99,36 @@ export async function buildServer(opts: ServerOptions = {}) {
     if (!user) return reply;
     // No mailbox to rebuild from → safe no-op (don't clear the seeded demo board).
     if ((await getMailConnections(store.db, user.id)).length === 0) return { removed: 0, connections: 0, results: [] };
-    const { removed } = await rebuildSyncedApplications(store.db, user.id);
+    // The web app annotates applications in a client-side overlay the server
+    // can't see; it sends those thread ids so the rebuild keeps them too.
+    const rawKeep = (req.body as { keepThreadIds?: unknown } | undefined)?.keepThreadIds;
+    const keepThreadIds = Array.isArray(rawKeep)
+      ? rawKeep.filter((t): t is string => typeof t === "string" && t.length > 0 && t.length <= 256).slice(0, 5000)
+      : [];
+    const { removed } = await rebuildSyncedApplications(store.db, user.id, keepThreadIds);
     const summary = await syncAllConnections({ db: store.db, masterKey, userId: user.id, configs, transport: opts.transport });
     return { removed, ...summary };
   });
 
   // Connected mailboxes (metadata only — no secrets). Powers the header's
-  // "Connected: N E-mails" chip.
+  // "Connected: N E-mails" chip and the Settings mailbox list.
   app.get("/api/connections", async (req, reply) => {
     const user = requireUser(req, reply);
     if (!user) return reply;
     const mailboxes = await getMailConnections(store.db, user.id);
-    return { count: mailboxes.length, mailboxes: mailboxes.map((m) => ({ provider: m.provider, email: m.email })) };
+    return { count: mailboxes.length, mailboxes: mailboxes.map((m) => ({ id: m.id, provider: m.provider, email: m.email })) };
+  });
+
+  // Disconnect a mailbox for real: delete the connection row (the encrypted
+  // token goes with it, and sync_state cascades), so background sync stops
+  // reading the account. Scoped to the signed-in owner.
+  app.delete("/api/connections/:id", async (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return reply;
+    const id = (req.params as { id?: string }).id ?? "";
+    const removed = await deleteMailConnection(store.db, user.id, id);
+    if (!removed) return reply.code(404).send({ error: "connection not found" });
+    return { ok: true };
   });
 
   // Pro-tier routes (analytics, reminders, export, notes/contacts) — all gated.

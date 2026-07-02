@@ -1213,30 +1213,51 @@ export function Templates(ctx: Ctx) {
 /* ============================================================================
    SETTINGS
    ========================================================================== */
+const PROVIDER_LABEL: Record<string, string> = { google: "Gmail", microsoft: "Outlook", imap: "IMAP" };
+const PROVIDER_COLOR: Record<string, string> = { google: "#c06a57", microsoft: "#6c7d96", imap: "#857a64" };
+
 export function Settings(ctx: Ctx) {
-  const { overlay, setSetting, exportCsv, deleteAll, disconnect, email, onRebuild } = ctx;
+  const { overlay, setSetting, exportCsv, deleteAll, disconnect, mailboxes, onRebuild } = ctx;
   return (
     <div style={{ maxWidth: 720 }}>
       <div className="card" style={{ padding: 20, marginBottom: 14 }}>
         <div style={{ font: "600 15px var(--sans)" }}>Connected mailboxes</div>
         <div style={{ font: "500 12.5px var(--sans)", color: "var(--muted-2)", marginTop: 3 }}>Pipeline reads these inboxes read-only to find your applications.</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 15, padding: "13px 15px", border: "1px solid rgba(34,31,26,.09)", borderRadius: 12, background: "#fdfbf6" }}>
-          <span style={{ width: 36, height: 36, borderRadius: 10, background: "#fff", border: "1px solid rgba(34,31,26,.1)", display: "grid", placeItems: "center", flex: "0 0 auto" }}>
-            <IconMail size={18} color="#c06a57" />
-          </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ font: "600 13.5px var(--sans)" }}>{email}</div>
-            <div style={{ font: "500 11.5px var(--sans)", color: "#2f9266", display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2f9266" }} />
-              Connected
+        {mailboxes.length === 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 15, padding: "13px 15px", border: "1px dashed rgba(34,31,26,.18)", borderRadius: 12 }}>
+            <span style={{ width: 36, height: 36, borderRadius: 10, background: "#fff", border: "1px solid rgba(34,31,26,.1)", display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+              <IconMail size={18} color="#b3ab9e" />
+            </span>
+            <div style={{ font: "500 12.5px var(--sans)", color: "var(--muted-2)" }}>
+              No mailbox connected — the board shows sample data until you connect one below.
             </div>
           </div>
-          <span style={{ font: "600 10.5px var(--mono)", color: "#857a64", background: "#efe9df", padding: "3px 8px", borderRadius: 6 }}>PRIMARY</span>
-          <button className="btn btn-danger" onClick={disconnect}>Disconnect</button>
-        </div>
-        <div onClick={() => (window.location.href = "/auth/google/start")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 11, padding: 12, border: "1px dashed rgba(34,31,26,.18)", borderRadius: 12, color: "var(--primary)", font: "600 12.5px var(--sans)", cursor: "pointer" }}>
-          <IconPlus size={15} />
-          Connect another mailbox
+        )}
+        {mailboxes.map((m) => (
+          <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 15, padding: "13px 15px", border: "1px solid rgba(34,31,26,.09)", borderRadius: 12, background: "#fdfbf6" }}>
+            <span style={{ width: 36, height: 36, borderRadius: 10, background: "#fff", border: "1px solid rgba(34,31,26,.1)", display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+              <IconMail size={18} color={PROVIDER_COLOR[m.provider] ?? "#857a64"} />
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ font: "600 13.5px var(--sans)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email}</div>
+              <div style={{ font: "500 11.5px var(--sans)", color: "#2f9266", display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2f9266" }} />
+                Connected
+              </div>
+            </div>
+            <span style={{ font: "600 10.5px var(--mono)", color: "#857a64", background: "#efe9df", padding: "3px 8px", borderRadius: 6 }}>{(PROVIDER_LABEL[m.provider] ?? m.provider).toUpperCase()}</span>
+            <button className="btn btn-danger" onClick={() => disconnect(m.id)}>Disconnect</button>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 10, marginTop: 11 }}>
+          <a href="/auth/google/start" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: 12, border: "1px dashed rgba(34,31,26,.18)", borderRadius: 12, color: "var(--primary)", font: "600 12.5px var(--sans)", cursor: "pointer", textDecoration: "none" }}>
+            <IconPlus size={15} />
+            Connect Gmail
+          </a>
+          <a href="/auth/microsoft/start" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: 12, border: "1px dashed rgba(34,31,26,.18)", borderRadius: 12, color: "var(--primary)", font: "600 12.5px var(--sans)", cursor: "pointer", textDecoration: "none" }}>
+            <IconPlus size={15} />
+            Connect Outlook
+          </a>
         </div>
       </div>
 

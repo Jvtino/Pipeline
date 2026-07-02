@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { looksLikeJobApplication } from "./index";
+import { looksLikeJobApplication, isAtsDomain, ATS_SENDER_DOMAINS } from "./index";
 import type { Thread } from "./index";
 
 const thread = (domain: string, subject: string, ...bodies: string[]): Thread => ({
@@ -45,6 +45,15 @@ describe("@pipeline/classify — looksLikeJobApplication", () => {
     expect(looksLikeJobApplication(thread("apple.com", "Your receipt from Apple", "Thank you for your purchase. Your subscription has been received."))).toBe(false);
     expect(looksLikeJobApplication(thread("zoom.us", "Meeting invitation: Team standup", "You are invited to schedule a call. Please confirm your availability."))).toBe(false);
     expect(looksLikeJobApplication(thread("ticketmaster.com", "Your event has been rescheduled", "Unfortunately, after review the venue changed the date. We wish you the best."))).toBe(false);
+  });
+
+  // The sync sources build their provider prefilter queries from ATS_SENDER_DOMAINS.
+  // Every listed sender must be one the gate keeps (via isAtsDomain), or the two
+  // lists have drifted and the prefilter excludes mail the gate would keep.
+  it("ATS_SENDER_DOMAINS stays aligned with the ATS domains the gate keeps", () => {
+    for (const domain of ATS_SENDER_DOMAINS) {
+      expect(isAtsDomain(domain), `${domain} is not an ATS domain the gate recognises`).toBe(true);
+    }
   });
 
   // Job boards (LinkedIn, Indeed, …) email heavy NON-application content — profile

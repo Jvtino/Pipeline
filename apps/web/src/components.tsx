@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { Screen, Plan } from "./types";
-import { STATUS, STATUS_ORDER, type UiStatus } from "./lib/status";
+import { STATUS, STATUS_ORDER, styleFor, type UiStatus } from "./lib/status";
 import { tintFor, monogram, initials } from "./lib/avatar";
 import { donutSegments, DONUT_C, type DonutSegment } from "./lib/derive";
 import type { UiApplication } from "./types";
@@ -47,7 +47,7 @@ export const screenTitle = (s: Screen): string => NAV.find((n) => n.key === s)?.
 
 /* ---- status pill ---------------------------------------------------------- */
 export function StatusPill({ status, sm }: { status: UiStatus; sm?: boolean }) {
-  const s = STATUS[status];
+  const s = styleFor(status); // tolerant lookup — an unknown status must not unmount the app
   return (
     <span className={`pill${sm ? " sm" : ""}`} style={{ color: s.fg, background: s.bg }}>
       <span className="dot" style={{ background: s.dot }} />

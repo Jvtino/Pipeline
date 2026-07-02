@@ -37,12 +37,6 @@ export async function syncAllConnections(deps: SyncDeps): Promise<SyncSummary> {
   const conns = await getMailConnections(deps.db, deps.userId);
   const results: SyncSummary["results"] = [];
 
-  // Once a real mailbox is connected, drop the seeded demo applications so the
-  // board reflects the user's actual mail (idempotent — a no-op after the first).
-  if (conns.some((c) => c.provider === "google" || c.provider === "microsoft")) {
-    await deleteDemoApplications(deps.db, deps.userId);
-  }
-
   for (const c of conns) {
     if (c.provider !== "google" && c.provider !== "microsoft") continue; // IMAP isn't OAuth-synced here
     const provider: ProviderId = c.provider;
@@ -71,6 +65,14 @@ export async function syncAllConnections(deps: SyncDeps): Promise<SyncSummary> {
     } catch (e) {
       results.push({ email: c.email, provider, error: e instanceof Error ? e.message : String(e) });
     }
+  }
+
+  // Once a real mailbox has SYNCED, drop the seeded demo applications so the
+  // board reflects the user's actual mail (idempotent — a no-op after the first).
+  // Deliberately after the loop: a failed first sync must not leave the user
+  // staring at an empty board with no data and no visible error.
+  if (results.some((r) => r.result)) {
+    await deleteDemoApplications(deps.db, deps.userId);
   }
   return { connections: conns.length, results };
 }

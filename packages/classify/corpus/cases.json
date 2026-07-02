@@ -140,7 +140,9 @@
     { "text": "We'll be interviewing candidates over the coming weeks and will be in touch.", "null": true },
     { "text": "Thanks for taking the time to speak with us yesterday.", "null": true },
     { "text": "Your interview is scheduled for 12 June at 14:00 CET.", "hasDateTime": true, "hasLink": false },
-    { "text": "Interview confirmed: Thursday 15:30 (Istanbul time).", "hasDateTime": true, "hasLink": false }
+    { "text": "Interview confirmed: Thursday 15:30 (Istanbul time).", "hasDateTime": true, "hasLink": false },
+    { "text": "Join here: https://zoom.us/j/123456789 on Tuesday, June 12 at 3:00pm PT.", "hasDateTime": true, "link": "https://zoom.us/j/123456789" },
+    { "text": "Meeting link: https://meet.google.com/abc-defg-hij", "hasDateTime": false, "hasLink": true }
   ],
   "compensation": [
     { "text": "The base salary range for this role is $120,000–$150,000.", "expect": "$120,000–$150,000" },

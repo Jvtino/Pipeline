@@ -56,9 +56,21 @@ export interface CompensationInfo {
   text: string;
 }
 
-const AMOUNT = "(?:[$£€]|\\b(?:USD|GBP|EUR|CAD|AUD)\\s?)\\d[\\d,]*(?:\\.\\d{1,2})?\\s*[kKmM]?";
+// A number: thousands-grouped with either separator ("120,000", "70.000") or a
+// plain integer with optional decimals ("70", "5.5"). Grouped-first, so the
+// European "70.000" is taken whole instead of truncating at "70.00".
+const NUM = "(?:\\d{1,3}(?:[.,]\\d{3})+|\\d+(?:[.,]\\d{1,2})?)";
+const CUR_BEFORE = "(?:[$£€]|\\b(?:USD|GBP|EUR|CAD|AUD|TRY|TL)\\s?)";
+const AMOUNT_BEFORE = `${CUR_BEFORE}${NUM}\\s*[kKmM]?`; // "$120k", "USD 120,000"
+const AMOUNT_AFTER = `${NUM}\\s*[kKmM]?\\s?(?:USD|EUR|GBP|CAD|AUD|TRY|TL)\\b`; // "130k USD"
+// Second half of a range may drop the currency ("$120k–150k") — but a bare
+// number then needs thousands-grouping or a k/M suffix, so "and 3 days" can't join.
+const RANGE_SECOND = `(?:${AMOUNT_BEFORE}|${AMOUNT_AFTER}|\\d{1,3}(?:[.,]\\d{3})+|\\d+(?:[.,]\\d{1,2})?\\s*[kKmM])`;
 const COMP_RE = new RegExp(
-  `${AMOUNT}(?:\\s*(?:[-–—]|to)\\s*(?:[$£€]|\\b(?:USD|GBP|EUR|CAD|AUD)\\s?)?\\d[\\d,]*(?:\\.\\d{1,2})?\\s*[kKmM]?)?(?:\\s*(?:\\/|per\\s+)(?:hr|hour|yr|year|annum|month|mo))?`,
+  `(?:\\b(?:up to|from|starting (?:at|from)|between)\\s+)?` + // qualifier is part of the fact ("up to $150k" ≠ "$150k")
+    `(?:${AMOUNT_BEFORE}|${AMOUNT_AFTER})` +
+    `(?:\\s*(?:[-–—]|to|and)\\s*${RANGE_SECOND})?` +
+    `(?:\\s*(?:\\/|per\\s+)(?:hr|hour|yr|year|annum|month|mo)\\b)?`,
   "i",
 );
 

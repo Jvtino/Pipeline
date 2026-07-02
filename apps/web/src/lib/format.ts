@@ -3,15 +3,17 @@
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** Parse an ISO date (YYYY-MM-DD) to epoch ms (UTC midnight). NaN-safe callers. */
+/** Parse an ISO date (YYYY-MM-DD → UTC midnight) OR a full ISO timestamp to
+ *  epoch ms. Precision-tolerant: appending T00:00:00Z to a value that already
+ *  has a time part produced NaN, which sorted those rows dead last. */
 export function parseIso(iso: string): number {
-  return Date.parse(`${iso}T00:00:00Z`);
+  return Date.parse(iso.length > 10 ? iso : `${iso}T00:00:00Z`);
 }
 
-/** "2026-05-02" → "May 2". Empty/invalid → "—". */
+/** "2026-05-02" → "May 2" (full timestamps use their date part). Empty/invalid → "—". */
 export function shortDate(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const ms = parseIso(iso);
+  const ms = Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
   if (Number.isNaN(ms)) return iso; // already a human string like "today"
   const d = new Date(ms);
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
@@ -29,6 +31,14 @@ export function localIsoDate(ms: number): string {
   const d = new Date(ms);
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** Local date+time ("YYYY-MM-DDTHH:mm:ss") — lets a manual entry added "just
+ *  now" sort ahead of anything else from the same day. */
+export function localIsoDateTime(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${localIsoDate(ms)}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 /** A friendly "synced" label for the header chip from an ISO timestamp or null. */

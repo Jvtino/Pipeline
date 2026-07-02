@@ -13,7 +13,7 @@ import { STATUS } from "./lib/status";
 import { ensureSession, getMe, getBoard, getDocuments, runSync, resync, getConnections, deleteConnection, postJson, type Mailbox, type SyncedDoc, type SyncSummary } from "./api";
 import { loadOverlay, saveOverlay, defaultOverlay } from "./lib/overlay";
 import { flattenBoard, buildNotifications } from "./lib/derive";
-import { shortDate, syncedLabel, localIsoDate } from "./lib/format";
+import { shortDate, syncedLabel, localIsoDate, localIsoDateTime } from "./lib/format";
 import { Sidebar, Header, Toast, StateLoading, StateError, screenTitle } from "./components";
 import type { Ctx } from "./ctx";
 import { Dashboard, Applications, Contacts, Calendar, Tasks, Statistics, Documents, Templates, Settings } from "./screens";
@@ -375,8 +375,9 @@ export function App() {
     const id = uid("m");
     // The date the user picked drives BOTH the label and the metrics (calendar,
     // trend, streaks) — falling back to the current LOCAL date, not the UTC date
-    // of a nowMs frozen at mount.
-    const createdIso = f.dateIso || localIsoDate(Date.now());
+    // of a nowMs frozen at mount. When no date is picked, keep the time too so
+    // "just now" sorts ahead of everything else from today.
+    const createdIso = f.dateIso || localIsoDateTime(Date.now());
     setOverlay((o) => ({
       ...o,
       manual: [...o.manual, { id, company: f.company, role: f.role, status: f.status, dateLabel: "", source: f.source, createdIso }],

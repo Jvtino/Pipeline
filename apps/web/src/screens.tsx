@@ -30,7 +30,7 @@ import {
   type CompanyCardData,
   type DerivedTask,
 } from "./lib/derive";
-import { MONTHS, shortDate } from "./lib/format";
+import { MONTHS, shortDate, parseIso } from "./lib/format";
 import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip, NeedsReviewBadge, ExpandMorph } from "./components";
 import { IconBolt, IconChevronRight, IconSearch, IconMail, IconDownload, IconPlus, IconShield, IconCheck, IconX } from "./lib/icons";
 
@@ -171,23 +171,29 @@ type CompanyFilter = "all" | "active" | "offer" | "interview" | "needsReview";
 
 // How "far along" a status is, for the "Furthest along" sort.
 const PROGRESS_RANK: Record<UiStatus, number> = { offer: 5, interview: 4, screening: 3, applied: 2, no_response: 1, wishlist: 1, rejected: 0 };
-const maxIso = (xs: (string | null)[]): string => xs.reduce<string>((m, s) => (s && s > m ? s : m), "");
+// Numeric max across the card's apps: date-only and full-timestamp ISO values
+// compare correctly, and a missing date sorts last instead of poisoning the max.
+const maxMs = (xs: (string | null)[]): number => xs.reduce<number>((m, s) => (s ? Math.max(m, parseIso(s)) : m), -Infinity);
 
 // Sort keys are computed ONCE per card (a comparator runs O(C log C) times, so
 // deriving them inside it would rescan every application on every comparison).
 interface SortableCard {
   card: CompanyCardData;
-  updated: string;
-  applied: string;
+  updated: number;
+  applied: number;
   rank: number;
 }
 
+// Every sorter carries explicit tie-breaks — activity dates are usually
+// date-only, so whole same-day batches tie and a stable sort would otherwise
+// freeze them in stale insertion order.
+const byName = (a: SortableCard, b: SortableCard) => a.card.company.localeCompare(b.card.company);
 const COMPANY_SORTERS: Record<CompanySort, (a: SortableCard, b: SortableCard) => number> = {
-  updated: (a, b) => b.updated.localeCompare(a.updated),
-  applied: (a, b) => b.applied.localeCompare(a.applied),
-  positions: (a, b) => b.card.apps.length - a.card.apps.length,
-  furthest: (a, b) => b.rank - a.rank,
-  name: (a, b) => a.card.company.localeCompare(b.card.company),
+  updated: (a, b) => b.updated - a.updated || b.applied - a.applied || byName(a, b),
+  applied: (a, b) => b.applied - a.applied || b.updated - a.updated || byName(a, b),
+  positions: (a, b) => b.card.apps.length - a.card.apps.length || b.updated - a.updated || byName(a, b),
+  furthest: (a, b) => b.rank - a.rank || b.updated - a.updated || byName(a, b),
+  name: byName,
 };
 
 function matchesCompanyFilter(c: CompanyCardData, f: CompanyFilter): boolean {
@@ -216,8 +222,8 @@ export function Applications(ctx: Ctx) {
     cs = cs.filter((c) => matchesCompanyFilter(c, filter));
     const sortable: SortableCard[] = cs.map((card) => ({
       card,
-      updated: maxIso(card.apps.map((x) => x.lastActivityIso)),
-      applied: maxIso(card.apps.map((x) => x.appliedIso)),
+      updated: maxMs(card.apps.map((x) => x.lastActivityIso)),
+      applied: maxMs(card.apps.map((x) => x.appliedIso)),
       rank: card.apps.reduce((m, a) => Math.max(m, PROGRESS_RANK[a.status] ?? 0), 0),
     }));
     sortable.sort(COMPANY_SORTERS[sort]);
@@ -239,25 +245,33 @@ export function Applications(ctx: Ctx) {
 
   const totalApps = cards.reduce((n, c) => n + c.apps.length, 0);
 
-  const selStyle: CSSProperties = { padding: "8px 11px", fontSize: 12.5 };
+  const FILTERS: { key: CompanyFilter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "active", label: "Active" },
+    { key: "interview", label: "Interviewing" },
+    { key: "offer", label: "Offer" },
+    { key: "needsReview", label: "Needs review" },
+  ];
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-        <span style={{ font: "600 10.5px var(--mono)", letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>Prioritize</span>
-        <select className="select" value={sort} onChange={(e) => setSort(e.target.value as CompanySort)} style={selStyle}>
-          <option value="updated">Last updated</option>
-          <option value="applied">Last applied</option>
-          <option value="positions">Most positions</option>
-          <option value="furthest">Furthest along</option>
-          <option value="name">Company A–Z</option>
-        </select>
-        <select className="select" value={filter} onChange={(e) => setFilter(e.target.value as CompanyFilter)} style={selStyle}>
-          <option value="all">All companies</option>
-          <option value="active">Active pipeline</option>
-          <option value="offer">Has an offer</option>
-          <option value="interview">Interviewing</option>
-          <option value="needsReview">Needs review</option>
-        </select>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <div className="segmented" role="tablist" aria-label="Filter companies">
+          {FILTERS.map((f) => (
+            <button key={f.key} className={filter === f.key ? "active" : ""} onClick={() => setFilter(f.key)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+          <span style={{ font: "600 10.5px var(--mono)", letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>Sort</span>
+          <select className="select" value={sort} onChange={(e) => setSort(e.target.value as CompanySort)} style={{ padding: "7px 10px", fontSize: 12.5, borderRadius: 9 }}>
+            <option value="updated">Last updated</option>
+            <option value="applied">Last applied</option>
+            <option value="positions">Most positions</option>
+            <option value="furthest">Furthest along</option>
+            <option value="name">Company A–Z</option>
+          </select>
+        </label>
         <span style={{ flex: 1 }} />
         <span style={{ font: "500 12px var(--sans)", color: "var(--muted-2)" }}>
           {cards.length} {cards.length === 1 ? "company" : "companies"} · {totalApps} application{totalApps === 1 ? "" : "s"}

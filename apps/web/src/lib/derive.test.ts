@@ -121,6 +121,24 @@ describe("flattenBoard — needsReview seam", () => {
     expect(buildNotifications([], now)).toEqual([]);
   });
 
+  it("ordering: a just-added entry beats same-day rows; full timestamps don't sink to the bottom", () => {
+    const board = boardFromApplications(
+      [
+        app({ threadId: "sameday-old", firstSeen: "2026-04-01", lastActivity: "2026-05-09", company: "Zeta" }), // old app, active today-ish
+        app({ threadId: "sameday-new", firstSeen: "2026-05-09", lastActivity: "2026-05-09", company: "Alpha" }), // applied the same day
+      ],
+      "test",
+    );
+    const overlay = {
+      ...defaultOverlay(),
+      manual: [{ id: "m-now", company: "Nova", role: "Engineer", status: "applied" as const, dateLabel: "", source: "Company site", createdIso: "2026-05-09T14:30:00" }],
+    };
+    const rows = flattenBoard(board, overlay, Date.parse("2026-05-09T18:00:00Z"));
+    // Full timestamp beats the date-only rows from the same day (it used to parse
+    // to NaN and sort dead last); among the date-only ties, later firstSeen wins.
+    expect(rows.map((r) => r.id)).toEqual(["m-now", "sameday-new", "sameday-old"]);
+  });
+
   it("companyCards groups a company's positions into .apps (drives the expandable card)", () => {
     const board = boardFromApplications(
       [

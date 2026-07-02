@@ -124,11 +124,16 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
     });
   }
 
-  // Newest activity first (nulls last).
+  // Newest activity first (nulls last). Activity dates are often date-only, so
+  // whole same-day batches tie — break by applied date, then company, so a
+  // just-added application can't land beneath week-old rows from the same day.
+  const ms = (iso: string | null) => (iso ? parseIso(iso) : -Infinity);
   apps.sort((x, y) => {
-    const a = x.lastActivityIso ? parseIso(x.lastActivityIso) : -Infinity;
-    const b = y.lastActivityIso ? parseIso(y.lastActivityIso) : -Infinity;
-    return b - a;
+    const byActivity = ms(y.lastActivityIso) - ms(x.lastActivityIso);
+    if (byActivity) return byActivity;
+    const byApplied = ms(y.appliedIso) - ms(x.appliedIso);
+    if (byApplied) return byApplied;
+    return x.company.localeCompare(y.company);
   });
   return apps;
 }
@@ -635,7 +640,8 @@ export function volumeStats(apps: UiApplication[], nowMs: number): VolumeStats {
   let bestDay: VolumeStats["bestDay"] = null;
   { let bi = -1, bc = 0; dow.forEach((c, i) => { if (c > bc) { bc = c; bi = i; } }); if (bi >= 0) bestDay = { label: DOW[bi] as string, count: bc }; }
 
-  const appliedDays = new Set(sent.map((a) => a.appliedIso));
+  // Bucket by calendar day — appliedIso may carry a time part (manual "just now" entries).
+  const appliedDays = new Set(sent.map((a) => (a.appliedIso as string).slice(0, 10)));
   let streakDays = 0;
   for (let i = 0; i < 366; i++) {
     const iso = new Date(nowMs - i * DAY_MS).toISOString().slice(0, 10);

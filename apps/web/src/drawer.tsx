@@ -351,6 +351,11 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
                   <div key={i} style={{ padding: "13px 15px", background: "var(--card)", border: "1px solid var(--card-border)", borderRadius: 12, marginBottom: 9 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
                       <div style={{ font: "650 13px var(--sans)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{senderName(m.from)}</div>
+                      {m.webLink && (
+                        <a href={m.webLink} target="_blank" rel="noreferrer" style={{ font: "600 11px var(--sans)", color: "var(--primary)", textDecoration: "none", flex: "0 0 auto" }}>
+                          Open in mailbox ↗
+                        </a>
+                      )}
                       <div style={{ font: "500 11px var(--mono)", color: "var(--faint)", flex: "0 0 auto" }}>{shortDate(m.date)}</div>
                     </div>
                     <div style={{ font: "400 12.5px/1.55 var(--sans)", color: "#3f3a33", marginTop: 6 }}>{m.bodyPreview || "(no preview)"}</div>

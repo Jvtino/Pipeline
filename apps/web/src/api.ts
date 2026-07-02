@@ -98,6 +98,7 @@ export interface ThreadMessage {
   from: string;
   bodyPreview: string;
   attachments: { name: string; contentType?: string | null; size?: number | null }[];
+  webLink?: string | null; // deep link to the original in the provider's web mail
 }
 
 /** A thread's stored message previews, oldest first. */

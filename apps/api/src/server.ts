@@ -139,7 +139,7 @@ export async function buildServer(opts: ServerOptions = {}) {
     if (!(await applicationBelongsTo(store.db, user.id, `${user.id}:${threadId}`)))
       return reply.code(404).send({ error: "application not found" });
     const messages = await listThreadMessages(store.db, user.id, threadId);
-    return { messages: messages.map((m) => ({ date: m.date, from: m.from, bodyPreview: m.bodyPreview, attachments: m.attachments ?? [] })) };
+    return { messages: messages.map((m) => ({ date: m.date, from: m.from, bodyPreview: m.bodyPreview, attachments: m.attachments ?? [], webLink: m.webLink })) };
   });
 
   // The recorded status timeline for one application (drives the drawer's

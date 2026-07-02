@@ -12,7 +12,7 @@ import {
 
 // Every provider must emit { threadId, domain, subject, messages:[{date,from,body}] };
 // `id` and `attachments` (metadata only) are the only optional extras allowed.
-const MESSAGE_KEYS = new Set(["body", "date", "from", "id", "attachments"]);
+const MESSAGE_KEYS = new Set(["body", "date", "from", "id", "attachments", "webLink"]);
 function assertThreadShape(t: Thread) {
   expect(typeof t.threadId).toBe("string");
   expect(t.threadId.length).toBeGreaterThan(0);

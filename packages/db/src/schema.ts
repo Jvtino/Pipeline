@@ -135,6 +135,7 @@ export const applicationMessages = pgTable(
     fromAddr: text("from_addr").notNull(),
     bodyPreview: text("body_preview").notNull(),
     attachments: text("attachments"), // JSON [{name,contentType,size}] or NULL
+    webLink: text("web_link"), // deep link to the original in the provider's web mail
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

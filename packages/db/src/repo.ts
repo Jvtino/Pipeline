@@ -307,6 +307,7 @@ export interface ThreadMessageRow {
   from: string;
   bodyPreview: string;
   attachments: AttachmentMeta[] | null;
+  webLink: string | null;
 }
 
 /** Stable per-message key: the provider id, else a content hash (id-less messages stay idempotent). */
@@ -327,12 +328,13 @@ export async function upsertThreadMessages(db: Database, userId: string, threads
       const id = `${applicationId}:${msgKey(m)}`;
       const attachments = m.attachments?.length ? JSON.stringify(m.attachments) : null;
       const bodyPreview = m.body.slice(0, 600);
+      const webLink = m.webLink ?? null;
       await db
         .insert(applicationMessages)
-        .values({ id, userId, applicationId, threadId: t.threadId, date: m.date, fromAddr: m.from, bodyPreview, attachments })
+        .values({ id, userId, applicationId, threadId: t.threadId, date: m.date, fromAddr: m.from, bodyPreview, attachments, webLink })
         .onConflictDoUpdate({
           target: applicationMessages.id,
-          set: { bodyPreview, ...(attachments ? { attachments } : {}) },
+          set: { bodyPreview, ...(attachments ? { attachments } : {}), ...(webLink ? { webLink } : {}) },
         });
     }
   }
@@ -350,6 +352,7 @@ export async function listThreadMessages(db: Database, userId: string, threadId:
     from: r.fromAddr,
     bodyPreview: r.bodyPreview,
     attachments: r.attachments ? (JSON.parse(r.attachments) as AttachmentMeta[]) : null,
+    webLink: r.webLink ?? null,
   }));
 }
 

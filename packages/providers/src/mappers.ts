@@ -70,7 +70,13 @@ export function mapGmailThread(thread: GmailThread): Thread {
   rows.sort((a, b) => a.date.localeCompare(b.date));
   const first = rows[0];
   // No attachments: the metadata-format fetch carries no MIME parts (Graph does).
-  const messages: Message[] = rows.map((r) => ({ date: r.date, from: r.from, body: r.body, ...(r.id ? { id: r.id } : {}) }));
+  // The Gmail web UI addresses a message directly by its id under #all/.
+  const messages: Message[] = rows.map((r) => ({
+    date: r.date,
+    from: r.from,
+    body: r.body,
+    ...(r.id ? { id: r.id, webLink: `https://mail.google.com/mail/u/0/#all/${r.id}` } : {}),
+  }));
   return {
     threadId: thread.id ?? "",
     domain: first?.domain ?? "unknown",
@@ -98,6 +104,7 @@ interface GraphMessage {
   subject?: string;
   receivedDateTime?: string;
   bodyPreview?: string;
+  webLink?: string;
   from?: { emailAddress?: { name?: string; address?: string } };
   attachments?: GraphAttachment[];
 }
@@ -110,7 +117,7 @@ function mapAttachments(list: GraphAttachment[] | undefined): Message["attachmen
 }
 
 export function mapGraphMessagesToThreads(messages: GraphMessage[] | null | undefined): Thread[] {
-  type Row = { date: string; from: string; domain: string; subject: string; body: string; id?: string; attachments?: Message["attachments"] };
+  type Row = { date: string; from: string; domain: string; subject: string; body: string; id?: string; attachments?: Message["attachments"]; webLink?: string };
   const groups = new Map<string, Row[]>();
   let counter = 0;
   for (const m of messages ?? []) {
@@ -128,6 +135,7 @@ export function mapGraphMessagesToThreads(messages: GraphMessage[] | null | unde
       body: clean(m.bodyPreview),
       ...(m.id ? { id: m.id } : {}),
       ...(attachments ? { attachments } : {}),
+      ...(m.webLink ? { webLink: m.webLink } : {}),
     };
     const arr = groups.get(conv);
     if (arr) arr.push(row);
@@ -148,6 +156,7 @@ export function mapGraphMessagesToThreads(messages: GraphMessage[] | null | unde
         body: r.body,
         ...(r.id ? { id: r.id } : {}),
         ...(r.attachments ? { attachments: r.attachments } : {}),
+        ...(r.webLink ? { webLink: r.webLink } : {}),
       })),
     });
   }

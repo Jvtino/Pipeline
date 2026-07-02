@@ -116,7 +116,8 @@
     { "domain": "americanexpress.com", "expected": "American Express" },
     { "domain": "openai.com", "expected": "OpenAI" },
     { "domain": "blackrock.com", "expected": "BlackRock" },
-    { "domain": "brownadvisory.com", "expected": "Brown Advisory" }
+    { "domain": "brownadvisory.com", "expected": "Brown Advisory" },
+    { "domain": "fanaticsinc.com", "expected": "Fanatics" }
   ],
   "companyFromSenderName_null": [
     { "from": "Greenhouse <no-reply@greenhouse.io>" },

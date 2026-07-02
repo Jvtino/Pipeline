@@ -164,7 +164,7 @@ export function gmailSource(token: string, transport: HttpTransport = fetchTrans
 const GRAPH_KEYWORDS =
   "application OR applying OR interview OR candidacy OR candidate OR recruiting OR position OR offer";
 const GRAPH_FROM = SENDER_DOMAINS.map((d) => `from:${d}`).join(" OR ");
-const GRAPH_SELECT = "subject,from,receivedDateTime,bodyPreview,conversationId,hasAttachments";
+const GRAPH_SELECT = "subject,from,receivedDateTime,bodyPreview,conversationId,hasAttachments,webLink";
 // Attachment METADATA only (never content) for the Files/Documents views. Some
 // tenants reject $expand combined with $search — the fetch retries without it.
 const GRAPH_EXPAND = "attachments($select=name,contentType,size,isInline)";

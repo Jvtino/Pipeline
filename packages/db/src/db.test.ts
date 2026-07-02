@@ -180,7 +180,7 @@ describe("@pipeline/db", () => {
       domain: "acme.com",
       subject: "Engineer",
       messages: [
-        { id: "m2", date: "2026-02-01", from: "Recruiting <rec@acme.com>", body: "interview time?" },
+        { id: "m2", date: "2026-02-01", from: "Recruiting <rec@acme.com>", body: "interview time?", webLink: "https://outlook.live.com/mail/deep/m2" },
         { id: "m1", date: "2026-01-01", from: "Careers <careers@acme.com>", body: "thanks for applying" },
         { date: "2026-01-15", from: "Careers <careers@acme.com>", body: "id-less legacy message" }, // hashed key
       ],
@@ -192,6 +192,7 @@ describe("@pipeline/db", () => {
     expect(msgs).toHaveLength(3);
     expect(msgs.map((m) => m.date)).toEqual(["2026-01-01", "2026-01-15", "2026-02-01"]); // date asc
     expect(msgs.every((m) => m.attachments === null)).toBe(true);
+    expect(msgs.map((m) => m.webLink)).toEqual([null, null, "https://outlook.live.com/mail/deep/m2"]); // deep link rides along
 
     // A re-fetch that adds attachment metadata enriches the stored row.
     thread.messages[0] = { ...thread.messages[0]!, attachments: [{ name: "JD.pdf", contentType: "application/pdf", size: 1234 }] } as never;

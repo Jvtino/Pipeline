@@ -101,4 +101,6 @@ CREATE TABLE IF NOT EXISTS application_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_appmsg_app ON application_messages (application_id);
 CREATE INDEX IF NOT EXISTS idx_appmsg_user ON application_messages (user_id);
+-- Deep link to the original message in the provider's web mail (additive).
+ALTER TABLE application_messages ADD COLUMN IF NOT EXISTS web_link text;
 `;

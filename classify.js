@@ -103,7 +103,7 @@ const NAME_MAP = { datadoghq: "Datadog", notion: "Notion", spotify: "Spotify", f
   roberthalf: "Robert Half", rhi: "Robert Half", teksystems: "TEKsystems", kellyservices: "Kelly Services",
   insightglobal: "Insight Global", michaelpage: "Michael Page", pagegroup: "PageGroup", manpowergroup: "ManpowerGroup",
   ms: "Morgan Stanley", morganstanley: "Morgan Stanley", americanexpress: "American Express",
-  openai: "OpenAI", blackrock: "BlackRock", brownadvisory: "Brown Advisory" };
+  openai: "OpenAI", blackrock: "BlackRock", brownadvisory: "Brown Advisory", fanaticsinc: "Fanatics" };
 
 // Two-level public suffixes, so the registrable label is taken correctly for
 // ccTLDs (e.g. "acme.co.uk" → "acme", not "co"; "acme.com.au" → "acme").

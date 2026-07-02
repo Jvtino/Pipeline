@@ -43,6 +43,16 @@ const INTERVIEW_RE =
 const APPLIED_RE =
   /\b(thank(?:s| you) for (?:applying|your application|submitting|your interest)|appreciate your (?:interest|application)|application (?:has been |was )?(?:received|submitted|registered)|received your application|we(?:'?ve| have) received your|successfully (?:submitted|applied|received)|your application (?:is|has been|was) (?:received|submitted|under review|being reviewed|in)|(?:currently |now )?(?:under|in) review|reviewing your application|will (?:review|be in touch|get back)|in our (?:system|database)|has been received)\b/;
 
+/* Turkish job-mail phrasings — high-precision renderings of the standard
+   ATS/LinkedIn/kurumsal templates ("maalesef … olumsuz", "başvurunuz alınmıştır",
+   "mülakata davet", "iş teklifi"). Substring-matched: \b is unreliable next to
+   non-ASCII letters in JS regex. Kept deliberately small; negation handling and
+   broader coverage wait for real misclassified mail in the corpus. */
+const TR_REJECT_RE = /(maalesef|ne yazık ki|olumsuz (?:bir karar|sonuçlan|değerlendir)|olumlu sonuçlanmad|başka bir aday)/;
+const TR_INTERVIEW_RE = /(mülakat|görüşmeye davet|telefon görüşmesi|değerlendirme merkezi)/;
+const TR_APPLIED_RE = /(başvurunuz (?:başarıyla )?(?:alınmış|alındı|iletil)|başvurunuzu aldık|değerlendirmeye alınmış|başvurunuz için teşekkür)/;
+const TR_OFFER_RE = /(i̇?ş teklifi|teklif mektubu)/;
+
 // Precedence used to break score ties — the EARLIER status wins. detectStatus()
 // and classifyStatus() must argmax over this exact order (strict `>`), or their
 // labels drift apart and the parity gate breaks.
@@ -68,6 +78,12 @@ export function scoreStatus(text: string | null | undefined): Record<Status, num
   if (negOffer) score.rejected += 10; // "unable to offer you the role" = rejection
   if (INTERVIEW_RE.test(t)) score.interview += 8;
   if (APPLIED_RE.test(t)) score.applied += 5;
+
+  // Turkish templates — same weights as their English counterparts.
+  if (TR_OFFER_RE.test(t)) score.offer += 10;
+  if (TR_REJECT_RE.test(t)) score.rejected += 10;
+  if (TR_INTERVIEW_RE.test(t)) score.interview += 8;
+  if (TR_APPLIED_RE.test(t)) score.applied += 5;
 
   // weak single-word cues — only decide when no stronger phrase fired
   if (/\b(interview|assessment|availability|next steps)\b/.test(t)) score.interview += 2;
@@ -341,6 +357,8 @@ const SUBJECT_PATS = [
   /\b(?:to|with)\s+([A-Z][A-Za-z0-9&.'\- ]+?)(?:\s+for\b|\s*[-–—(|]|[.!]|\s*$)/,
   /\binterest in (?:working (?:at|for) |joining )?([A-Z][A-Za-z0-9&.'\- ]+?)(?:\s*[-–—(|.!]|\s+(?:for|as|has|team)\b|\s*$)/,
   /\b(?:viewed|reviewed) by\s+([A-Z][A-Za-z0-9&.'\- ]+?)(?:\s*[-–—(|]|[.!]|\s*$)/,
+  // LinkedIn Turkish: "Başvurunuz Acme şirketine gönderildi / iletildi"
+  /başvurunuz\s+(.{1,40}?)\s+(?:şirketine|firmasına)\s+(?:gönderildi|iletildi)/i,
 ];
 
 export function extractCompanyFromSubject(subject: string | null | undefined): string | null {

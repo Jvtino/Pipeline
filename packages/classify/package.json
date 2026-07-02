@@ -17,6 +17,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "eval": "tsx scripts/eval.ts",
     "try": "tsx scripts/try.ts",
     "add-case": "node scripts/add-case.mjs"
   },

@@ -107,5 +107,79 @@
     { "text": "Sent from Greenhouse on behalf of the team. Do not reply to this message.", "null": true },
     { "text": "Thanks,\nThe Hiring Team", "null": true },
     { "text": "Questions? Contact us at no-reply@greenhouse.io", "null": true }
+  ],
+  "_comment_matching": "Matching/grouping layer (Known Issue A): threads reduced via threadsToApplications + boardFromApplications. Distinct employers sharing an ATS platform domain must stay DISTINCT groups — never bundle under the platform. expectCompanies (optional) is the exact group-name set, case-insensitive.",
+  "matching": [
+    {
+      "name": "greenhouse: two employers with sender names stay two groups",
+      "expectGroups": 2,
+      "expectCompanies": ["Acme Robotics", "Globex"],
+      "threads": [
+        { "threadId": "gh-1", "domain": "greenhouse.io", "subject": "Thank you for applying", "messages": [{ "date": "2026-06-01", "from": "Acme Robotics via Greenhouse <no-reply@greenhouse.io>", "body": "Thanks for applying to Acme Robotics." }] },
+        { "threadId": "gh-2", "domain": "greenhouse.io", "subject": "Thank you for applying", "messages": [{ "date": "2026-06-02", "from": "Globex via Greenhouse <no-reply@greenhouse.io>", "body": "Thanks for applying to Globex." }] }
+      ]
+    },
+    {
+      "name": "workday: employer in the tenant apply-URL stays distinct",
+      "expectGroups": 2,
+      "expectCompanies": ["Initech", "Hooli"],
+      "threads": [
+        { "threadId": "wd-url-1", "domain": "myworkday.com", "subject": "Application Update", "messages": [{ "date": "2026-06-01", "from": "Workday <noreply@myworkday.com>", "body": "There is an update. View it at https://initech.wd5.myworkdayjobs.com/en-US/careers." }] },
+        { "threadId": "wd-url-2", "domain": "myworkday.com", "subject": "Application Update", "messages": [{ "date": "2026-06-02", "from": "Workday <noreply@myworkday.com>", "body": "There is an update. View it at https://hooli.wd1.myworkdayjobs.com/en-US/jobs." }] }
+      ]
+    },
+    {
+      "name": "KNOWN ISSUE A — workday: employer only in the tenant local part must not bundle",
+      "expectGroups": 2,
+      "expectCompanies": ["Initech", "Hooli"],
+      "threads": [
+        { "threadId": "wd-lp-1", "domain": "myworkday.com", "subject": "Application Update", "messages": [{ "date": "2026-06-01", "from": "Workday <initech@myworkday.com>", "body": "There is an update on your application. Sign in to the portal to view it." }] },
+        { "threadId": "wd-lp-2", "domain": "myworkday.com", "subject": "Application Update", "messages": [{ "date": "2026-06-02", "from": "Workday <hooli@myworkday.com>", "body": "There is an update on your application. Sign in to the portal to view it." }] }
+      ]
+    },
+    {
+      "name": "KNOWN ISSUE A — linkedin: employer after 'viewed by' must not bundle",
+      "expectGroups": 2,
+      "expectCompanies": ["Acme Corp", "Umbrella Corp"],
+      "threads": [
+        { "threadId": "li-vb-1", "domain": "linkedin.com", "subject": "Your application was viewed by Acme Corp", "messages": [{ "date": "2026-06-01", "from": "LinkedIn <jobs-noreply@linkedin.com>", "body": "Your application was viewed by the hiring team at Acme Corp." }] },
+        { "threadId": "li-vb-2", "domain": "linkedin.com", "subject": "Your application was viewed by Umbrella Corp", "messages": [{ "date": "2026-06-02", "from": "LinkedIn <jobs-noreply@linkedin.com>", "body": "Your application was viewed by the hiring team at Umbrella Corp." }] }
+      ]
+    },
+    {
+      "name": "KNOWN ISSUE A — two unidentifiable platform threads must not silently merge",
+      "expectGroups": 2,
+      "threads": [
+        { "threadId": "li-anon-1", "domain": "linkedin.com", "subject": "Your application was viewed", "messages": [{ "date": "2026-06-01", "from": "LinkedIn <jobs-noreply@linkedin.com>", "body": "Your application was viewed. Keep an eye on your inbox." }] },
+        { "threadId": "li-anon-2", "domain": "linkedin.com", "subject": "Your application was viewed", "messages": [{ "date": "2026-06-02", "from": "LinkedIn <jobs-noreply@linkedin.com>", "body": "Your application was viewed. Keep an eye on your inbox." }] }
+      ]
+    }
+  ],
+  "_comment_imapThreading": "Desktop IMAP thread construction (root imap.js mapParsedToThreads). Keying threads on sender-domain+subject bundles different companies' boilerplate ATS mail into ONE thread (Known Issue A, matching layer). Each case: raw mails in, expected thread count out.",
+  "imapThreading": [
+    {
+      "name": "same company, ack + follow-up with Re: prefix → one thread",
+      "expectThreads": 1,
+      "mails": [
+        { "from": "Acme Careers <jobs@acme.com>", "subject": "Your application at Acme", "date": "2026-06-01", "body": "Thanks for applying to Acme." },
+        { "from": "Acme Careers <jobs@acme.com>", "subject": "Re: Your application at Acme", "date": "2026-06-05", "body": "We'd like to schedule a phone screen." }
+      ]
+    },
+    {
+      "name": "KNOWN ISSUE A — two workday tenants, identical boilerplate subject → two threads",
+      "expectThreads": 2,
+      "mails": [
+        { "from": "Workday <initech@myworkday.com>", "subject": "Application Update", "date": "2026-06-01", "body": "Initech has an update on your application." },
+        { "from": "Workday <hooli@myworkday.com>", "subject": "Application Update", "date": "2026-06-02", "body": "Hooli has an update on your application." }
+      ]
+    },
+    {
+      "name": "KNOWN ISSUE A — same no-reply sender, companies only in body → two threads",
+      "expectThreads": 2,
+      "mails": [
+        { "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was sent", "date": "2026-06-01", "body": "Your application was sent to Acme Corp." },
+        { "from": "LinkedIn <jobs-noreply@linkedin.com>", "subject": "Your application was sent", "date": "2026-06-02", "body": "Your application was sent to Umbrella Corp." }
+      ]
+    }
   ]
 }

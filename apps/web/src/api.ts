@@ -118,6 +118,23 @@ export function getEvents(threadId: string): Promise<{ events: StatusEvent[] }> 
   return getJson<{ events: StatusEvent[] }>(`/api/applications/${encodeURIComponent(threadId)}/events`);
 }
 
+/** Always-local background-sync status (Settings → Sync). */
+export interface BackgroundSync {
+  mode: "local" | "hosted" | "unsupported";
+  supported: boolean;
+  enabled: boolean;
+  intervalMinutes: number | null;
+  reason?: string;
+}
+
+export function getBackgroundSync(): Promise<BackgroundSync> {
+  return getJson<BackgroundSync>("/api/background-sync");
+}
+
+export function setBackgroundSync(enabled: boolean, intervalMinutes?: number): Promise<BackgroundSync> {
+  return postJson<BackgroundSync>("/api/background-sync", { enabled, intervalMinutes });
+}
+
 /** A synced attachment (METADATA only — name/type/size, no file content). */
 export interface SyncedDoc {
   threadId: string;

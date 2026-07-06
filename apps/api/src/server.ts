@@ -25,6 +25,7 @@ import { registerOAuthRoutes } from "./oauth-routes";
 import { registerAuthRoutes } from "./auth-routes";
 import { registerProRoutes } from "./pro-routes";
 import { memoryPendingStore, redisPendingStore } from "./pending-store";
+import { backgroundSyncStatus, setBackgroundSync } from "./background-sync";
 import { startSyncScheduler } from "./scheduler";
 import { syncAllConnections } from "./sync-service";
 import { verifyWebhookSignature, planFromEvent, type BillingEvent } from "./billing";
@@ -151,6 +152,30 @@ export async function buildServer(opts: ServerOptions = {}) {
     if (!(await applicationBelongsTo(store.db, user.id, `${user.id}:${threadId}`)))
       return reply.code(404).send({ error: "application not found" });
     return { events: await listStatusEvents(store.db, user.id, threadId) };
+  });
+
+  // Always-local background sync — the in-app control for the macOS LaunchAgent
+  // (Settings → Sync). Only a local macOS install can toggle it; a hosted deploy
+  // syncs server-side already. See background-sync.ts for the safety notes.
+  app.get("/api/background-sync", async (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return reply;
+    return backgroundSyncStatus({ local });
+  });
+  app.post("/api/background-sync", async (req, reply) => {
+    const user = requireUser(req, reply);
+    if (!user) return reply;
+    const body = (req.body ?? {}) as { enabled?: unknown; intervalMinutes?: unknown };
+    try {
+      return await setBackgroundSync({
+        local,
+        enabled: body.enabled === true,
+        intervalMinutes: typeof body.intervalMinutes === "number" ? body.intervalMinutes : undefined,
+      });
+    } catch (e) {
+      req.log.error(e);
+      return reply.code(500).send({ error: "Couldn't change background sync. See ~/Library/Logs/PipelineSync.log." });
+    }
   });
 
   // Every synced attachment (METADATA only) across the user's applications —

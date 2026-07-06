@@ -1,7 +1,7 @@
 // The ten content screens of the redesign. Each reads the shared Ctx (derived
 // from the real Board + overlay) and renders the warm-light design. Per-screen
 // layout uses design-system classes from styles.css plus a few inline grids.
-import { useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import type { Ctx } from "./ctx";
 import type { UiApplication } from "./types";
 import { STATUS, type UiStatus } from "./lib/status";
@@ -30,6 +30,7 @@ import {
   type DerivedTask,
 } from "./lib/derive";
 import { MONTHS, shortDate, parseIso } from "./lib/format";
+import { getBackgroundSync, setBackgroundSync as apiSetBackgroundSync, type BackgroundSync } from "./api";
 import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip, NeedsReviewBadge, ExpandMorph } from "./components";
 import { IconBolt, IconChevronRight, IconSearch, IconMail, IconDownload, IconPlus, IconShield, IconCheck, IconX } from "./lib/icons";
 
@@ -1437,6 +1438,7 @@ export function Settings(ctx: Ctx) {
             <span className="knob" />
           </button>
         </div>
+        <BackgroundSyncRow />
         <div style={{ display: "flex", alignItems: "center", marginTop: 16, paddingTop: 15, borderTop: "1px solid rgba(34,31,26,.07)" }}>
           <div style={{ flex: 1 }}>
             <div style={{ font: "600 13px var(--sans)" }}>Rebuild from mailbox</div>
@@ -1460,6 +1462,85 @@ export function Settings(ctx: Ctx) {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ---- Settings → always-local background sync (macOS agent toggle) --------- */
+const BG_FREQ: { label: string; minutes: number }[] = [
+  { label: "Every 30 min", minutes: 30 },
+  { label: "Hourly", minutes: 60 },
+  { label: "Every 4 hours", minutes: 240 },
+];
+
+function BackgroundSyncRow() {
+  const [st, setSt] = useState<BackgroundSync | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getBackgroundSync().then((s) => alive && setSt(s)).catch(() => alive && setErr("offline"));
+    return () => { alive = false; };
+  }, []);
+
+  const apply = async (enabled: boolean, minutes?: number) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      setSt(await apiSetBackgroundSync(enabled, minutes));
+    } catch {
+      setErr("Couldn't change background sync — is the app running?");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const row = (children: ReactNode) => (
+    <div style={{ display: "flex", alignItems: "center", marginTop: 16, paddingTop: 15, borderTop: "1px solid rgba(34,31,26,.07)" }}>
+      <div style={{ flex: 1, paddingRight: 14 }}>
+        <div style={{ font: "600 13px var(--sans)" }}>Background sync</div>
+        <div style={{ font: "500 11.5px/1.5 var(--sans)", color: "var(--muted-2)", marginTop: 2 }}>
+          Keep syncing even when Pipeline is closed, while your Mac is on. {err && <span style={{ color: "#a85544" }}>· {err}</span>}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+
+  if (!st) return row(<span style={{ font: "500 12px var(--mono)", color: "var(--faint)" }}>…</span>);
+
+  // Hosted / non-macOS: nothing to toggle — say why.
+  if (!st.supported) {
+    return row(
+      <span style={{ font: "500 11.5px var(--sans)", color: "var(--muted-2)", maxWidth: 230, textAlign: "right" }}>
+        {st.mode === "hosted" ? "Always on (synced on the server)" : st.reason ?? "Not available here"}
+      </span>,
+    );
+  }
+
+  return row(
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {st.enabled && (
+        <select
+          className="select"
+          value={st.intervalMinutes ?? 30}
+          disabled={busy}
+          onChange={(e) => apply(true, Number(e.target.value))}
+          style={{ padding: "7px 9px", fontSize: 12 }}
+        >
+          {BG_FREQ.map((f) => <option key={f.minutes} value={f.minutes}>{f.label}</option>)}
+        </select>
+      )}
+      <button
+        className={`toggle${st.enabled ? " on" : ""}`}
+        aria-pressed={st.enabled}
+        disabled={busy}
+        onClick={() => apply(!st.enabled, st.intervalMinutes ?? 30)}
+        style={busy ? { opacity: 0.6 } : undefined}
+      >
+        <span className="knob" />
+      </button>
+    </div>,
   );
 }
 

@@ -128,12 +128,17 @@ chip. (The `Pipeline Desktop` launcher now does this check and self-heals automa
 
 By default Pipeline syncs when you open the app and every 30 minutes while its
 window is running. To keep it syncing **even when the window is closed** — as long
-as your Mac is on and logged in — turn on the background agent:
+as your Mac is on and logged in — turn on background sync:
 
-1. In your **Pipeline** folder → **launchers**, double-click **`Enable Background
-   Sync.command`** (first time: right-click → Open, to clear Gatekeeper).
-2. That installs a macOS **LaunchAgent** (`com.pipeline.sync`) that runs the
-   Pipeline API in the background and syncs every 30 minutes.
+**In the app (recommended):** open **Settings → Sync → Background sync** and flip
+the toggle on. Pick a cadence (every 30 min / hourly / every 4 hours). That
+installs a macOS **LaunchAgent** (`com.pipeline.sync`) that runs the Pipeline API
+in the background. Flip it off any time from the same place.
+
+**Or from Finder** (works even when the app isn't running): in your **Pipeline**
+folder → **launchers**, double-click **`Enable Background Sync.command`** (first
+time: right-click → Open, to clear Gatekeeper). `Disable Background Sync.command`
+turns it off.
 
 **How it fits together**
 - The agent runs the *same* API the app uses (port 3001, the persistent PGlite

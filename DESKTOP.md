@@ -121,3 +121,34 @@ rm -rf node_modules/electron && npm install
 ```
 `npm` runs Electron's postinstall, which downloads the correct binary for your Mac's
 chip. (The `Pipeline Desktop` launcher now does this check and self-heals automatically.)
+
+---
+
+## Always-on background sync (local)
+
+By default Pipeline syncs when you open the app and every 30 minutes while its
+window is running. To keep it syncing **even when the window is closed** — as long
+as your Mac is on and logged in — turn on the background agent:
+
+1. In your **Pipeline** folder → **launchers**, double-click **`Enable Background
+   Sync.command`** (first time: right-click → Open, to clear Gatekeeper).
+2. That installs a macOS **LaunchAgent** (`com.pipeline.sync`) that runs the
+   Pipeline API in the background and syncs every 30 minutes.
+
+**How it fits together**
+- The agent runs the *same* API the app uses (port 3001, the persistent PGlite
+  data dir), so exactly one process ever owns the local database. Opening the
+  Desktop app **reuses** the agent's API rather than starting a second one, and
+  closing the app leaves background sync running.
+- It does **not** update its own code — that would be unsafe unattended. New
+  code lands when you open the Desktop app (which pulls the latest `main`).
+
+**Turn it off:** double-click **`Disable Background Sync.command`** — the board
+keeps what it has synced; new mail is then only picked up when you open the app.
+
+**Notes**
+- Only runs while your Mac is **on and logged in** (a login agent, not a system
+  daemon). It does not wake a sleeping Mac.
+- Log: `~/Library/Logs/PipelineSync.log`.
+- Change the cadence by editing `SYNC_INTERVAL_MS` (milliseconds) in
+  `~/Library/LaunchAgents/com.pipeline.sync.plist`, then run Disable + Enable.

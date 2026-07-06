@@ -105,14 +105,33 @@ pnpm_run -r --filter "./packages/*" build || { alert "Setup failed while buildin
 
 # ---- Start the servers ------------------------------------------------------
 notify "Almost there — starting the app…"
-pnpm_run --filter @pipeline/api dev > "$HOME/Library/Logs/PipelinePreview-api.log" 2>&1 &
-API_PID=$!
+# Reuse an already-running API (the background-sync LaunchAgent, if enabled) so
+# we never open a SECOND process on the single-process PGlite data dir. Only if
+# nothing is answering on :3001 do we start our own foreground API.
+API_STARTED=0
+if curl -fsS http://localhost:3001/api/health >/dev/null 2>&1; then
+  echo "API already running (background sync agent) — reusing it"
+else
+  pnpm_run --filter @pipeline/api dev > "$HOME/Library/Logs/PipelinePreview-api.log" 2>&1 &
+  API_PID=$!
+  API_STARTED=1
+fi
 pnpm_run --filter @pipeline/web dev > "$HOME/Library/Logs/PipelinePreview-web.log" 2>&1 &
 WEB_PID=$!
 
-# pkill patterns are scoped to THIS checkout's node_modules so another project's
-# vite/tsx dev servers are never touched.
-cleanup() { echo "=== stopping ==="; kill "$API_PID" "$WEB_PID" 2>/dev/null; pkill -f "$APP_DIR/.*tsx.*src/server.ts" 2>/dev/null; pkill -f "$APP_DIR/.*vite" 2>/dev/null; exit 0; }
+# On quit, stop the web viewer — and the API ONLY if we started it, so the
+# background-sync agent's API keeps running. pkill patterns are scoped to THIS
+# checkout so another project's dev servers are never touched.
+cleanup() {
+  echo "=== stopping ==="
+  kill "$WEB_PID" 2>/dev/null
+  pkill -f "$APP_DIR/.*vite" 2>/dev/null
+  if [ "$API_STARTED" = "1" ]; then
+    kill "$API_PID" 2>/dev/null
+    pkill -f "$APP_DIR/.*tsx.*src/server.ts" 2>/dev/null
+  fi
+  exit 0
+}
 trap cleanup EXIT INT TERM
 
 # ---- Wait for both servers, then open the browser ---------------------------

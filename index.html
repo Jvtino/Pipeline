@@ -171,9 +171,10 @@
   .card.thread-open .roles{height:208px}  /* fixed height while a thread is open: card never grows, content scrolls */
   .role{
     display:flex;align-items:center;gap:11px;padding:11px 9px;border-radius:11px;cursor:pointer;
-    height:48px;transition:background .13s;
+    height:48px;transition:background .18s cubic-bezier(.16,1,.3,1),transform .18s cubic-bezier(.16,1,.3,1),box-shadow .18s cubic-bezier(.16,1,.3,1);
   }
-  .role:hover{background:rgba(255,255,255,.035)}
+  .role:hover{background:rgba(255,255,255,.035);transform:translateX(2px)}
+  .role:active{transform:scale(.985)}
   .role.selected{background:rgba(47,129,247,.10);box-shadow:inset 0 0 0 1px rgba(47,129,247,.18)}
   .role .rtitle{flex:1;min-width:0;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .role .when{font-size:11.5px;color:var(--text-faint);white-space:nowrap}
@@ -187,7 +188,7 @@
   @keyframes tlIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
   @keyframes cardIn{from{opacity:.5;transform:translateY(5px)}to{opacity:1;transform:none}}
   .card{animation:cardIn .18s ease}
-  @media (prefers-reduced-motion: reduce){.card,.role.open + .timeline{animation:none}}
+  @media (prefers-reduced-motion: reduce){.card,.role,.role.open + .timeline{animation:none;transition:none}}
   .tl{position:relative;padding-left:20px}
   .tl::before{content:"";position:absolute;left:5px;top:4px;bottom:4px;width:2px;background:linear-gradient(var(--border-2),transparent)}
   .ev{position:relative;padding:7px 0}
@@ -372,6 +373,23 @@
   .iconbtn svg{width:15px;height:15px}
 
   /* Application detail */
+  .app-island{
+    grid-column:1/-1;overflow:hidden;margin:2px 0 16px;border:1px solid rgba(79,156,255,.24);
+    border-radius:18px;background:linear-gradient(180deg,rgba(47,129,247,.12),rgba(255,255,255,.025));
+    box-shadow:0 18px 44px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.06);
+    transform-origin:50% 0;animation:islandIn .46s cubic-bezier(.16,1,.3,1) both;
+  }
+  @keyframes islandIn{
+    from{opacity:0;transform:translateY(-10px) scale(.985);filter:blur(3px)}
+    to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}
+  }
+  @keyframes islandContentIn{
+    from{opacity:0;transform:translateY(7px)}
+    to{opacity:1;transform:translateY(0)}
+  }
+  .app-island-body{padding:0 18px 18px;animation:islandContentIn .38s .07s cubic-bezier(.16,1,.3,1) both}
+  .app-island .detail-hero{margin:0;padding:18px 18px 6px;border:none;background:transparent;box-shadow:none;animation:islandContentIn .34s .03s cubic-bezier(.16,1,.3,1) both}
+  .island-close{margin-left:auto;flex:0 0 auto}
   .detail-shell{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(290px,.65fr);gap:14px}
   @media (max-width:900px){.detail-shell{grid-template-columns:1fr}}
   .detail-hero{padding:18px;margin-bottom:14px}
@@ -395,6 +413,7 @@
   .detail-timeline{padding:16px}
   .detail-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:14px}
   .detail-side .feature-card{margin-bottom:14px}
+  @media (prefers-reduced-motion: reduce){.app-island,.app-island-body,.app-island .detail-hero{animation:none;filter:none}}
   .detail-side .rowline{padding:12px 14px}
 
   /* Calendar */
@@ -899,7 +918,7 @@ function renderViewTabs(){
   const nav = $("#viewtabs");
   if (!nav) return;
   nav.innerHTML = NAV.map(v => `
-    <button type="button" class="viewtab ${(state.view===v.key || (state.view==="detail" && v.key==="applications"))?"active":""}" data-view="${v.key}" aria-pressed="${state.view===v.key || (state.view==="detail" && v.key==="applications")}">
+    <button type="button" class="viewtab ${state.view===v.key?"active":""}" data-view="${v.key}" aria-pressed="${state.view===v.key}">
       ${v.icon}<span>${v.label}</span>
     </button>`).join("");
 }
@@ -1028,6 +1047,11 @@ function renderCard(g){
 function renderBoard(){
   $("#board").className = "board";
   const groups = groupByCompany(state.apps.filter(appMatches));
+  const selected = selectedApplication();
+  const renderGroup = g => {
+    const island = selected && g.apps.some(a => a.id === selected.id) ? renderApplicationDetail(selected) : "";
+    return renderCard(g) + island;
+  };
 
   const orderIdx = new Map(state.cardOrder.map((c,i)=>[c,i]));
   const oi = g => orderIdx.has(g.company) ? orderIdx.get(g.company) : Infinity;
@@ -1056,10 +1080,10 @@ function renderBoard(){
   let html = "";
   if (pinned.length){
     html += `<div class="seclabel">${PIN_SVG} Pinned</div>`;
-    html += pinned.map(renderCard).join("");
+    html += pinned.map(renderGroup).join("");
     if (rest.length) html += `<div class="seclabel dim">More</div>`;
   }
-  html += rest.map(renderCard).join("");
+  html += rest.map(renderGroup).join("");
   html += renderIgnoredSection();
   setBoardHtml(html);
 }
@@ -1143,14 +1167,33 @@ function sourceFromDomain(domain){
 function openApplication(appId){
   const a = state.apps.find(x => x.id === appId);
   if (!a) return;
-  state.view = "detail";
+  const changed = state.selectedAppId !== appId;
+  state.view = "applications";
+  try { localStorage.setItem("pipeline.desktopView", state.view); } catch(e){}
   state.selectedAppId = appId;
-  state.detailTab = state.detailTab || "overview";
+  state.detailTab = changed ? "overview" : (state.detailTab || "overview");
+  state.filter = "all";
+  state.query = "";
+  const q = $("#q"); if (q) q.value = "";
+  if (!inTimeframe(a)){
+    state.timeframe = "all";
+    try { localStorage.setItem("pipeline.timeframe", state.timeframe); } catch(e){}
+  }
+  closeStatusMenu();
   render();
-  window.scrollTo({ top:0, behavior:"smooth" });
+  setTimeout(() => {
+    const sel = '.app-island[data-appisland="' + (window.CSS && CSS.escape ? CSS.escape(appId) : appId) + '"]';
+    const el = document.querySelector(sel);
+    if (el) el.scrollIntoView({ block:"nearest", behavior:"smooth" });
+  }, 30);
 }
 function selectedApplication(){
   return state.apps.find(x => x.id === state.selectedAppId) || null;
+}
+function closeApplicationIsland(){
+  state.selectedAppId = null;
+  state.detailTab = "overview";
+  render();
 }
 function setDetailTab(tab){
   if (!["overview","statistics","contacts","documents"].includes(tab)) return;
@@ -1277,31 +1320,30 @@ function renderDetailStatistics(app){
       <section class="feature-card feature-pad"><div class="eyebrow">Follow-up read</div><div class="detail-metrics" style="grid-template-columns:1fr"><div class="detail-metric"><b>${nextAction}</b><span>Suggested focus</span></div><div class="detail-metric"><b>${daysSince}d</b><span>Since last activity</span></div><div class="detail-metric"><b>${contacts.length}</b><span>Contacts tracked</span></div></div></section>
     </div>`;
 }
-function renderApplicationDetail(){
-  const app = selectedApplication();
-  if (!app) return `<div class="screen-head"><button class="btn secondary" type="button" data-backapps>Back to applications</button></div><div class="feature-card empty-panel"><b>Application not found</b>Return to Applications and choose a position.</div>`;
+function renderApplicationDetail(app = selectedApplication()){
+  if (!app) return "";
   const st = STATUS[app.status];
   const hue = hueFor(app.company);
   const tab = ["overview","statistics","contacts","documents"].includes(state.detailTab) ? state.detailTab : "overview";
   state.detailTab = tab;
   const body = tab === "statistics" ? renderDetailStatistics(app) : tab === "contacts" ? renderDetailContacts(app) : tab === "documents" ? renderDetailDocuments(app) : renderDetailOverview(app);
   return `
-    <div class="screen-head">
-      <div class="screen-title"><button class="btn secondary" type="button" data-backapps style="margin-bottom:12px">Back to applications</button></div>
-    </div>
-    <section class="feature-card detail-hero">
+    <section class="app-island" data-appisland="${esc(app.id)}">
+    <div class="detail-hero">
       <div class="detail-titleline">
         <div class="avatar" style="background:hsl(${hue} 42% 20%);color:hsl(${hue} 75% 74%)"><span class="ring" style="border-color:${st.color}"></span><span class="initial">${esc(app.company[0])}</span></div>
         <div class="row-main"><h2>${esc(app.company)}</h2><div class="detail-role">${esc(app.role)}</div></div>
         <button type="button" class="pill statbtn ${st.cls} ${state.statusOverrides.has(app.id)?"manual":""}" data-setstatusfor="${esc(app.id)}" aria-haspopup="menu">${st.label}${CARET_SVG}</button>
+        <button type="button" class="iconbtn island-close" data-closeapp aria-label="Close application details"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>
       <div class="detail-actions">
         ${app.status === "interview" ? `<button type="button" class="btn secondary" data-prep="${esc(app.id)}">${PREP_SVG} Prep</button>` : ""}
         <span class="muted">Applied ${fmtDate(app.firstDate)} · last activity ${fmtDate(app.lastDate)}</span>
       </div>
       ${renderDetailTabs(app)}
-    </section>
-    ${body}`;
+    </div>
+    <div class="app-island-body">${body}</div>
+    </section>`;
 }
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -1544,7 +1586,6 @@ function renderDocumentsScreen(){
 function renderFeatureView(){
   const html = ({
     calendar:renderCalendarScreen,
-    detail:renderApplicationDetail,
   })[state.view]?.() || "";
   setScreenHtml(html);
 }
@@ -1770,6 +1811,7 @@ function removeManual(id){
   saveManual();
   if (state.statusOverrides.has(id)){ state.statusOverrides.delete(id); saveMap("pipeline.statusOverrides", state.statusOverrides); }
   state.expanded.delete(id);
+  if (state.selectedAppId === id) state.selectedAppId = null;
   rebuildApps();
   render();
 }
@@ -1852,7 +1894,7 @@ async function openDocument(id){
 /* ---- events ---- */
 document.addEventListener("click", e => {
   if (e.target.closest("[data-stop]")) return;
-  if (e.target.closest("[data-backapps]")){ setView("applications"); return; }
+  if (e.target.closest("[data-backapps]") || e.target.closest("[data-closeapp]")){ closeApplicationIsland(); return; }
   const detailTab = e.target.closest("[data-detailtab]");
   if (detailTab){ setDetailTab(detailTab.dataset.detailtab); return; }
   const view = e.target.closest("[data-view]");
@@ -1885,6 +1927,8 @@ document.addEventListener("click", e => {
   const ign = e.target.closest("[data-ignore]");
   if (ign){
     state.ignored.add(ign.dataset.ignore);
+    const selected = selectedApplication();
+    if (selected && selected.company === ign.dataset.ignore) state.selectedAppId = null;
     saveSet("pipeline.ignored", state.ignored);
     render();   // stats + board both change
     return;
@@ -1916,9 +1960,9 @@ document.addEventListener("click", e => {
     return;
   }
   const f = e.target.closest("[data-filter]");
-  if (f){ state.filter = f.dataset.filter; render(); }
+  if (f){ state.filter = f.dataset.filter; state.selectedAppId = null; render(); }
 });
-$("#q").addEventListener("input", e => { state.query = e.target.value.trim(); renderBoard(); });
+$("#q").addEventListener("input", e => { state.query = e.target.value.trim(); state.selectedAppId = null; renderBoard(); });
 
 // keyboard shortcuts: "/" focus search · Esc clear/close · 1–5 status filters
 const FILTER_KEYS = { "1":"all", "2":"applied", "3":"interview", "4":"offer", "5":"rejected" };
@@ -1928,7 +1972,7 @@ document.addEventListener("keydown", e => {
     if ($("#addOverlay").classList.contains("open")){ closeAddModal(); return; }
     if ($("#contactOverlay").classList.contains("open")){ closeContactModal(); return; }
     if ($("#overlay").classList.contains("open")){ $("#overlay").classList.remove("open"); return; }
-    if (state.view === "detail"){ setView("applications"); return; }
+    if (state.selectedAppId){ closeApplicationIsland(); return; }
     if (state.query || document.activeElement === $("#q")){
       $("#q").value = ""; state.query = ""; $("#q").blur(); renderBoard();
     }
@@ -1989,6 +2033,7 @@ $("#sort").addEventListener("change", e => {
 });
 $("#timeframe").addEventListener("change", e => {
   state.timeframe = e.target.value;
+  state.selectedAppId = null;
   try { localStorage.setItem("pipeline.timeframe", state.timeframe); } catch(err){}
   render();
 });

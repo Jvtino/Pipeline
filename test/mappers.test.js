@@ -22,8 +22,16 @@ function assertThreadShape(t) {
     assert.match(m.date, /^\d{4}-\d{2}-\d{2}$/, "message.date is ISO yyyy-mm-dd");
     assert.equal(typeof m.from, "string");
     assert.equal(typeof m.body, "string");
-    // the unified message shape is exactly {date, from, body}
-    assert.deepEqual(Object.keys(m).sort(), ["body", "date", "from"]);
+    const keys = Object.keys(m).sort();
+    assert.deepEqual(keys.filter((k) => !["attachments", "webLink"].includes(k)), ["body", "date", "from"]);
+    if (m.attachments) {
+      assert.ok(Array.isArray(m.attachments));
+      for (const a of m.attachments) {
+        assert.equal(typeof a.name, "string");
+        assert.ok("contentType" in a);
+        assert.ok("size" in a);
+      }
+    }
   }
 }
 
@@ -58,7 +66,8 @@ test("gmail.mapGmailThread sorts messages oldest-first and derives meta from ear
       { internalDate: "1718000000000", snippet: "we'd like to schedule a call",
         payload: { headers: [{ name: "From", value: "Recruiting <rec@acme.com>" }, { name: "Subject", value: "Re: Engineer" }] } },
       { internalDate: "1717200000000", snippet: "thank you for applying",
-        payload: { headers: [{ name: "From", value: "Careers <careers@acme.com>" }, { name: "Subject", value: "Engineer" }] } },
+        payload: { headers: [{ name: "From", value: "Careers <careers@acme.com>" }, { name: "Subject", value: "Engineer" }],
+          parts: [{ filename: "Role Brief.pdf", mimeType: "application/pdf", body: { attachmentId: "a1", size: 2048 } }] } },
     ],
   });
   assertThreadShape(t);
@@ -66,6 +75,7 @@ test("gmail.mapGmailThread sorts messages oldest-first and derives meta from ear
   assert.equal(t.domain, "acme.com");
   assert.equal(t.subject, "Engineer");                 // earliest message's subject
   assert.deepEqual(t.messages.map((m) => m.date), ["2024-06-01", "2024-06-10"]);
+  assert.deepEqual(t.messages[0].attachments, [{ name: "Role Brief.pdf", contentType: "application/pdf", size: 2048 }]);
 });
 
 test("gmail.mapGmailThread handles missing snippet/headers without throwing", () => {
@@ -87,7 +97,8 @@ test("msgraph.domainOf / isoDate", () => {
 test("msgraph.mapMessagesToThreads groups by conversationId, sorts, formats sender", () => {
   const threads = msgraph.mapMessagesToThreads([
     { conversationId: "c1", subject: "Offer", receivedDateTime: "2026-06-15T10:00:00Z",
-      from: { emailAddress: { name: "Talent", address: "talent@contoso.com" } }, bodyPreview: "we are pleased to offer you" },
+      from: { emailAddress: { name: "Talent", address: "talent@contoso.com" } }, bodyPreview: "we are pleased to offer you",
+      attachments: [{ name: "Offer Letter.pdf", contentType: "application/pdf", size: 84213, isInline: false }] },
     { conversationId: "c1", subject: "Interview", receivedDateTime: "2026-06-10T10:00:00Z",
       from: { emailAddress: { name: "Rec", address: "rec@contoso.com" } }, bodyPreview: "interview" },
     { conversationId: "c2", subject: "Other", receivedDateTime: "2026-06-12T10:00:00Z",
@@ -100,6 +111,7 @@ test("msgraph.mapMessagesToThreads groups by conversationId, sorts, formats send
   const c1 = threads[0];
   assert.deepEqual(c1.messages.map((m) => m.date), ["2026-06-10", "2026-06-15"]);
   assert.equal(c1.messages[0].from, "Rec <rec@contoso.com>");        // name <addr>
+  assert.deepEqual(c1.messages[1].attachments, [{ name: "Offer Letter.pdf", contentType: "application/pdf", size: 84213 }]);
   assert.equal(threads[1].messages[0].from, "jobs@globex.io");        // addr only when no name
 });
 
@@ -142,12 +154,14 @@ test("imap.mapParsedToThreads groups by domain+subject, sorts, dedups threads", 
     { from: { value: [{ address: "careers@acme.com" }], text: "Acme <careers@acme.com>" },
       subject: "RE: Your application for Engineer", date: "2026-06-10", text: "schedule a call" },
     { from: { value: [{ address: "jobs@globex.io" }], text: "jobs@globex.io" },
-      subject: "Interview", date: "2026-06-12", html: "<p>phone screen</p>" },
+      subject: "Interview", date: "2026-06-12", html: "<p>phone screen</p>",
+      attachments: [{ filename: "Interview Plan.docx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: 3210 }] },
   ]);
   // the two Acme messages collapse into one thread (Re: normalized away)
   assert.equal(threads.length, 2);
   threads.forEach(assertThreadShape);
   assert.equal(threads[0].domain, "globex.io");   // newest activity first
+  assert.deepEqual(threads[0].messages[0].attachments, [{ name: "Interview Plan.docx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: 3210 }]);
   const acme = threads.find((t) => t.domain === "acme.com");
   assert.equal(acme.messages.length, 2);
   assert.deepEqual(acme.messages.map((m) => m.date), ["2026-06-01", "2026-06-10"]);

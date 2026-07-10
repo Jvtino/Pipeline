@@ -10,4 +10,6 @@ contextBridge.exposeInMainWorld("pipelineAPI", {
   disconnect: (id) => ipcRenderer.invoke("pipeline:disconnect", id),
   fetchThreads: () => ipcRenderer.invoke("pipeline:fetchThreads"),
   openExternal: (url) => ipcRenderer.invoke("pipeline:openExternal", url),
+  pickDocument: () => ipcRenderer.invoke("pipeline:pickDocument"),
+  openPath: (path) => ipcRenderer.invoke("pipeline:openPath", path),
 });

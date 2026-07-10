@@ -53,6 +53,11 @@ function bodyText(parsed) {
   if (!t && parsed.html) t = String(parsed.html).replace(/<[^>]+>/g, " ");
   return t.replace(/\s+/g, " ").trim().slice(0, 600);
 }
+function attachmentMeta(parsed) {
+  return (parsed.attachments || [])
+    .filter((a) => a && a.filename && !/^\s*inline/i.test(a.contentDisposition || ""))
+    .map((a) => ({ name: a.filename, contentType: a.contentType || null, size: a.size ?? (a.content ? a.content.length : null) }));
+}
 function mapParsedToThreads(parsedList) {
   const groups = new Map();
   let seq = 0;
@@ -62,6 +67,7 @@ function mapParsedToThreads(parsedList) {
     const subject = p.subject || "(no subject)";
     const domain = domainOf(fromAddr);
     const body = bodyText(p);
+    const attachments = attachmentMeta(p);
     let key = domain + "|" + normSubject(subject);
     // Shared ATS platforms: many employers mail from ONE domain, often with the
     // same boilerplate subject — domain+subject would bundle them into one
@@ -82,6 +88,7 @@ function mapParsedToThreads(parsedList) {
       domain,
       subject,
       body,
+      ...(attachments.length ? { attachments } : {}),
     });
   }
   const threads = [];
@@ -103,7 +110,7 @@ function mapParsedToThreads(parsedList) {
       ...(legacyThreadId !== threadId ? { legacyThreadId } : {}),
       domain: msgs[0].domain,
       subject: msgs[0].subject,
-      messages: msgs.map(({ date, from, body }) => ({ date, from, body })),
+      messages: msgs.map(({ date, from, body, attachments }) => ({ date, from, body, ...(attachments ? { attachments } : {}) })),
     });
   }
   threads.sort((a, b) => b.messages[b.messages.length - 1].date.localeCompare(a.messages[a.messages.length - 1].date));
@@ -145,4 +152,4 @@ async function connectAndFetch({ email, pass, host, port, sinceDays }) {
   return { account: email, threads: mapParsedToThreads(parsed) };
 }
 
-module.exports = { hostFor, connectAndFetch, mapParsedToThreads, domainOf, isoDate, normSubject, bodyText, HOST_PRESETS };
+module.exports = { hostFor, connectAndFetch, mapParsedToThreads, domainOf, isoDate, normSubject, bodyText, attachmentMeta, HOST_PRESETS };

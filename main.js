@@ -5,7 +5,7 @@
 // (Electron safeStorage) and stored only in the user-data dir — never in the repo.
 
 "use strict";
-const { app, BrowserWindow, ipcMain, shell, safeStorage } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, safeStorage, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const http = require("http");
@@ -178,6 +178,34 @@ ipcMain.handle("pipeline:disconnect", async (_e, id) => {
 ipcMain.handle("pipeline:openExternal", (_e, url) => {
   if (typeof url === "string" && url.startsWith("https://")) shell.openExternal(url);
   return { ok: true };
+});
+
+ipcMain.handle("pipeline:pickDocument", async () => {
+  const res = await dialog.showOpenDialog(win, {
+    title: "Add documents to Pipeline",
+    properties: ["openFile", "multiSelections"],
+    filters: [
+      { name: "Documents", extensions: ["pdf", "doc", "docx", "rtf", "txt", "pages", "md", "png", "jpg", "jpeg"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+  });
+  if (res.canceled) return [];
+  return res.filePaths.map((filePath) => {
+    let stat = null;
+    try { stat = fs.statSync(filePath); } catch (e) {}
+    return {
+      path: filePath,
+      name: path.basename(filePath),
+      size: stat ? stat.size : null,
+      modified: stat ? stat.mtime.toISOString().slice(0, 10) : null,
+    };
+  });
+});
+
+ipcMain.handle("pipeline:openPath", async (_e, filePath) => {
+  if (typeof filePath !== "string" || !filePath) return { ok: false, error: "No file selected" };
+  const err = await shell.openPath(filePath);
+  return err ? { ok: false, error: err } : { ok: true };
 });
 
 ipcMain.handle("pipeline:fetchThreads", async () => {

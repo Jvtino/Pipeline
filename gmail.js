@@ -79,16 +79,27 @@ function isoFromInternal(ms, dateHeader) {
   if (isNaN(d)) d = new Date();
   return d.toISOString().slice(0, 10);
 }
+function gmailAttachments(part, out = []) {
+  if (!part) return out;
+  const disposition = header(part.headers, "Content-Disposition");
+  if (part.filename && part.body && part.body.attachmentId && !/^\s*inline/i.test(disposition)) {
+    out.push({ name: part.filename, contentType: part.mimeType || null, size: part.body.size ?? null });
+  }
+  for (const child of part.parts || []) gmailAttachments(child, out);
+  return out;
+}
 function mapGmailThread(thread) {
   const msgs = (thread.messages || []).map((m) => {
     const hs = (m.payload && m.payload.headers) || [];
     const from = header(hs, "From");
+    const attachments = gmailAttachments(m.payload);
     return {
       date: isoFromInternal(m.internalDate, header(hs, "Date")),
       from: from || "unknown",
       domain: domainOf(from),
       subject: header(hs, "Subject") || "(no subject)",
       body: String(m.snippet || "").replace(/\s+/g, " ").trim().slice(0, 600),
+      ...(attachments.length ? { attachments } : {}),
     };
   });
   msgs.sort((a, b) => a.date.localeCompare(b.date));
@@ -96,7 +107,7 @@ function mapGmailThread(thread) {
     threadId: thread.id,
     domain: (msgs[0] || {}).domain || "unknown",
     subject: (msgs[0] || {}).subject || "(no subject)",
-    messages: msgs.map(({ date, from, body }) => ({ date, from, body })),
+    messages: msgs.map(({ date, from, body, attachments }) => ({ date, from, body, ...(attachments ? { attachments } : {}) })),
   };
 }
 
@@ -127,7 +138,7 @@ async function fetchJobThreads(token) {
   for (const id of ids.slice(0, MAX_THREADS)) {
     try {
       const t = await getJson("gmail.googleapis.com",
-        `/gmail/v1/users/me/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`, token);
+        `/gmail/v1/users/me/threads/${id}?format=full`, token);
       threads.push(mapGmailThread(t));
     } catch (e) { /* skip a bad thread */ }
   }
@@ -137,5 +148,5 @@ async function fetchJobThreads(token) {
 
 module.exports = {
   SCOPE, pkceVerifier, pkceChallenge, buildAuthUrl, exchangeCode, refresh,
-  getEmail, fetchJobThreads, mapGmailThread, domainOf, header, isoFromInternal,
+  getEmail, fetchJobThreads, mapGmailThread, domainOf, header, isoFromInternal, gmailAttachments,
 };

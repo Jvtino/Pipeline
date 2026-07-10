@@ -92,7 +92,7 @@ function refresh(clientId, refreshToken) {
 
 // ---------------------------------------------------------------------------
 // Pure mapping: Graph messages -> Provider thread shape (testable, no network)
-//   thread = { threadId, domain, subject, messages:[{date, from, body}] }
+//   thread = { threadId, domain, subject, messages:[{date, from, body, attachments?}] }
 // ---------------------------------------------------------------------------
 function domainOf(addr) {
   const m = String(addr || "").match(/@([^>\s]+)/);
@@ -102,6 +102,10 @@ function isoDate(s) {
   try { const d = new Date(s); return isNaN(d) ? new Date().toISOString().slice(0, 10) : d.toISOString().slice(0, 10); }
   catch (e) { return new Date().toISOString().slice(0, 10); }
 }
+function mapAttachments(list) {
+  const named = (list || []).filter((a) => a && a.name && !a.isInline);
+  return named.map((a) => ({ name: a.name, contentType: a.contentType || null, size: a.size ?? null }));
+}
 function mapMessagesToThreads(messages) {
   const groups = new Map();
   for (const m of messages || []) {
@@ -109,6 +113,7 @@ function mapMessagesToThreads(messages) {
     const ea = (m.from && m.from.emailAddress) || {};
     const addr = ea.address || "";
     const name = ea.name || addr;
+    const attachments = mapAttachments(m.attachments);
     if (!groups.has(conv)) groups.set(conv, []);
     groups.get(conv).push({
       date: isoDate(m.receivedDateTime),
@@ -116,6 +121,8 @@ function mapMessagesToThreads(messages) {
       domain: domainOf(addr),
       subject: m.subject || "(no subject)",
       body: String(m.bodyPreview || "").replace(/\s+/g, " ").trim().slice(0, 600),
+      ...(attachments.length ? { attachments } : {}),
+      ...(m.webLink ? { webLink: m.webLink } : {}),
     });
   }
   const threads = [];
@@ -125,7 +132,7 @@ function mapMessagesToThreads(messages) {
       threadId: conv,
       domain: msgs[0].domain,
       subject: msgs[0].subject,
-      messages: msgs.map(({ date, from, body }) => ({ date, from, body })),
+      messages: msgs.map(({ date, from, body, attachments, webLink }) => ({ date, from, body, ...(attachments ? { attachments } : {}), ...(webLink ? { webLink } : {}) })),
     });
   }
   threads.sort((a, b) => b.messages[b.messages.length - 1].date.localeCompare(a.messages[a.messages.length - 1].date));
@@ -147,20 +154,29 @@ async function fetchJobThreads(token) {
   // Page through ALL matching mail via @odata.nextLink (previously we read a
   // single page, which silently capped results at ~100 messages).
   const search = encodeURIComponent(`"${SEARCH_KQL}"`);
-  const mkPath = (top) =>
+  const select = "subject,from,receivedDateTime,bodyPreview,conversationId,hasAttachments,webLink";
+  const expand = "attachments($select=name,contentType,size,isInline)";
+  const mkPath = (top, includeAttachments = true) =>
     `/v1.0/me/messages?$search=${search}` +
-    `&$select=subject,from,receivedDateTime,bodyPreview,conversationId&$top=${top}`;
+    `&$select=${select}${includeAttachments ? `&$expand=${expand}` : ""}&$top=${top}`;
   const all = [];
   const seen = new Set();
-  let path = mkPath(100);
+  let includeAttachments = true;
+  let path = mkPath(100, includeAttachments);
   let firstPage = true;
   while (path && all.length < MAX_MESSAGES) {
     let data;
     try {
       data = await getJson("graph.microsoft.com", path, token);
     } catch (e) {
+      if (includeAttachments) {
+        includeAttachments = false;
+        path = mkPath(25, false);
+        firstPage = false;
+        continue;
+      }
       // Some tenants cap $top on $search queries — retry once with a small page.
-      if (firstPage) { firstPage = false; path = mkPath(25); continue; }
+      if (firstPage) { firstPage = false; path = mkPath(25, false); continue; }
       throw e;
     }
     firstPage = false;
@@ -176,7 +192,7 @@ async function fetchJobThreads(token) {
   // on consumer accounts. Well-known folder id "junkemail" works for all personal mailboxes.
   try {
     const junkPath = `/v1.0/me/mailFolders/junkemail/messages?$search=${search}` +
-      `&$select=subject,from,receivedDateTime,bodyPreview,conversationId&$top=50`;
+      `&$select=${select}${includeAttachments ? `&$expand=${expand}` : ""}&$top=50`;
     const junk = await getJson("graph.microsoft.com", junkPath, token);
     for (const m of junk.value || []) {
       if (m.id && seen.has(m.id)) continue;
@@ -191,5 +207,5 @@ async function fetchJobThreads(token) {
 module.exports = {
   SCOPE, pkceVerifier, pkceChallenge, buildAuthUrl,
   exchangeCode, refresh, getEmail, fetchJobThreads,
-  mapMessagesToThreads, domainOf, isoDate,
+  mapMessagesToThreads, mapAttachments, domainOf, isoDate,
 };

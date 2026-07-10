@@ -327,6 +327,91 @@
   }
   .rm-manual:hover{background:rgba(240,85,107,.16);border-color:rgba(240,85,107,.5)}
   .rm-manual svg{width:13px;height:13px}
+
+  [hidden]{display:none!important}
+
+  /* ---------------- Native feature tabs ---------------- */
+  .viewtabs{display:flex;align-items:center;gap:8px;margin:15px 0 0;flex-wrap:wrap}
+  .viewtab{
+    cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:8px;
+    padding:8px 12px;border-radius:999px;border:1px solid var(--border);
+    background:rgba(255,255,255,.025);color:var(--text-dim);font-size:12.5px;font-weight:700;
+    transition:border-color .14s,background .14s,color .14s,transform .12s;
+  }
+  .viewtab:hover{border-color:var(--border-2);color:var(--text);transform:translateY(-1px)}
+  .viewtab.active{border-color:rgba(47,129,247,.65);background:rgba(47,129,247,.14);color:#d9e9ff;box-shadow:0 0 0 1px rgba(47,129,247,.20)}
+  .viewtab svg{width:15px;height:15px;flex:0 0 auto}
+
+  /* ---------------- Feature screens ---------------- */
+  .screen{display:block;margin-top:22px}
+  .screen-head{display:flex;align-items:flex-start;gap:16px;margin:0 0 16px;flex-wrap:wrap}
+  .screen-title{flex:1;min-width:240px}
+  .screen-title h2{margin:0;font-size:22px;letter-spacing:-.35px;line-height:1.15}
+  .screen-title p{margin:5px 0 0;color:var(--text-dim);font-size:13px}
+  .screen-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .feature-card{
+    border:1px solid var(--border);border-radius:var(--radius);
+    background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.01));
+    box-shadow:0 14px 34px rgba(0,0,0,.24);overflow:hidden;
+  }
+  .feature-pad{padding:18px}
+  .eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--text-faint)}
+  .muted{color:var(--text-dim)}
+  .empty-panel{padding:62px 20px;text-align:center;color:var(--text-faint)}
+  .empty-panel b{display:block;color:var(--text);font-size:15px;margin-bottom:4px}
+  .rowline{display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:1px solid var(--border)}
+  .rowline:first-child{border-top:none}
+  .rowline:hover{background:rgba(255,255,255,.026)}
+  .row-main{flex:1;min-width:0}
+  .row-title{font-weight:700;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row-sub{font-size:12px;color:var(--text-dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .iconbtn{cursor:pointer;font-family:inherit;display:inline-grid;place-items:center;width:32px;height:32px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.025);color:var(--text-dim)}
+  .iconbtn:hover{color:var(--text);border-color:var(--blue);background:rgba(47,129,247,.09)}
+  .iconbtn svg{width:15px;height:15px}
+
+  /* Calendar */
+  .cal-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .cal-title{font-size:18px;font-weight:760;letter-spacing:-.25px;min-width:180px}
+  .cal-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-left:auto}
+  .cal-legend span{display:inline-flex;align-items:center;gap:6px;color:var(--text-dim);font-size:12px;font-weight:650}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(112px,1fr));gap:7px}
+  .cal-scroll{overflow-x:auto;padding:16px}
+  .cal-dow{text-align:center;color:var(--text-faint);font-size:10.5px;font-weight:800;letter-spacing:.08em}
+  .cal-cell{min-height:112px;border:1px solid var(--border);border-radius:12px;padding:8px;background:rgba(255,255,255,.018)}
+  .cal-cell.blank{background:transparent;border-color:rgba(255,255,255,.035)}
+  .cal-day{font:700 12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text-dim);margin-bottom:6px}
+  .cal-day.today{color:#9cc2ff}
+  .cal-event{width:100%;border:none;cursor:pointer;text-align:left;font-family:inherit;display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 7px;border-radius:8px;background:rgba(255,255,255,.035);color:var(--text);font-size:11px;font-weight:700;line-height:1.2;overflow:hidden}
+  .cal-event:hover{background:rgba(47,129,247,.16)}
+  .cal-event .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* Contacts */
+  .contact-group{margin-bottom:10px}
+  .contact-avatar,.doc-badge{display:grid;place-items:center;flex:0 0 auto;border-radius:10px;font-weight:800;background:rgba(47,129,247,.12);border:1px solid rgba(47,129,247,.20);color:#9cc2ff}
+  .contact-avatar{width:38px;height:38px}
+  .contact-links{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .mini-link{color:#9cc2ff;text-decoration:none;font-size:12px;font-weight:650}
+  .mini-link:hover{text-decoration:underline}
+
+  /* Statistics */
+  .metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+  @media (max-width:900px){.metric-grid{grid-template-columns:repeat(2,1fr)}}
+  .metric{border:1px solid var(--border);border-radius:14px;padding:15px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.01))}
+  .metric .value{font-size:30px;font-weight:780;letter-spacing:-.6px;line-height:1}
+  .metric .label{margin-top:8px;color:var(--text-dim);font-size:12.5px;font-weight:700}
+  .stat-layout{display:grid;grid-template-columns:1.25fr .9fr;gap:14px}
+  @media (max-width:900px){.stat-layout{grid-template-columns:1fr}}
+  .barrow{display:grid;grid-template-columns:90px 1fr 42px;gap:12px;align-items:center;margin:11px 0}
+  .bartrack{height:12px;border-radius:999px;background:rgba(255,255,255,.055);overflow:hidden}
+  .barfill{height:100%;border-radius:999px;background:var(--blue)}
+  .spark{display:flex;align-items:flex-end;gap:7px;height:92px;padding-top:12px}
+  .sparkbar{flex:1;min-width:18px;border-radius:7px 7px 0 0;background:linear-gradient(180deg,#4f9cff,#1f4fbd)}
+  .sparklabel{font:700 10px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text-faint);text-align:center;margin-top:6px}
+
+  /* Documents */
+  .doc-badge{width:39px;height:45px;font-size:9px;letter-spacing:.04em;color:#ffd0d7;background:rgba(240,85,107,.12);border-color:rgba(240,85,107,.24)}
+  .doc-badge.doc{color:#b9ccff;background:rgba(79,156,255,.12);border-color:rgba(79,156,255,.24)}
+  .doc-source{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint)}
 </style>
 </head>
 <body>
@@ -371,6 +456,8 @@
     </button>
   </header>
 
+  <nav class="viewtabs" id="viewtabs" aria-label="Pipeline sections"></nav>
+
   <section class="stats" id="stats"></section>
 
   <div class="toolbar">
@@ -398,6 +485,26 @@
   <main class="board" id="board"></main>
 
   <footer class="note" id="foot"></footer>
+</div>
+
+<!-- Add-contact modal -->
+<div class="overlay" id="contactOverlay">
+  <div class="modal">
+    <h2>Add a contact</h2>
+    <p>Keep recruiters, hiring managers and referrals close to the applications they belong to.</p>
+    <div class="field"><label for="contact-company">Company</label><input id="contact-company" type="text" placeholder="e.g. Acme Corp" autocomplete="off"></div>
+    <div class="field"><label for="contact-name">Name</label><input id="contact-name" type="text" placeholder="e.g. Jordan Lee" autocomplete="off"></div>
+    <div class="field"><label for="contact-title">Title</label><input id="contact-title" type="text" placeholder="Recruiter, hiring manager, referral..." autocomplete="off"></div>
+    <div class="field row">
+      <div><label for="contact-email">Email</label><input id="contact-email" type="email" placeholder="name@company.com" autocomplete="off"></div>
+      <div><label for="contact-phone">Phone</label><input id="contact-phone" type="tel" placeholder="optional" autocomplete="off"></div>
+    </div>
+    <div class="cmsg" id="contact-msg"></div>
+    <div class="actions">
+      <button class="btn secondary" id="contact-cancel" type="button">Cancel</button>
+      <button class="btn" id="contact-save" type="button">Add contact</button>
+    </div>
+  </div>
 </div>
 
 <!-- Connect-email modal -->
@@ -632,7 +739,7 @@ function buildApplications(threads){
     const timeline = msgs.map(m => {
       const s = detectStatus(m.body);
       if (s){ status = s; sawAny = true; }
-      return { date:m.date, from:m.from, body:m.body, status:s || status };
+      return { date:m.date, from:m.from, body:m.body, status:s || status, ...(m.attachments ? { attachments:m.attachments } : {}), ...(m.webLink ? { webLink:m.webLink } : {}) };
     });
     // The subject (minus the role title, so job-title words like "Interview" don't
     // mislead) is a secondary signal that can upgrade the final status — e.g. a
@@ -696,6 +803,8 @@ function groupByCompany(apps){
 // pinned favorites persist across reloads: companies (by name) + positions (by id)
 function loadSet(key){ try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch(e){ return new Set(); } }
 function saveSet(key, set){ try { localStorage.setItem(key, JSON.stringify([...set])); } catch(e){} }
+function loadJson(key, fallback){ try { const v = JSON.parse(localStorage.getItem(key) || "null"); return v == null ? fallback : v; } catch(e){ return fallback; } }
+function saveJson(key, value){ try { localStorage.setItem(key, JSON.stringify(value)); } catch(e){} }
 // manual status overrides: appId -> { status, date } (persisted, re-applied each sync)
 function loadMap(key){ try { return new Map(Object.entries(JSON.parse(localStorage.getItem(key) || "{}"))); } catch(e){ return new Map(); } }
 function saveMap(key, map){ try { localStorage.setItem(key, JSON.stringify(Object.fromEntries(map))); } catch(e){} }
@@ -718,12 +827,22 @@ function loadSort(){
 }
 function loadOrder(){ try { return JSON.parse(localStorage.getItem("pipeline.cardOrder") || "[]"); } catch(e){ return []; } }
 function saveOrder(){ try { localStorage.setItem("pipeline.cardOrder", JSON.stringify(state.cardOrder)); localStorage.setItem("pipeline.sort", state.sort); } catch(e){} }
+function loadView(){
+  try {
+    const v = localStorage.getItem("pipeline.desktopView") || "applications";
+    return ["applications","calendar","contacts","statistics","documents"].includes(v) ? v : "applications";
+  } catch(e){ return "applications"; }
+}
+function currentCalendar(){ const d = new Date(); return { year:d.getFullYear(), month:d.getMonth() }; }
 
 const state = { filter:"all", query:"", sort:loadSort(), timeframe:loadTimeframe(),
+                view:loadView(), calendar:currentCalendar(),
                 cardOrder:loadOrder(), expanded:new Set(),
                 pinned:loadSet("pipeline.pins"),
                 statusOverrides:loadMap("pipeline.statusOverrides"),
                 manualThreads:loadManual(),
+                contacts:loadJson("pipeline.contacts", []),
+                docs:loadJson("pipeline.documents", []),
                 ignored:loadSet("pipeline.ignored"), apps:[], rawThreads:[] };
 const $ = sel => document.querySelector(sel);
 
@@ -741,6 +860,29 @@ const IGN_SVG  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const PREP_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6"/><path d="M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`;
 const CARET_SVG = `<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
 const STATUS_ORDER = ["applied","interview","offer","rejected"];
+const NAV = [
+  { key:"applications", label:"Applications", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>` },
+  { key:"calendar", label:"Calendar", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>` },
+  { key:"contacts", label:"Contacts", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 11a4 4 0 1 0-8 0"/><path d="M3 21a7 7 0 0 1 18 0"/><path d="M19 8v4M21 10h-4"/></svg>` },
+  { key:"statistics", label:"Statistics", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h17"/><path d="M8 16v-5M13 16V8M18 16v-9"/></svg>` },
+  { key:"documents", label:"Documents", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>` },
+];
+function renderViewTabs(){
+  const nav = $("#viewtabs");
+  if (!nav) return;
+  nav.innerHTML = NAV.map(v => `
+    <button type="button" class="viewtab ${state.view===v.key?"active":""}" data-view="${v.key}" aria-pressed="${state.view===v.key}">
+      ${v.icon}<span>${v.label}</span>
+    </button>`).join("");
+}
+function setView(view){
+  if (!NAV.some(v => v.key === view)) return;
+  state.view = view;
+  try { localStorage.setItem("pipeline.desktopView", view); } catch(e){}
+  closeStatusMenu();
+  render();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
 
 function counts(apps){
   const c = { all:apps.length, applied:0, interview:0, offer:0, rejected:0 };
@@ -866,6 +1008,7 @@ function renderCard(g){
 }
 
 function renderBoard(){
+  $("#board").className = "board";
   const groups = groupByCompany(state.apps.filter(appMatches));
 
   const orderIdx = new Map(state.cardOrder.map((c,i)=>[c,i]));
@@ -923,6 +1066,7 @@ function setBoardHtml(html){
 function layoutMasonry(){
   const board = $("#board");
   if (!board) return;
+  if (!board.classList.contains("board")) return;
   const prevLock = board.style.minHeight;
   board.style.minHeight = board.offsetHeight + "px";   // hold page height while spans reset (prevents scroll clamp)
   for (const k of board.children) k.style.gridRowEnd = "auto";   // reset, then measure natural heights
@@ -962,7 +1106,302 @@ function renderControls(){
   const so = $("#sort"); if (so) so.value = state.sort;
 }
 
-function render(){ renderControls(); renderStats(); renderBoard(); renderFoot(); }
+function featureApps(){ return state.apps.filter(a => !state.ignored.has(a.company)); }
+function setScreenHtml(html){
+  const board = $("#board");
+  board.className = "screen";
+  board.style.minHeight = "";
+  board.innerHTML = html;
+}
+function pct(n, d){ return d ? Math.round((n/d)*100) : 0; }
+function sourceFromDomain(domain){
+  const d = String(domain || "").toLowerCase();
+  if (d.includes("linkedin")) return "LinkedIn";
+  if (d.includes("indeed")) return "Indeed";
+  if (d.includes("glassdoor")) return "Glassdoor";
+  if (/greenhouse|lever|workday|myworkday|ashby|workable|smartrecruiters|jobvite|icims|breezy|recruitee/.test(d)) return "Company site";
+  return d && d !== "unknown" ? "Company site" : "Manual";
+}
+function openApplication(appId){
+  const a = state.apps.find(x => x.id === appId);
+  if (!a) return;
+  state.view = "applications";
+  try { localStorage.setItem("pipeline.desktopView", state.view); } catch(e){}
+  state.filter = "all";
+  state.query = "";
+  const q = $("#q"); if (q) q.value = "";
+  state.expanded.add(appId);
+  render();
+  setTimeout(() => {
+    const sel = '.role[data-id="' + (window.CSS && CSS.escape ? CSS.escape(appId) : appId) + '"]';
+    const el = document.querySelector(sel);
+    if (el) el.scrollIntoView({ block:"center", behavior:"smooth" });
+  }, 30);
+}
+
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const CAL_BUCKETS = [
+  { key:"applied", label:"Applied", status:"applied" },
+  { key:"interview", label:"Interview", status:"interview" },
+  { key:"offer", label:"Offer", status:"offer" },
+  { key:"rejected", label:"Rejected", status:"rejected" },
+];
+function localIso(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString().slice(0,10); }
+function isoOfDay(year, month, day){ return new Date(year, month, day).toISOString().slice(0,10); }
+function emptyCal(){ return { applied:[], interview:[], offer:[], rejected:[] }; }
+function calendarMap(apps){
+  const map = new Map();
+  const add = (date, bucket, a) => {
+    if (!date) return;
+    const c = map.get(date) || emptyCal();
+    c[bucket].push({ id:a.id, company:a.company, role:a.role });
+    map.set(date, c);
+  };
+  for (const a of apps){
+    add(a.firstDate, "applied", a);
+    if (a.status === "interview") add(a.lastDate, "interview", a);
+    if (a.status === "offer") add(a.lastDate, "offer", a);
+    if (a.status === "rejected") add(a.lastDate, "rejected", a);
+  }
+  return map;
+}
+function shiftCalendar(delta){
+  const d = new Date(state.calendar.year, state.calendar.month + delta, 1);
+  state.calendar = { year:d.getFullYear(), month:d.getMonth() };
+  render();
+}
+function renderCalendarScreen(){
+  const apps = featureApps();
+  const { year, month } = state.calendar;
+  const byDate = calendarMap(apps);
+  const today = localIso(new Date());
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i=0;i<firstDow;i++) cells.push(null);
+  for (let d=1; d<=daysInMonth; d++) cells.push(d);
+  while (cells.length % 7) cells.push(null);
+  const eventHtml = (date) => {
+    if (!date) return "";
+    const counts = byDate.get(date) || emptyCal();
+    return CAL_BUCKETS.flatMap(b => counts[b.key].map(e => {
+      const st = STATUS[b.status];
+      return `<button type="button" class="cal-event" data-openapp="${esc(e.id)}" title="${esc(e.role)}"><span class="dot ${st.cls}"></span><span class="name">${esc(e.company)}</span></button>`;
+    })).join("");
+  };
+  return `
+    <div class="screen-head">
+      <div class="screen-title"><h2>Calendar</h2><p>Application milestones, interviews, offers and rejections in one month view.</p></div>
+      <div class="screen-actions cal-top">
+        <button class="btn secondary" type="button" data-caltoday>Today</button>
+        <button class="iconbtn" type="button" data-calprev aria-label="Previous month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m15 18-6-6 6-6"/></svg></button>
+        <button class="iconbtn" type="button" data-calnext aria-label="Next month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m9 18 6-6-6-6"/></svg></button>
+        <div class="cal-title">${MONTHS[month]} ${year}</div>
+      </div>
+    </div>
+    <div class="feature-card cal-scroll">
+      <div class="cal-legend" style="margin:0 0 12px">${CAL_BUCKETS.map(b => `<span><span class="dot ${STATUS[b.status].cls}"></span>${b.label}</span>`).join("")}</div>
+      <div class="cal-grid" style="margin-bottom:8px">${["SUN","MON","TUE","WED","THU","FRI","SAT"].map(d => `<div class="cal-dow">${d}</div>`).join("")}</div>
+      <div class="cal-grid">${cells.map(day => {
+        if (!day) return `<div class="cal-cell blank"></div>`;
+        const iso = isoOfDay(year, month, day);
+        return `<div class="cal-cell"><div class="cal-day ${iso===today?"today":""}">${day}</div>${eventHtml(iso)}</div>`;
+      }).join("")}</div>
+    </div>`;
+}
+
+function parseSender(from){
+  const s = String(from || "");
+  const email = (s.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i) || [])[0] || "";
+  let name = s.replace(/<[^>]+>/g, "").replace(email, "").replace(/["']/g, "").trim();
+  if (!name && email) name = email.split("@")[0].replace(/[._-]+/g, " ");
+  name = name.replace(/\b\w/g, m => m.toUpperCase());
+  return { name:name || "Hiring team", email };
+}
+function contactTitle(name, email){
+  const key = (name + " " + email).toLowerCase();
+  if (/recruit|talent|careers|people|hiring|jobs/.test(key)) return "Recruiting contact";
+  if (/no.?reply|notification|automated/.test(key)) return "Automated sender";
+  return "Contact";
+}
+function derivedContacts(){
+  const out = [], seen = new Set();
+  for (const a of featureApps()){
+    for (const ev of a.timeline || []){
+      if (ev.manual) continue;
+      const p = parseSender(ev.from);
+      if (!p.email && !p.name) continue;
+      const local = p.email.split("@")[0] || "";
+      if (/^(no.?reply|do.?not.?reply|notification|alerts?)$/i.test(local)) continue;
+      const key = (p.email || `${p.name}|${a.company}`).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id:"auto-"+key, company:a.company, name:p.name, title:contactTitle(p.name, p.email), email:p.email, phone:"", source:"email", appId:a.id });
+    }
+  }
+  return out;
+}
+function allContacts(){
+  const manual = Array.isArray(state.contacts) ? state.contacts : [];
+  const keys = new Set(manual.map(c => (c.email || `${c.name}|${c.company}`).toLowerCase()));
+  return [...manual, ...derivedContacts().filter(c => !keys.has((c.email || `${c.name}|${c.company}`).toLowerCase()))]
+    .sort((a,b)=> a.company.localeCompare(b.company) || a.name.localeCompare(b.name));
+}
+function renderContactsScreen(){
+  const list = allContacts();
+  const groups = new Map();
+  for (const c of list){ if (!groups.has(c.company)) groups.set(c.company, []); groups.get(c.company).push(c); }
+  return `
+    <div class="screen-head">
+      <div class="screen-title"><h2>Contacts</h2><p>Recruiters, hiring teams, referrals and people you add by hand.</p></div>
+      <div class="screen-actions"><button class="btn" type="button" data-addcontact>${NAV[2].icon} Add contact</button></div>
+    </div>
+    ${list.length ? [...groups.entries()].map(([company, people]) => `
+      <section class="feature-card contact-group">
+        <div class="rowline"><div class="avatar" style="width:34px;height:34px;border-radius:10px;background:hsl(${hueFor(company)} 42% 20%);color:hsl(${hueFor(company)} 75% 74%)">${esc(company[0] || "?")}</div><div class="row-main"><div class="row-title">${esc(company)}</div><div class="row-sub">${people.length} contact${people.length===1?"":"s"}</div></div></div>
+        ${people.map(c => `
+          <div class="rowline" ${c.appId ? `data-openapp="${esc(c.appId)}" style="cursor:pointer"` : ""}>
+            <div class="contact-avatar">${esc((c.name || "?")[0])}</div>
+            <div class="row-main"><div class="row-title">${esc(c.name || "Hiring team")} ${c.source==="email" ? `<span class="pill s-offer" style="margin-left:6px">from email</span>` : ""}</div><div class="row-sub">${esc(c.title || "Contact")}</div></div>
+            <div class="contact-links">${c.email ? `<a class="mini-link" href="mailto:${esc(c.email)}" data-stop>${esc(c.email)}</a>` : ""}${c.phone ? `<a class="mini-link" href="tel:${esc(c.phone.replace(/[^+\d]/g, ""))}" data-stop>${esc(c.phone)}</a>` : ""}</div>
+          </div>`).join("")}
+      </section>`).join("") : `<div class="feature-card empty-panel"><b>No contacts yet</b>Connect mail or add the people you are talking to.</div>`}`;
+}
+
+function daysBetween(a, b){ return Math.max(0, Math.round((new Date(b+"T00:00:00") - new Date(a+"T00:00:00")) / 86400000)); }
+function median(nums){ const a = nums.filter(n => Number.isFinite(n)).sort((x,y)=>x-y); if (!a.length) return null; const m = Math.floor(a.length/2); return a.length%2 ? a[m] : Math.round((a[m-1]+a[m])/2); }
+function computeDesktopStats(apps){
+  const c = counts(apps);
+  const replied = c.interview + c.offer + c.rejected;
+  const active = c.applied + c.interview + c.offer;
+  const responseDays = apps.map(a => {
+    const ev = (a.timeline || []).find(x => x.status && x.status !== "applied");
+    return ev ? daysBetween(a.firstDate, ev.date) : null;
+  }).filter(n => n != null);
+  const bySource = new Map(), byCompany = new Map();
+  for (const a of apps){
+    const src = sourceFromDomain(a.domain);
+    bySource.set(src, (bySource.get(src) || 0) + 1);
+    if (!byCompany.has(a.company)) byCompany.set(a.company, { company:a.company, total:0, replied:0 });
+    const co = byCompany.get(a.company); co.total++; if (a.status !== "applied") co.replied++;
+  }
+  const trend = [];
+  const now = new Date();
+  for (let i=5;i>=0;i--){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const key = d.getFullYear()+"-"+d.getMonth();
+    trend.push({ key, label:MONTHS[d.getMonth()].slice(0,3), count:0 });
+  }
+  const idx = new Map(trend.map((t,i)=>[t.key,i]));
+  for (const a of apps){
+    const d = new Date(a.firstDate+"T00:00:00");
+    const i = idx.get(d.getFullYear()+"-"+d.getMonth());
+    if (i != null) trend[i].count++;
+  }
+  const silent21 = apps.filter(a => a.status === "applied" && daysBetween(a.lastDate, todayISO()) >= 21).length;
+  return {
+    c, replied, active, responseRate:pct(replied, c.all), medianReply:median(responseDays), silent21,
+    sources:[...bySource.entries()].map(([label,count])=>({label,count})).sort((a,b)=>b.count-a.count).slice(0,5),
+    companies:[...byCompany.values()].sort((a,b)=> b.replied-a.replied || b.total-a.total).slice(0,5),
+    trend,
+  };
+}
+function metric(value, label, color){ return `<div class="metric"><div class="value" style="${color?`color:${color}`:""}">${value}</div><div class="label">${label}</div></div>`; }
+function renderStatisticsScreen(){
+  const apps = featureApps();
+  if (!apps.length) return `<div class="screen-head"><div class="screen-title"><h2>Statistics</h2><p>Performance appears once Pipeline has applications to analyze.</p></div></div><div class="feature-card empty-panel"><b>No data yet</b>Add a position or sync your inbox to begin.</div>`;
+  const s = computeDesktopStats(apps);
+  const maxTrend = Math.max(1, ...s.trend.map(t => t.count));
+  const funnel = [
+    { label:"Applications", count:s.c.all, color:"var(--blue)" },
+    { label:"Replies", count:s.replied, color:"var(--c-interview)" },
+    { label:"Interviews", count:s.c.interview + s.c.offer, color:"var(--c-interview)" },
+    { label:"Offers", count:s.c.offer, color:"var(--c-offer)" },
+  ];
+  return `
+    <div class="screen-head"><div class="screen-title"><h2>Statistics</h2><p>Your desktop pipeline health, conversion, pace and follow-up pressure.</p></div></div>
+    <section class="metric-grid">
+      ${metric(`${s.responseRate}%`, "Response rate", s.responseRate >= 25 ? "var(--c-offer)" : s.responseRate >= 10 ? "var(--c-interview)" : "var(--c-rejected)")}
+      ${metric(s.active, "Active pipeline", "var(--c-offer)")}
+      ${metric(s.medianReply == null ? "-" : s.medianReply+"d", "Median reply time")}
+      ${metric(s.silent21, "Silent 21+ days", s.silent21 ? "var(--c-rejected)" : "var(--text)")}
+    </section>
+    <div class="stat-layout">
+      <section class="feature-card feature-pad"><div class="eyebrow">Funnel conversion</div>${funnel.map(f => `<div class="barrow"><div class="muted">${f.label}</div><div class="bartrack"><div class="barfill" style="width:${Math.max(pct(f.count, s.c.all), f.count ? 4 : 0)}%;background:${f.color}"></div></div><b>${f.count}</b></div>`).join("")}</section>
+      <section class="feature-card feature-pad"><div class="eyebrow">Application pace</div><div class="spark">${s.trend.map(t => `<div style="flex:1"><div class="sparkbar" title="${t.count} applications" style="height:${Math.max(6, Math.round((t.count/maxTrend)*82))}px"></div><div class="sparklabel">${t.label}</div></div>`).join("")}</div></section>
+      <section class="feature-card feature-pad"><div class="eyebrow">Top sources</div>${s.sources.length ? s.sources.map(r => `<div class="barrow"><div class="muted">${esc(r.label)}</div><div class="bartrack"><div class="barfill" style="width:${pct(r.count, s.c.all)}%"></div></div><b>${r.count}</b></div>`).join("") : `<div class="muted" style="margin-top:12px">No sources yet.</div>`}</section>
+      <section class="feature-card feature-pad"><div class="eyebrow">Best responders</div>${s.companies.map(r => `<div class="rowline" style="padding-left:0;padding-right:0"><div class="row-main"><div class="row-title">${esc(r.company)}</div><div class="row-sub">${r.total} application${r.total===1?"":"s"}</div></div><b>${pct(r.replied, r.total)}%</b></div>`).join("")}</section>
+    </div>`;
+}
+
+function docTypeOf(name, contentType){
+  const ext = (String(name || "").match(/\.([a-z0-9]{2,5})$/i) || [])[1];
+  if (ext) return ext.toUpperCase();
+  if (/pdf/i.test(contentType || "")) return "PDF";
+  if (/word|document/i.test(contentType || "")) return "DOC";
+  return "FILE";
+}
+function docSize(bytes){
+  if (bytes == null || !Number.isFinite(Number(bytes))) return "-";
+  bytes = Number(bytes);
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024*1024) return Math.round(bytes/1024) + " KB";
+  return (bytes/(1024*1024)).toFixed(1) + " MB";
+}
+function syncedDocuments(){
+  const docs = [];
+  for (const a of featureApps()){
+    for (const ev of a.timeline || []){
+      for (const att of ev.attachments || []){
+        docs.push({ id:`${a.id}:${ev.date}:${att.name}`, appId:a.id, company:a.company, role:a.role, date:ev.date, name:att.name, contentType:att.contentType || "", size:att.size ?? null, source:"email" });
+      }
+    }
+  }
+  docs.sort((a,b)=> b.date.localeCompare(a.date));
+  return docs;
+}
+function renderDocRow(d, local){
+  const type = docTypeOf(d.name, d.contentType || "");
+  return `<div class="rowline" ${local && d.path ? `data-opendoc="${esc(d.id)}" style="cursor:pointer"` : d.appId ? `data-openapp="${esc(d.appId)}" style="cursor:pointer"` : ""}>
+    <div class="doc-badge ${/^DOC/i.test(type) ? "doc" : ""}">${esc(type)}</div>
+    <div class="row-main"><div class="row-title">${esc(d.name)}</div><div class="row-sub">${local ? esc(d.path || "Stored locally") : esc(d.company + " · " + d.role)}</div></div>
+    <span class="doc-source">${local ? "Local" : "Email"}</span>
+    <span class="muted" style="font:700 11px ui-monospace,SFMono-Regular,Menlo,monospace">${docSize(d.size)}</span>
+    ${local ? `<button class="iconbtn" type="button" data-removedoc="${esc(d.id)}" title="Remove from Pipeline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 16h10l1-16"/></svg></button>` : ""}
+  </div>`;
+}
+function renderDocumentsScreen(){
+  const local = Array.isArray(state.docs) ? state.docs : [];
+  const synced = syncedDocuments();
+  const groups = new Map();
+  for (const d of synced){ if (!groups.has(d.company)) groups.set(d.company, []); groups.get(d.company).push(d); }
+  return `
+    <div class="screen-head"><div class="screen-title"><h2>Documents</h2><p>Local resumes, cover letters, portfolios and attachment metadata from synced mail.</p></div><div class="screen-actions"><button class="btn" type="button" data-adddoc>${NAV[4].icon} Add document</button></div></div>
+    <section class="feature-card" style="margin-bottom:14px"><div class="rowline"><div class="row-main"><div class="row-title">Local documents</div><div class="row-sub">Files you choose stay on your Mac; Pipeline remembers their path.</div></div><b>${local.length}</b></div>${local.length ? local.map(d => renderDocRow(d, true)).join("") : `<div class="empty-panel" style="padding:34px 20px"><b>No local documents yet</b>Add your resume, cover letter, writing samples or portfolio.</div>`}</section>
+    <div class="eyebrow" style="margin:18px 0 10px">From synced email</div>
+    ${synced.length ? [...groups.entries()].map(([company, docs]) => `<section class="feature-card" style="margin-bottom:10px"><div class="rowline"><div class="row-main"><div class="row-title">${esc(company)}</div><div class="row-sub">${docs.length} attachment${docs.length===1?"":"s"} found in mail metadata</div></div></div>${docs.map(d => renderDocRow(d, false)).join("")}</section>`).join("") : `<div class="feature-card empty-panel"><b>No email attachments yet</b>When synced messages include attachments, their names and sizes appear here without downloading file contents.</div>`}`;
+}
+function renderFeatureView(){
+  const html = ({
+    calendar:renderCalendarScreen,
+    contacts:renderContactsScreen,
+    statistics:renderStatisticsScreen,
+    documents:renderDocumentsScreen,
+  })[state.view]?.() || "";
+  setScreenHtml(html);
+}
+
+function render(){
+  renderControls();
+  renderViewTabs();
+  const appsView = state.view === "applications";
+  const stats = $("#stats"), toolbar = document.querySelector(".toolbar");
+  if (stats) stats.hidden = !appsView;
+  if (toolbar) toolbar.hidden = !appsView;
+  if (appsView){ renderStats(); renderBoard(); }
+  else renderFeatureView();
+  renderFoot();
+}
 
 /* ---- connect / provider picker (interactive in the desktop app) ---- */
 function renderConnectModal(){
@@ -1177,8 +1616,94 @@ function removeManual(id){
   render();
 }
 
+function openContactModal(company){
+  $("#contact-company").value = company || "";
+  $("#contact-name").value = "";
+  $("#contact-title").value = "";
+  $("#contact-email").value = "";
+  $("#contact-phone").value = "";
+  const m = $("#contact-msg"); if (m){ m.className = "cmsg"; m.textContent = ""; }
+  $("#contactOverlay").classList.add("open");
+  setTimeout(() => (company ? $("#contact-name") : $("#contact-company")).focus(), 30);
+}
+function closeContactModal(){ $("#contactOverlay").classList.remove("open"); }
+function submitContact(){
+  const company = ($("#contact-company").value || "").trim();
+  const name = ($("#contact-name").value || "").trim();
+  const title = ($("#contact-title").value || "").trim();
+  const email = ($("#contact-email").value || "").trim();
+  const phone = ($("#contact-phone").value || "").trim();
+  const msg = $("#contact-msg");
+  if (!company || !name){
+    if (msg){ msg.className = "cmsg err"; msg.textContent = "Enter a company and a name."; }
+    return;
+  }
+  state.contacts.unshift({ id:"contact-" + Date.now().toString(36), company, name, title, email, phone, source:"manual" });
+  saveJson("pipeline.contacts", state.contacts);
+  closeContactModal();
+  state.view = "contacts";
+  render();
+}
+async function pickDocument(){
+  if (window.pipelineAPI && window.pipelineAPI.pickDocument){
+    const picked = await window.pipelineAPI.pickDocument();
+    if (Array.isArray(picked) && picked.length){
+      const now = todayISO();
+      state.docs.unshift(...picked.map(d => ({
+        id:"doc-" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+        name:d.name || "Document",
+        path:d.path || "",
+        size:d.size ?? null,
+        date:d.modified || now,
+        contentType:"",
+      })));
+      saveJson("pipeline.documents", state.docs);
+      render();
+    }
+    return;
+  }
+  const input = document.createElement("input");
+  input.type = "file";
+  input.multiple = true;
+  input.onchange = () => {
+    const now = todayISO();
+    const files = [...(input.files || [])];
+    state.docs.unshift(...files.map(f => ({
+      id:"doc-" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      name:f.name, path:"", size:f.size, date:now, contentType:f.type || "",
+    })));
+    saveJson("pipeline.documents", state.docs);
+    render();
+  };
+  input.click();
+}
+function removeDocument(id){
+  state.docs = state.docs.filter(d => d.id !== id);
+  saveJson("pipeline.documents", state.docs);
+  render();
+}
+async function openDocument(id){
+  const doc = state.docs.find(d => d.id === id);
+  if (!doc || !doc.path) return;
+  if (window.pipelineAPI && window.pipelineAPI.openPath) await window.pipelineAPI.openPath(doc.path);
+}
+
 /* ---- events ---- */
 document.addEventListener("click", e => {
+  if (e.target.closest("[data-stop]")) return;
+  const view = e.target.closest("[data-view]");
+  if (view){ setView(view.dataset.view); return; }
+  const open = e.target.closest("[data-openapp]");
+  if (open){ openApplication(open.dataset.openapp); return; }
+  if (e.target.closest("[data-caltoday]")){ state.calendar = currentCalendar(); render(); return; }
+  if (e.target.closest("[data-calprev]")){ shiftCalendar(-1); return; }
+  if (e.target.closest("[data-calnext]")){ shiftCalendar(1); return; }
+  if (e.target.closest("[data-addcontact]")){ openContactModal(); return; }
+  if (e.target.closest("[data-adddoc]")){ pickDocument(); return; }
+  const remdoc = e.target.closest("[data-removedoc]");
+  if (remdoc){ e.stopPropagation(); removeDocument(remdoc.dataset.removedoc); return; }
+  const opendoc = e.target.closest("[data-opendoc]");
+  if (opendoc){ openDocument(opendoc.dataset.opendoc); return; }
   const rmm = e.target.closest("[data-removemanual]");
   if (rmm){ removeManual(rmm.dataset.removemanual); return; }
   const sset = e.target.closest("[data-setstatusfor]");
@@ -1252,6 +1777,7 @@ document.addEventListener("keydown", e => {
   const inField = /^(INPUT|SELECT|TEXTAREA)$/.test((e.target.tagName||"")) ;
   if (e.key === "Escape"){
     if ($("#addOverlay").classList.contains("open")){ closeAddModal(); return; }
+    if ($("#contactOverlay").classList.contains("open")){ closeContactModal(); return; }
     if ($("#overlay").classList.contains("open")){ $("#overlay").classList.remove("open"); return; }
     if (state.query || document.activeElement === $("#q")){
       $("#q").value = ""; state.query = ""; $("#q").blur(); renderBoard();
@@ -1324,6 +1850,10 @@ $("#add-save").addEventListener("click", submitAddPosition);
 $("#add-cancel").addEventListener("click", closeAddModal);
 $("#addOverlay").addEventListener("click", e => { if (e.target.id === "addOverlay") closeAddModal(); });
 $("#addOverlay").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.tagName === "INPUT"){ e.preventDefault(); submitAddPosition(); } });
+$("#contact-save").addEventListener("click", submitContact);
+$("#contact-cancel").addEventListener("click", closeContactModal);
+$("#contactOverlay").addEventListener("click", e => { if (e.target.id === "contactOverlay") closeContactModal(); });
+$("#contactOverlay").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.tagName === "INPUT"){ e.preventDefault(); submitContact(); } });
 $("#overlay").addEventListener("click", e => { if (e.target.id==="overlay") $("#overlay").classList.remove("open"); });
 $("#overlay").addEventListener("click", e => {
   // web build (no IPC bridge): drive the backend OAuth/API routes directly

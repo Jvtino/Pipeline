@@ -24,7 +24,7 @@ say()  { printf "\n\033[1m%s\033[0m\n" "$1"; }
 die()  { printf "\n\033[1m%s\033[0m\n" "$1"; read -r -p "Press Return to close this window."; exit 1; }
 
 clear
-echo "▦  $NAME — starting up (everything comes from GitHub)"
+echo "▦  $NAME — starting up (checking GitHub first)"
 
 # 1) Required tools, with friendly install hints.
 if ! command -v git >/dev/null 2>&1; then
@@ -49,13 +49,29 @@ fi
 cd "$APP_DIR" || die "Could not open $APP_DIR."
 
 say "Getting the latest version from GitHub…"
-git fetch origin "$BRANCH" --quiet || echo "   (couldn't reach GitHub — using the copy you already have)"
+FETCH_OK=1
+git fetch origin "$BRANCH" --quiet || FETCH_OK=0
 
 if [ -z "$(git status --porcelain)" ]; then
-  # Clean working copy → make it match GitHub exactly. Your secrets and data
-  # (.env, accounts, local DB) are git-ignored, so they are never touched.
   git checkout -q "$BRANCH" 2>/dev/null || git checkout -q -B "$BRANCH" "origin/$BRANCH"
-  git reset --hard "origin/$BRANCH" --quiet && echo "   ✓ Up to date with GitHub"
+  if [ "$FETCH_OK" = "1" ] && git rev-parse --verify "origin/$BRANCH" >/dev/null 2>&1; then
+    LOCAL_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+    REMOTE_HEAD="$(git rev-parse "origin/$BRANCH" 2>/dev/null || true)"
+    BASE_HEAD="$(git merge-base HEAD "origin/$BRANCH" 2>/dev/null || true)"
+
+    if [ "$LOCAL_HEAD" = "$REMOTE_HEAD" ]; then
+      echo "   ✓ Up to date with GitHub"
+    elif [ "$LOCAL_HEAD" = "$BASE_HEAD" ]; then
+      # Clean working copy and only behind GitHub -> fast-forward to GitHub.
+      git reset --hard "origin/$BRANCH" --quiet && echo "   ✓ Updated from GitHub"
+    elif [ "$REMOTE_HEAD" = "$BASE_HEAD" ]; then
+      echo "   ✓ Local app is newer than GitHub — keeping this restored version"
+    else
+      echo "   ⚠ Local and GitHub versions differ — keeping your current copy."
+    fi
+  else
+    echo "   (couldn't reach GitHub — using the copy you already have)"
+  fi
 else
   echo "   ⚠ You have local edits — leaving them alone and running your current copy."
 fi

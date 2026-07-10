@@ -174,8 +174,10 @@
     height:48px;transition:background .13s;
   }
   .role:hover{background:rgba(255,255,255,.035)}
+  .role.selected{background:rgba(47,129,247,.10);box-shadow:inset 0 0 0 1px rgba(47,129,247,.18)}
   .role .rtitle{flex:1;min-width:0;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .role .when{font-size:11.5px;color:var(--text-faint);white-space:nowrap}
+  .role .openhint{font-size:11px;color:var(--blue-2);font-weight:750;white-space:nowrap}
   .chev{width:15px;height:15px;color:var(--text-faint);transition:transform .18s;flex:0 0 auto}
   .role.open .chev{transform:rotate(90deg)}
 
@@ -368,6 +370,32 @@
   .iconbtn{cursor:pointer;font-family:inherit;display:inline-grid;place-items:center;width:32px;height:32px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.025);color:var(--text-dim)}
   .iconbtn:hover{color:var(--text);border-color:var(--blue);background:rgba(47,129,247,.09)}
   .iconbtn svg{width:15px;height:15px}
+
+  /* Application detail */
+  .detail-shell{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(290px,.65fr);gap:14px}
+  @media (max-width:900px){.detail-shell{grid-template-columns:1fr}}
+  .detail-hero{padding:18px;margin-bottom:14px}
+  .detail-titleline{display:flex;align-items:center;gap:12px;min-width:0}
+  .detail-titleline h2{margin:0;font-size:23px;letter-spacing:-.35px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .detail-role{margin-top:6px;color:var(--text-dim);font-size:13.5px;font-weight:650}
+  .detail-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0}
+  .detail-tab{
+    cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:7px;
+    padding:8px 12px;border-radius:999px;border:1px solid var(--border);
+    background:rgba(255,255,255,.025);color:var(--text-dim);font-size:12.5px;font-weight:750;
+  }
+  .detail-tab:hover{border-color:var(--border-2);color:var(--text)}
+  .detail-tab.active{border-color:rgba(47,129,247,.65);background:rgba(47,129,247,.14);color:#d9e9ff}
+  .detail-tab .count{color:var(--text-faint);font:800 11px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .detail-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+  @media (max-width:760px){.detail-metrics{grid-template-columns:1fr}}
+  .detail-metric{border:1px solid var(--border);border-radius:12px;padding:12px;background:rgba(255,255,255,.018)}
+  .detail-metric b{display:block;font-size:18px;line-height:1.1}
+  .detail-metric span{display:block;margin-top:5px;color:var(--text-dim);font-size:11.5px;font-weight:700}
+  .detail-timeline{padding:16px}
+  .detail-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:14px}
+  .detail-side .feature-card{margin-bottom:14px}
+  .detail-side .rowline{padding:12px 14px}
 
   /* Calendar */
   .cal-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
@@ -830,13 +858,14 @@ function saveOrder(){ try { localStorage.setItem("pipeline.cardOrder", JSON.stri
 function loadView(){
   try {
     const v = localStorage.getItem("pipeline.desktopView") || "applications";
-    return ["applications","calendar","contacts","statistics","documents"].includes(v) ? v : "applications";
+    return ["applications","calendar"].includes(v) ? v : "applications";
   } catch(e){ return "applications"; }
 }
 function currentCalendar(){ const d = new Date(); return { year:d.getFullYear(), month:d.getMonth() }; }
 
 const state = { filter:"all", query:"", sort:loadSort(), timeframe:loadTimeframe(),
                 view:loadView(), calendar:currentCalendar(),
+                selectedAppId:null, detailTab:"overview",
                 cardOrder:loadOrder(), expanded:new Set(),
                 pinned:loadSet("pipeline.pins"),
                 statusOverrides:loadMap("pipeline.statusOverrides"),
@@ -863,21 +892,21 @@ const STATUS_ORDER = ["applied","interview","offer","rejected"];
 const NAV = [
   { key:"applications", label:"Applications", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>` },
   { key:"calendar", label:"Calendar", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>` },
-  { key:"contacts", label:"Contacts", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 11a4 4 0 1 0-8 0"/><path d="M3 21a7 7 0 0 1 18 0"/><path d="M19 8v4M21 10h-4"/></svg>` },
-  { key:"statistics", label:"Statistics", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h17"/><path d="M8 16v-5M13 16V8M18 16v-9"/></svg>` },
-  { key:"documents", label:"Documents", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>` },
 ];
+const CONTACT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 11a4 4 0 1 0-8 0"/><path d="M3 21a7 7 0 0 1 18 0"/><path d="M19 8v4M21 10h-4"/></svg>`;
+const DOC_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>`;
 function renderViewTabs(){
   const nav = $("#viewtabs");
   if (!nav) return;
   nav.innerHTML = NAV.map(v => `
-    <button type="button" class="viewtab ${state.view===v.key?"active":""}" data-view="${v.key}" aria-pressed="${state.view===v.key}">
+    <button type="button" class="viewtab ${(state.view===v.key || (state.view==="detail" && v.key==="applications"))?"active":""}" data-view="${v.key}" aria-pressed="${state.view===v.key || (state.view==="detail" && v.key==="applications")}">
       ${v.icon}<span>${v.label}</span>
     </button>`).join("");
 }
 function setView(view){
   if (!NAV.some(v => v.key === view)) return;
   state.view = view;
+  state.selectedAppId = null;
   try { localStorage.setItem("pipeline.desktopView", view); } catch(e){}
   closeStatusMenu();
   render();
@@ -948,22 +977,11 @@ function renderCard(g){
   const ringColor = STATUS[g.headline].color;
   const isPinned = state.pinned.has(g.company);
   const apps = g.apps;   // already ordered by latest activity in groupByCompany
-  // Fixed-height mode only matters when other positions can scroll out of the
-  // way; a single-position card sizes naturally so it never shows dead space.
-  const threadOpen = apps.length > 1 && apps.some(a => state.expanded.has(a.id));
   const roles = apps.map(a => {
     const st = STATUS[a.status];
-    const open = state.expanded.has(a.id);
     const manual = !!(state.statusOverrides && state.statusOverrides.has(a.id));
-    const events = a.timeline.map(ev => `
-      <div class="ev">
-        <span class="node s-${ev.status}"></span>
-        <div class="esub">${STATUS[ev.status].label} · <span style="color:var(--text-dim);font-weight:500">${esc(ev.from)}</span></div>
-        <div class="ebody">${esc(ev.body)}</div>
-        <div class="emeta">${fmtDate(ev.date)}${ev.manual ? ` · <span style="color:var(--blue-2)">edited</span>` : ""}</div>
-      </div>`).join("");
     return `
-      <div class="role ${open?"open":""}" data-id="${a.id}">
+      <div class="role ${state.selectedAppId===a.id?"selected":""}" data-id="${a.id}" data-openapp="${esc(a.id)}">
         <span class="dot ${st.cls}"></span>
         <span class="rtitle">${esc(a.role)}</span>
         ${a.status === "interview" ? `<button type="button" class="prep" data-prep="${esc(a.id)}" title="Search interview prep">${PREP_SVG}Prep</button>` : ""}
@@ -971,16 +989,16 @@ function renderCard(g){
                 title="${manual?"Status set manually — click to change":"Change status manually"}"
                 aria-haspopup="menu" aria-label="Change status for ${esc(a.role)}, currently ${st.label}">${st.label}${CARET_SVG}</button>
         <span class="when">${timeAgo(a.lastDate)}</span>
+        <span class="openhint">Open</span>
         <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
-      </div>
-      <div class="timeline"><div class="tl">${events}</div>${a.manual ? `<button type="button" class="rm-manual" data-removemanual="${esc(a.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m1 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>Remove position</button>` : ""}</div>`;
+      </div>`;
   }).join("");
 
   const summDots = g.apps.slice(0,8).map(a=>`<span class="dot ${STATUS[a.status].cls}" title="${esc(a.role)}: ${STATUS[a.status].label}"></span>`).join("")
     + (g.apps.length > 8 ? `<span class="dots-more">+${g.apps.length - 8}</span>` : "");
 
   return `
-    <section class="card ${isPinned?"pinned":""} ${threadOpen?"thread-open":""}" draggable="true" data-company="${esc(g.company)}">
+    <section class="card ${isPinned?"pinned":""}" draggable="true" data-company="${esc(g.company)}">
       <div class="chead">
         <div class="avatar" style="background:hsl(${hue} 42% 20%);color:hsl(${hue} 75% 74%)">
           <span class="ring" style="border-color:${ringColor}"></span>
@@ -1125,18 +1143,165 @@ function sourceFromDomain(domain){
 function openApplication(appId){
   const a = state.apps.find(x => x.id === appId);
   if (!a) return;
-  state.view = "applications";
-  try { localStorage.setItem("pipeline.desktopView", state.view); } catch(e){}
-  state.filter = "all";
-  state.query = "";
-  const q = $("#q"); if (q) q.value = "";
-  state.expanded.add(appId);
+  state.view = "detail";
+  state.selectedAppId = appId;
+  state.detailTab = state.detailTab || "overview";
   render();
-  setTimeout(() => {
-    const sel = '.role[data-id="' + (window.CSS && CSS.escape ? CSS.escape(appId) : appId) + '"]';
-    const el = document.querySelector(sel);
-    if (el) el.scrollIntoView({ block:"center", behavior:"smooth" });
-  }, 30);
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+function selectedApplication(){
+  return state.apps.find(x => x.id === state.selectedAppId) || null;
+}
+function setDetailTab(tab){
+  if (!["overview","statistics","contacts","documents"].includes(tab)) return;
+  state.detailTab = tab;
+  render();
+}
+function appContacts(app){
+  return allContacts().filter(c => c.appId === app.id || c.company === app.company);
+}
+function appSyncedDocs(app){
+  return syncedDocuments().filter(d => d.appId === app.id);
+}
+function appLocalDocs(app){
+  const docs = Array.isArray(state.docs) ? state.docs : [];
+  return docs.filter(d => !d.appId || d.appId === app.id || d.company === app.company);
+}
+function renderDetailTabs(app){
+  const tabs = [
+    { key:"overview", label:"Overview" },
+    { key:"statistics", label:"Statistics" },
+    { key:"contacts", label:"Contacts", count:appContacts(app).length },
+    { key:"documents", label:"Documents", count:appLocalDocs(app).length + appSyncedDocs(app).length },
+  ];
+  return `<div class="detail-tabs">${tabs.map(t => `
+    <button type="button" class="detail-tab ${state.detailTab===t.key?"active":""}" data-detailtab="${t.key}">
+      ${t.label}${t.count != null ? `<span class="count">${t.count}</span>` : ""}
+    </button>`).join("")}</div>`;
+}
+function renderDetailTimeline(app){
+  const events = (app.timeline || []).map(ev => `
+    <div class="ev">
+      <span class="node s-${ev.status}"></span>
+      <div class="esub">${STATUS[ev.status].label} · <span style="color:var(--text-dim);font-weight:500">${esc(ev.from)}</span></div>
+      <div class="ebody">${esc(ev.body)}</div>
+      <div class="emeta">${fmtDate(ev.date)}${ev.manual ? ` · <span style="color:var(--blue-2)">edited</span>` : ""}</div>
+    </div>`).join("");
+  return `<section class="feature-card detail-timeline"><div class="eyebrow">Timeline</div><div class="tl" style="margin-top:10px">${events}</div>${app.manual ? `<button type="button" class="rm-manual" data-removemanual="${esc(app.id)}" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m1 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>Remove position</button>` : ""}</section>`;
+}
+function renderDetailOverview(app){
+  const contacts = appContacts(app);
+  const localDocs = appLocalDocs(app);
+  const syncedDocs = appSyncedDocs(app);
+  const docPreview = [
+    ...localDocs.map(d => ({ ...d, _local:true })),
+    ...syncedDocs.map(d => ({ ...d, _local:false })),
+  ];
+  const docs = docPreview.length;
+  const status = STATUS[app.status];
+  const firstResponse = (app.timeline || []).find(ev => ev.status && ev.status !== "applied");
+  const replyTime = firstResponse ? daysBetween(app.firstDate, firstResponse.date) + "d" : "-";
+  return `<div class="detail-shell">
+    ${renderDetailTimeline(app)}
+    <aside class="detail-side">
+      <section class="feature-card feature-pad">
+        <div class="eyebrow">Snapshot</div>
+        <div class="detail-metrics" style="grid-template-columns:1fr">
+          <div class="detail-metric"><b style="color:${status.color}">${status.label}</b><span>Current status</span></div>
+          <div class="detail-metric"><b>${timeAgo(app.lastDate)}</b><span>Last activity</span></div>
+          <div class="detail-metric"><b>${replyTime}</b><span>First reply time</span></div>
+        </div>
+      </section>
+      <section class="feature-card">
+        <div class="rowline"><div class="row-main"><div class="row-title">Contacts</div><div class="row-sub">${contacts.length} person${contacts.length===1?"":"s"} tied to this company</div></div><button class="iconbtn" type="button" data-addcontact="${esc(app.company)}" aria-label="Add contact">${CONTACT_ICON}</button></div>
+        ${contacts.slice(0,3).map(c => renderContactRow(c)).join("") || `<div class="empty-panel" style="padding:28px 16px"><b>No contacts yet</b>Add a recruiter or sync mail for this application.</div>`}
+      </section>
+      <section class="feature-card">
+        <div class="rowline"><div class="row-main"><div class="row-title">Documents</div><div class="row-sub">${docs} document${docs===1?"":"s"} visible here</div></div><button class="iconbtn" type="button" data-adddoc="${esc(app.id)}" aria-label="Add document">${DOC_ICON}</button></div>
+        ${docPreview.slice(0,3).map(d => renderDocRow(d, d._local)).join("") || `<div class="empty-panel" style="padding:28px 16px"><b>No documents yet</b>Add a local file or sync mail with attachment metadata.</div>`}
+      </section>
+    </aside>
+  </div>`;
+}
+function renderContactRow(c){
+  return `<div class="rowline" ${c.appId ? `data-openapp="${esc(c.appId)}" style="cursor:pointer"` : ""}>
+    <div class="contact-avatar">${esc((c.name || "?")[0])}</div>
+    <div class="row-main"><div class="row-title">${esc(c.name || "Hiring team")} ${c.source==="email" ? `<span class="pill s-offer" style="margin-left:6px">from email</span>` : ""}</div><div class="row-sub">${esc(c.title || "Contact")}</div></div>
+    <div class="contact-links">${c.email ? `<a class="mini-link" href="mailto:${esc(c.email)}" data-stop>${esc(c.email)}</a>` : ""}${c.phone ? `<a class="mini-link" href="tel:${esc(c.phone.replace(/[^+\d]/g, ""))}" data-stop>${esc(c.phone)}</a>` : ""}</div>
+  </div>`;
+}
+function renderDetailContacts(app){
+  const contacts = appContacts(app);
+  return `<section class="feature-card">
+    <div class="rowline"><div class="row-main"><div class="row-title">Contacts for ${esc(app.company)}</div><div class="row-sub">Recruiters, hiring teams, referrals and people you add by hand.</div></div><button class="btn" type="button" data-addcontact="${esc(app.company)}">${CONTACT_ICON} Add contact</button></div>
+    ${contacts.length ? contacts.map(renderContactRow).join("") : `<div class="empty-panel"><b>No contacts yet</b>Add someone you are talking to for this application.</div>`}
+  </section>`;
+}
+function renderDetailDocuments(app){
+  const local = appLocalDocs(app);
+  const synced = appSyncedDocs(app);
+  return `<div>
+    <section class="feature-card" style="margin-bottom:14px"><div class="rowline"><div class="row-main"><div class="row-title">Documents for ${esc(app.company)}</div><div class="row-sub">Local documents stay on your Mac; synced mail shows attachment metadata only.</div></div><button class="btn" type="button" data-adddoc="${esc(app.id)}">${DOC_ICON} Add document</button></div>${local.length ? local.map(d => renderDocRow(d, true)).join("") : `<div class="empty-panel" style="padding:34px 20px"><b>No local documents yet</b>Add your resume, cover letter, writing samples or portfolio.</div>`}</section>
+    <section class="feature-card"><div class="rowline"><div class="row-main"><div class="row-title">From synced email</div><div class="row-sub">${synced.length} attachment${synced.length===1?"":"s"} found for this application</div></div></div>${synced.length ? synced.map(d => renderDocRow(d, false)).join("") : `<div class="empty-panel" style="padding:34px 20px"><b>No email attachments yet</b>Attachment names and sizes appear here when they are present in synced mail.</div>`}</section>
+  </div>`;
+}
+function renderDetailStatistics(app){
+  const events = app.timeline || [];
+  const contacts = appContacts(app);
+  const docs = appLocalDocs(app).length + appSyncedDocs(app).length;
+  const firstReply = events.find(ev => ev.status && ev.status !== "applied");
+  const replyDays = firstReply ? daysBetween(app.firstDate, firstReply.date) : null;
+  const daysActive = daysBetween(app.firstDate, todayISO());
+  const daysSince = daysBetween(app.lastDate, todayISO());
+  const stageIndex = Math.max(0, STATUS_ORDER.indexOf(app.status));
+  const nextAction = app.status === "applied" && daysSince >= 14 ? "Follow up" :
+    app.status === "interview" ? "Prepare" :
+    app.status === "offer" ? "Review offer" :
+    app.status === "rejected" ? "Closed" : "Monitor";
+  const stageBars = STATUS_ORDER.map((key, i) => {
+    const st = STATUS[key];
+    const on = i <= stageIndex;
+    return `<div class="barrow"><div class="muted">${st.label}</div><div class="bartrack"><div class="barfill" style="width:${on ? 100 : 0}%;background:${st.color}"></div></div><b>${on ? "Done" : "-"}</b></div>`;
+  }).join("");
+  const statusCounts = STATUS_ORDER.map(key => ({ key, count:events.filter(ev => ev.status === key).length }));
+  return `
+    <section class="metric-grid">
+      ${metric(replyDays == null ? "-" : replyDays+"d", "First reply")}
+      ${metric(daysActive+"d", "Days in pipeline", "var(--blue-2)")}
+      ${metric(events.length, "Mail touchpoints")}
+      ${metric(docs, "Documents")}
+    </section>
+    <div class="stat-layout">
+      <section class="feature-card feature-pad"><div class="eyebrow">Application stage</div>${stageBars}</section>
+      <section class="feature-card feature-pad"><div class="eyebrow">Activity mix</div>${statusCounts.map(r => `<div class="barrow"><div class="muted">${STATUS[r.key].label}</div><div class="bartrack"><div class="barfill" style="width:${Math.max(pct(r.count, Math.max(events.length, 1)), r.count ? 5 : 0)}%;background:${STATUS[r.key].color}"></div></div><b>${r.count}</b></div>`).join("")}</section>
+      <section class="feature-card feature-pad"><div class="eyebrow">Follow-up read</div><div class="detail-metrics" style="grid-template-columns:1fr"><div class="detail-metric"><b>${nextAction}</b><span>Suggested focus</span></div><div class="detail-metric"><b>${daysSince}d</b><span>Since last activity</span></div><div class="detail-metric"><b>${contacts.length}</b><span>Contacts tracked</span></div></div></section>
+    </div>`;
+}
+function renderApplicationDetail(){
+  const app = selectedApplication();
+  if (!app) return `<div class="screen-head"><button class="btn secondary" type="button" data-backapps>Back to applications</button></div><div class="feature-card empty-panel"><b>Application not found</b>Return to Applications and choose a position.</div>`;
+  const st = STATUS[app.status];
+  const hue = hueFor(app.company);
+  const tab = ["overview","statistics","contacts","documents"].includes(state.detailTab) ? state.detailTab : "overview";
+  state.detailTab = tab;
+  const body = tab === "statistics" ? renderDetailStatistics(app) : tab === "contacts" ? renderDetailContacts(app) : tab === "documents" ? renderDetailDocuments(app) : renderDetailOverview(app);
+  return `
+    <div class="screen-head">
+      <div class="screen-title"><button class="btn secondary" type="button" data-backapps style="margin-bottom:12px">Back to applications</button></div>
+    </div>
+    <section class="feature-card detail-hero">
+      <div class="detail-titleline">
+        <div class="avatar" style="background:hsl(${hue} 42% 20%);color:hsl(${hue} 75% 74%)"><span class="ring" style="border-color:${st.color}"></span><span class="initial">${esc(app.company[0])}</span></div>
+        <div class="row-main"><h2>${esc(app.company)}</h2><div class="detail-role">${esc(app.role)}</div></div>
+        <button type="button" class="pill statbtn ${st.cls} ${state.statusOverrides.has(app.id)?"manual":""}" data-setstatusfor="${esc(app.id)}" aria-haspopup="menu">${st.label}${CARET_SVG}</button>
+      </div>
+      <div class="detail-actions">
+        ${app.status === "interview" ? `<button type="button" class="btn secondary" data-prep="${esc(app.id)}">${PREP_SVG} Prep</button>` : ""}
+        <span class="muted">Applied ${fmtDate(app.firstDate)} · last activity ${fmtDate(app.lastDate)}</span>
+      </div>
+      ${renderDetailTabs(app)}
+    </section>
+    ${body}`;
 }
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -1254,17 +1419,12 @@ function renderContactsScreen(){
   return `
     <div class="screen-head">
       <div class="screen-title"><h2>Contacts</h2><p>Recruiters, hiring teams, referrals and people you add by hand.</p></div>
-      <div class="screen-actions"><button class="btn" type="button" data-addcontact>${NAV[2].icon} Add contact</button></div>
+      <div class="screen-actions"><button class="btn" type="button" data-addcontact>${CONTACT_ICON} Add contact</button></div>
     </div>
     ${list.length ? [...groups.entries()].map(([company, people]) => `
       <section class="feature-card contact-group">
         <div class="rowline"><div class="avatar" style="width:34px;height:34px;border-radius:10px;background:hsl(${hueFor(company)} 42% 20%);color:hsl(${hueFor(company)} 75% 74%)">${esc(company[0] || "?")}</div><div class="row-main"><div class="row-title">${esc(company)}</div><div class="row-sub">${people.length} contact${people.length===1?"":"s"}</div></div></div>
-        ${people.map(c => `
-          <div class="rowline" ${c.appId ? `data-openapp="${esc(c.appId)}" style="cursor:pointer"` : ""}>
-            <div class="contact-avatar">${esc((c.name || "?")[0])}</div>
-            <div class="row-main"><div class="row-title">${esc(c.name || "Hiring team")} ${c.source==="email" ? `<span class="pill s-offer" style="margin-left:6px">from email</span>` : ""}</div><div class="row-sub">${esc(c.title || "Contact")}</div></div>
-            <div class="contact-links">${c.email ? `<a class="mini-link" href="mailto:${esc(c.email)}" data-stop>${esc(c.email)}</a>` : ""}${c.phone ? `<a class="mini-link" href="tel:${esc(c.phone.replace(/[^+\d]/g, ""))}" data-stop>${esc(c.phone)}</a>` : ""}</div>
-          </div>`).join("")}
+        ${people.map(renderContactRow).join("")}
       </section>`).join("") : `<div class="feature-card empty-panel"><b>No contacts yet</b>Connect mail or add the people you are talking to.</div>`}`;
 }
 
@@ -1376,7 +1536,7 @@ function renderDocumentsScreen(){
   const groups = new Map();
   for (const d of synced){ if (!groups.has(d.company)) groups.set(d.company, []); groups.get(d.company).push(d); }
   return `
-    <div class="screen-head"><div class="screen-title"><h2>Documents</h2><p>Local resumes, cover letters, portfolios and attachment metadata from synced mail.</p></div><div class="screen-actions"><button class="btn" type="button" data-adddoc>${NAV[4].icon} Add document</button></div></div>
+    <div class="screen-head"><div class="screen-title"><h2>Documents</h2><p>Local resumes, cover letters, portfolios and attachment metadata from synced mail.</p></div><div class="screen-actions"><button class="btn" type="button" data-adddoc>${DOC_ICON} Add document</button></div></div>
     <section class="feature-card" style="margin-bottom:14px"><div class="rowline"><div class="row-main"><div class="row-title">Local documents</div><div class="row-sub">Files you choose stay on your Mac; Pipeline remembers their path.</div></div><b>${local.length}</b></div>${local.length ? local.map(d => renderDocRow(d, true)).join("") : `<div class="empty-panel" style="padding:34px 20px"><b>No local documents yet</b>Add your resume, cover letter, writing samples or portfolio.</div>`}</section>
     <div class="eyebrow" style="margin:18px 0 10px">From synced email</div>
     ${synced.length ? [...groups.entries()].map(([company, docs]) => `<section class="feature-card" style="margin-bottom:10px"><div class="rowline"><div class="row-main"><div class="row-title">${esc(company)}</div><div class="row-sub">${docs.length} attachment${docs.length===1?"":"s"} found in mail metadata</div></div></div>${docs.map(d => renderDocRow(d, false)).join("")}</section>`).join("") : `<div class="feature-card empty-panel"><b>No email attachments yet</b>When synced messages include attachments, their names and sizes appear here without downloading file contents.</div>`}`;
@@ -1384,9 +1544,7 @@ function renderDocumentsScreen(){
 function renderFeatureView(){
   const html = ({
     calendar:renderCalendarScreen,
-    contacts:renderContactsScreen,
-    statistics:renderStatisticsScreen,
-    documents:renderDocumentsScreen,
+    detail:renderApplicationDetail,
   })[state.view]?.() || "";
   setScreenHtml(html);
 }
@@ -1641,10 +1799,11 @@ function submitContact(){
   state.contacts.unshift({ id:"contact-" + Date.now().toString(36), company, name, title, email, phone, source:"manual" });
   saveJson("pipeline.contacts", state.contacts);
   closeContactModal();
-  state.view = "contacts";
+  if (state.view !== "detail") state.view = "applications";
   render();
 }
-async function pickDocument(){
+async function pickDocument(appId){
+  const app = appId ? state.apps.find(a => a.id === appId) : null;
   if (window.pipelineAPI && window.pipelineAPI.pickDocument){
     const picked = await window.pipelineAPI.pickDocument();
     if (Array.isArray(picked) && picked.length){
@@ -1656,6 +1815,7 @@ async function pickDocument(){
         size:d.size ?? null,
         date:d.modified || now,
         contentType:"",
+        ...(app ? { appId:app.id, company:app.company, role:app.role } : {}),
       })));
       saveJson("pipeline.documents", state.docs);
       render();
@@ -1671,6 +1831,7 @@ async function pickDocument(){
     state.docs.unshift(...files.map(f => ({
       id:"doc-" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
       name:f.name, path:"", size:f.size, date:now, contentType:f.type || "",
+      ...(app ? { appId:app.id, company:app.company, role:app.role } : {}),
     })));
     saveJson("pipeline.documents", state.docs);
     render();
@@ -1691,6 +1852,9 @@ async function openDocument(id){
 /* ---- events ---- */
 document.addEventListener("click", e => {
   if (e.target.closest("[data-stop]")) return;
+  if (e.target.closest("[data-backapps]")){ setView("applications"); return; }
+  const detailTab = e.target.closest("[data-detailtab]");
+  if (detailTab){ setDetailTab(detailTab.dataset.detailtab); return; }
   const view = e.target.closest("[data-view]");
   if (view){ setView(view.dataset.view); return; }
   const open = e.target.closest("[data-openapp]");
@@ -1698,8 +1862,14 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-caltoday]")){ state.calendar = currentCalendar(); render(); return; }
   if (e.target.closest("[data-calprev]")){ shiftCalendar(-1); return; }
   if (e.target.closest("[data-calnext]")){ shiftCalendar(1); return; }
-  if (e.target.closest("[data-addcontact]")){ openContactModal(); return; }
-  if (e.target.closest("[data-adddoc]")){ pickDocument(); return; }
+  const addContact = e.target.closest("[data-addcontact]");
+  if (addContact){
+    const app = selectedApplication();
+    openContactModal(addContact.dataset.addcontact || (app && app.company) || "");
+    return;
+  }
+  const addDoc = e.target.closest("[data-adddoc]");
+  if (addDoc){ pickDocument(addDoc.dataset.adddoc || (selectedApplication() && selectedApplication().id) || null); return; }
   const remdoc = e.target.closest("[data-removedoc]");
   if (remdoc){ e.stopPropagation(); removeDocument(remdoc.dataset.removedoc); return; }
   const opendoc = e.target.closest("[data-opendoc]");
@@ -1745,27 +1915,6 @@ document.addEventListener("click", e => {
     }
     return;
   }
-  const role = e.target.closest(".role");
-  if (role){
-    const id = role.dataset.id;
-    const opening = !state.expanded.has(id);
-    if (opening){
-      const company = state.apps.find(a => a.id === id)?.company;   // accordion: only one open per card
-      for (const openId of [...state.expanded])
-        if (state.apps.find(a => a.id === openId)?.company === company) state.expanded.delete(openId);
-      state.expanded.add(id);
-    } else {
-      state.expanded.delete(id);
-    }
-    renderBoard();
-    if (opening){   // bring the opened thread to the top of its card's fixed scroll area
-      const sel = '.role.open[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]';
-      const el = document.querySelector(sel);
-      const box = el && el.closest(".roles");
-      if (box) box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top;
-    }
-    return;
-  }
   const f = e.target.closest("[data-filter]");
   if (f){ state.filter = f.dataset.filter; render(); }
 });
@@ -1779,6 +1928,7 @@ document.addEventListener("keydown", e => {
     if ($("#addOverlay").classList.contains("open")){ closeAddModal(); return; }
     if ($("#contactOverlay").classList.contains("open")){ closeContactModal(); return; }
     if ($("#overlay").classList.contains("open")){ $("#overlay").classList.remove("open"); return; }
+    if (state.view === "detail"){ setView("applications"); return; }
     if (state.query || document.activeElement === $("#q")){
       $("#q").value = ""; state.query = ""; $("#q").blur(); renderBoard();
     }

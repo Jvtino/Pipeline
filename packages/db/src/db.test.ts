@@ -127,6 +127,24 @@ describe("@pipeline/db", () => {
     expect(byThread["t-plain"]).toBeUndefined();
   });
 
+  it("round-trips classification evidence and chronological event audits", async () => {
+    await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
+    const classification = {
+      eventType: "INTERVIEW_REQUESTED", confidence: 0.95,
+      evidence: ["select a time for your interview"], negativeEvidence: [],
+      requiresManualReview: false, reason: "Explicit interview request.",
+    };
+    const classificationEvents = [{
+      ...classification, date: "2026-06-12", suggestedStatus: "interview" as const, transitionApplied: true,
+    }];
+    await upsertApplications(h.db, "u1", [{
+      ...appFixture("t-audit", "Acme", "interview"), classification, classificationEvents,
+    }]);
+    const app = (await getApplicationsForUser(h.db, "u1"))[0]!;
+    expect(app.classification).toEqual(classification);
+    expect(app.classificationEvents).toEqual(classificationEvents);
+  });
+
   it("notes + contacts are scoped to (user, application)", async () => {
     await upsertUser(h.db, { id: "u1", email: "u1@b.com" });
     await upsertApplications(h.db, "u1", [appFixture("t1", "Acme", "applied")]);

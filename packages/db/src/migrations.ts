@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS applications (
   manual          boolean NOT NULL DEFAULT false,
   confidence      real,
   enrichment      text,
+  classification  text,
+  classification_events text,
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_app_user_thread ON applications (user_id, thread_id);
@@ -54,6 +56,9 @@ CREATE INDEX IF NOT EXISTS idx_app_user ON applications (user_id);
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS confidence real;
 -- Extracted enrichment (interview/comp/location/recruiter) as a JSON string.
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS enrichment text;
+-- Explainable current classification and privacy-bounded event history as JSON.
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS classification text;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS classification_events text;
 -- True when company is only the shared ATS platform's name (never a grouping key).
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS platform_fallback boolean;
 

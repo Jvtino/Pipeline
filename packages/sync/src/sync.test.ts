@@ -105,4 +105,19 @@ describe("incremental sync engine", () => {
     expect(r.upserted).toBe(1);
     expect((await getBoardForUser(h.db, "u1", "live")).counts.total).toBe(1);
   });
+
+  it("does not create a duplicate when an advertisement matches a real company and title", async () => {
+    const advertisement: Thread = {
+      threadId:"t-ad",
+      domain:"linkedin.com",
+      subject:"Engineer at Acme",
+      messages:[{ date:"2026-02-01", from:"jobs@linkedin.com", body:"Sponsored job based on your profile. Apply now. Unsubscribe." }],
+    };
+    const source = new FakeSource([{ threads:[acmeThread("Thank you for applying. We received your application."), advertisement], cursor:"h1" }]);
+    const result = await runSync(h.db, { userId:"u1", connectionId:"conn1", source });
+    expect(result).toMatchObject({ fetched:2, relevant:1, upserted:1 });
+    const board = await getBoardForUser(h.db, "u1", "live");
+    expect(board.counts.total).toBe(1);
+    expect(board.groups[0]?.company).toBe("Acme");
+  });
 });

@@ -14,13 +14,16 @@
 // Pure and dependency-free at runtime (only type-imports from @pipeline/contracts).
 // No DOM, no network — keep it that way so it stays trivially testable.
 import type { Status, Thread, Message, ResolvedCompany } from "@pipeline/contracts";
+import { classifyEmailEvent as classifyEvidenceEvent, REJECTION_EVENT_RE, stripQuotedText as stripEvidenceQuotes, type EmailEventClassification } from "./events";
 
 export { STATUS_RANK } from "@pipeline/contracts";
 export type { Status, Thread, Message, ResolvedCompany } from "@pipeline/contracts";
-export { statusForThread, threadToApplication, threadsToApplications, resolveCompanySmart, classifyThread, cleanRole } from "./aggregate";
-export type { Classification, CompanyField, RoleField } from "./aggregate";
+export { statusForThread, eventHistoryForThread, threadToApplication, threadsToApplications, resolveCompanySmart, classifyThread, cleanRole } from "./aggregate";
+export type { Classification, ClassifiedThreadEvent, CompanyField, RoleField } from "./aggregate";
 export { extractInterview, extractCompensation, extractLocation, extractRecruiterContact } from "./extract";
 export type { InterviewInfo, CompensationInfo, LocationInfo, LocationKind, RecruiterContact } from "./extract";
+export { classifyEmailEvent, applyEventTransition, resolveApplicationStatus, stripQuotedText, EMAIL_EVENT_TYPES } from "./events";
+export type { EmailEventType, EmailEventInput, EmailEventClassification, EventTransition, StatusResolution } from "./events";
 
 /* ============================================================================
    STATUS CLASSIFIER
@@ -126,7 +129,7 @@ function topStatus(score: Record<Status, number>): Status | null {
 }
 
 export function detectStatus(text: string | null | undefined): Status | null {
-  return topStatus(scoreStatus(text)); // null when nothing matched (caller keeps the prior status)
+  return topStatus(scoreStatus(text)); // broad relevance heuristic; status updates use classifyEmailEvent()
 }
 
 /* ----------------------------------------------------------------------------
@@ -161,15 +164,12 @@ export function classifyStatus(text: string | null | undefined): StatusResult {
   if (!status) return { status: null, confidence: 0, reasons: ["no_signal"] };
 
   const best = score[status];
-  const strong = best >= STRONG_SCORE; // a decisive phrase fired, not just a weak cue
-  // Conflicting valence: a progression cue (interview/offer) present alongside a
-  // decisive rejection — the label is still correct, but the thread is ambiguous.
+  const strong = best >= STRONG_SCORE;
   const positive = Math.max(score.interview, score.offer);
   const mixed = strong && positive >= 2 && score.rejected >= STRONG_SCORE;
 
   const reasons: string[] = [strong ? "strong_phrase" : "weak_cue_only"];
   if (mixed) reasons.push("mixed_signal");
-
   const confidence = !strong ? 0.35 : mixed ? 0.45 : 0.9;
   return { status, confidence, reasons };
 }
@@ -219,6 +219,162 @@ const STAFFING_DIGEST_RE =
 const ACCOUNT_NOISE_RE =
   /\b(?:sign|log)[- ]?in\b|\bpassword|passphrase|username|verification code|verify your (?:e-?mail|account|identity)|security (?:alert|notice|code)|two[- ]?factor|\b2fa\b|new device|account (?:created|activated|locked|updated)|requested information|privacy (?:policy|notice)|terms of (?:service|use)/i;
 
+export type ApplicationEmailType =
+  | "APPLICATION_CONFIRMATION" | "APPLICATION_STATUS_UPDATE" | "INTERVIEW_OR_ASSESSMENT"
+  | "REJECTION" | "OFFER" | "WITHDRAWAL_OR_CLOSURE" | "RECRUITER_OUTREACH"
+  | "JOB_ADVERTISEMENT" | "JOB_RECOMMENDATION" | "NEWSLETTER_OR_PROMOTION" | "UNCERTAIN";
+export type ApplicationExistence = "CONFIRMED_APPLICATION" | "LIKELY_APPLICATION" | "NOT_AN_APPLICATION" | "INSUFFICIENT_EVIDENCE";
+export interface ApplicationExistenceResult {
+  email_type: ApplicationEmailType;
+  application_status: ApplicationExistence;
+  confidence: number;
+  should_create_application: boolean;
+  should_update_existing_application: boolean;
+  company: string | null;
+  position_title: string | null;
+  requisition_id: string | null;
+  application_id: string | null;
+  evidence_for: string[];
+  evidence_against: string[];
+  reasoning_summary: string;
+  manual_review_required: boolean;
+}
+
+const JOB_RECOMMENDATION_RE = /\b(?:jobs? (?:you may be interested in|for you|matching your profile|you may like)|recommended jobs?|based on your profile|saved (?:job )?search|new jobs? matching|weekly job alert)\b/i;
+const JOB_ADVERTISEMENT_RE = /\b(?:apply now|we(?:'re| are) hiring|featured opportunity|sponsored job|new openings?|complete your profile to apply|start (?:your|an) application|your next career opportunity|view (?:the )?job description)\b/i;
+const NEWSLETTER_PROMO_RE = /\b(?:newsletter|talent community|career newsletter|email preferences?|unsubscribe|you are receiving this because you subscribed|promotional email)\b/i;
+const RECRUITER_OUTREACH_RE = /\b(?:came across your (?:profile|resume|background)|found your (?:profile|resume)|would you be interested in|are you interested in|opportunity (?:that|I think) may interest you|reaching out about (?:an?|this) (?:role|opportunity))\b/i;
+const INCOMPLETE_APPLICATION_RE = /\b(?:finish|complete|continue|resume) your application\b|\bapplication is incomplete\b/i;
+const DIRECT_APPLICATION_RE = /\b(?:your application|your candidacy|thank(?:s| you) for applying|you applied (?:to|for)|application (?:has been |was |is )?(?:received|submitted|under review)|following (?:your|the) (?:application|interview))\b/i;
+const DIRECTED_OUTCOME_RE = /\b(?:you (?:were|have been|are) not selected|we (?:will not|won't) be moving forward|mov(?:e|ing) forward with other (?:candidates|applicants)|(?:invite|invited|inviting) you (?:to|for) (?:an? |the )?interview|we(?:'d| would) like to schedule (?:an? |the )?(?:technical )?(?:interview|phone screen|technical screen)|please (?:schedule|select|book|complete) [^.]{0,60}(?:interview|phone screen|assessment|coding challenge)|(?:offer|extend) you (?:an? |the )?(?:position|role|offer)|your interview (?:is|has been|was)|after your interview)\b/i;
+const APPLICATION_ID_RE = /\b(?:application|candidate|applicant)\s*(?:id|number|reference|ref|#)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{3,})\b/i;
+const REQUISITION_ID_RE = /\b(?:requisition|req|job)\s*(?:id|number|reference|ref|#)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{3,})\b/i;
+const MULTIPLE_JOBS_RE = /\b(?:\d{1,3}\s+(?:new |recommended |matching )?jobs?|multiple (?:jobs?|openings?|opportunities)|top job picks)\b/i;
+const JOBISH_RE = /\b(?:job|role|position|career|recruiter|hiring|application|candidate|interview|assessment|offer)\b/i;
+
+function evidenceMatch(text: string, re: RegExp): string | null {
+  const m = re.exec(text);
+  return m?.[0] ? m[0].replace(/\s+/g, " ").trim().slice(0, 180) : null;
+}
+
+function emailTypeForEvent(event: EmailEventClassification | null): ApplicationEmailType {
+  if (!event) return "UNCERTAIN";
+  if (event.eventType === "APPLICATION_RECEIVED" || event.eventType === "APPLICATION_UNDER_REVIEW") return "APPLICATION_CONFIRMATION";
+  if (event.eventType.startsWith("INTERVIEW_") || event.eventType.startsWith("ASSESSMENT_")) return "INTERVIEW_OR_ASSESSMENT";
+  if (event.eventType === "REJECTION_RECEIVED") return "REJECTION";
+  if (event.eventType.startsWith("OFFER_")) return "OFFER";
+  if (event.eventType === "WITHDRAWN" || event.eventType === "POSITION_CLOSED") return "WITHDRAWAL_OR_CLOSURE";
+  if (event.eventType === "RECRUITER_CONTACT") return "RECRUITER_OUTREACH";
+  return event.eventType === "UNKNOWN" ? "UNCERTAIN" : "APPLICATION_STATUS_UPDATE";
+}
+
+/** Determine whether a thread proves that the user actually submitted an application. */
+export function classifyApplicationExistence(thread: Pick<Thread, "domain" | "subject" | "messages">): ApplicationExistenceResult {
+  const subject = thread.subject ?? "";
+  const sorted = [...(thread.messages ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  const cleanBodies = sorted.map((m) => stripEvidenceQuotes(m.body));
+  const combined = [subject, ...cleanBodies].join(" \n ").replace(/\s+/g, " ").trim();
+  const events = sorted.map((m, i) => classifyEvidenceEvent({ subject:i === 0 ? subject : "", body:m.body, from:m.from, attachments:m.attachments }));
+  const meaningful = events.filter((e) => e.eventType !== "UNKNOWN");
+  const latestEvent = meaningful[meaningful.length - 1] ?? events[events.length - 1] ?? null;
+  const applicationId = APPLICATION_ID_RE.exec(combined)?.[1] ?? null;
+  const requisitionId = REQUISITION_ID_RE.exec(combined)?.[1] ?? null;
+  const directEvidence = evidenceMatch(combined, DIRECT_APPLICATION_RE);
+  const directedOutcomeEvidence = evidenceMatch(combined, DIRECTED_OUTCOME_RE) ?? evidenceMatch(combined, REJECTION_EVENT_RE);
+  const recommendation = evidenceMatch(combined, JOB_RECOMMENDATION_RE);
+  const advertisement = evidenceMatch(combined, JOB_ADVERTISEMENT_RE);
+  const newsletter = evidenceMatch(combined, NEWSLETTER_PROMO_RE);
+  const recruiterOutreach = evidenceMatch(combined, RECRUITER_OUTREACH_RE);
+  const incomplete = evidenceMatch(combined, INCOMPLETE_APPLICATION_RE);
+  const multipleJobs = evidenceMatch(combined, MULTIPLE_JOBS_RE);
+  const evidenceAgainst = [recommendation && "Recommendation or saved-search language", advertisement && "The message encourages the recipient to apply", newsletter && "Newsletter, campaign, or unsubscribe language", recruiterOutreach && "Unsolicited recruiter outreach", incomplete && "The message asks the recipient to finish an unsubmitted application", multipleJobs && "Multiple jobs are promoted in one message"].filter(Boolean) as string[];
+  const confirmation = meaningful.find((e) => e.eventType === "APPLICATION_RECEIVED" || e.eventType === "APPLICATION_UNDER_REVIEW");
+  const downstreamCandidate = meaningful.find((e) => !["APPLICATION_RECEIVED", "APPLICATION_UNDER_REVIEW", "RECRUITER_CONTACT", "POSITION_CLOSED", "ON_HOLD"].includes(e.eventType));
+  const directedDownstream = directEvidence || directedOutcomeEvidence ? downstreamCandidate : undefined;
+  const resolved = resolveCompany(thread);
+  const role = extractRole(subject);
+  const company = resolved.company && (!isAtsDomain(thread.domain) || resolved.company !== companyFromDomain(thread.domain)) ? resolved.company : null;
+  const position = role && !/^application$/i.test(role) ? role : null;
+  const evidenceFor = [...(confirmation?.evidence ?? []), ...(directedDownstream ? directedDownstream.evidence : []), ...(directEvidence ? [directEvidence] : []), ...(directedOutcomeEvidence ? [directedOutcomeEvidence] : []), ...(applicationId ? [`Application ID ${applicationId}`] : []), ...(requisitionId ? [`Requisition ID ${requisitionId}`] : [])].filter((v, i, a) => a.indexOf(v) === i);
+
+  if (confirmation || (directEvidence && (applicationId || requisitionId))) {
+    return { email_type:emailTypeForEvent(confirmation ?? latestEvent), application_status:"CONFIRMED_APPLICATION", confidence:0.98, should_create_application:true, should_update_existing_application:meaningful.length > 1, company, position_title:position, requisition_id:requisitionId, application_id:applicationId, evidence_for:evidenceFor, evidence_against:evidenceAgainst, reasoning_summary:"The thread contains explicit evidence that the user's application was submitted or received.", manual_review_required:false };
+  }
+  if (directedDownstream) {
+    return { email_type:emailTypeForEvent(directedDownstream), application_status:"LIKELY_APPLICATION", confidence:0.92, should_create_application:true, should_update_existing_application:true, company, position_title:position, requisition_id:requisitionId, application_id:applicationId, evidence_for:evidenceFor, evidence_against:evidenceAgainst, reasoning_summary:"A directed hiring outcome or next-stage event strongly implies an existing application.", manual_review_required:false };
+  }
+  if (recommendation || advertisement || newsletter || multipleJobs || incomplete) {
+    const type: ApplicationEmailType = recommendation || multipleJobs ? "JOB_RECOMMENDATION" : newsletter ? "NEWSLETTER_OR_PROMOTION" : "JOB_ADVERTISEMENT";
+    return { email_type:type, application_status:"NOT_AN_APPLICATION", confidence:0.97, should_create_application:false, should_update_existing_application:false, company:null, position_title:null, requisition_id:requisitionId, application_id:applicationId, evidence_for:[], evidence_against:evidenceAgainst, reasoning_summary:"This message promotes jobs or asks the recipient to begin or finish applying; it does not prove submission.", manual_review_required:false };
+  }
+  if (recruiterOutreach || latestEvent?.eventType === "RECRUITER_CONTACT") {
+    return { email_type:"RECRUITER_OUTREACH", application_status:"NOT_AN_APPLICATION", confidence:0.95, should_create_application:false, should_update_existing_application:false, company:null, position_title:null, requisition_id:requisitionId, application_id:applicationId, evidence_for:[], evidence_against:[...evidenceAgainst, "No submitted-application evidence"], reasoning_summary:"This is recruiter outreach about an opportunity, not evidence that the user applied.", manual_review_required:false };
+  }
+  if (directEvidence) {
+    return { email_type:"APPLICATION_STATUS_UPDATE", application_status:"LIKELY_APPLICATION", confidence:0.82, should_create_application:false, should_update_existing_application:true, company, position_title:position, requisition_id:requisitionId, application_id:applicationId, evidence_for:evidenceFor, evidence_against:evidenceAgainst, reasoning_summary:"The thread refers to an application but lacks enough independent evidence for automatic creation.", manual_review_required:true };
+  }
+  const jobish = JOBISH_RE.test(combined) || isAtsDomain(thread.domain) || isStaffingDomain(thread.domain);
+  return { email_type:"UNCERTAIN", application_status:jobish ? "INSUFFICIENT_EVIDENCE" : "NOT_AN_APPLICATION", confidence:jobish ? 0.55 : 0.98, should_create_application:false, should_update_existing_application:false, company:null, position_title:null, requisition_id:requisitionId, application_id:applicationId, evidence_for:[], evidence_against:jobish ? ["Job-related wording without submission evidence"] : ["No application evidence"], reasoning_summary:jobish ? "The message is job-related, but there is not enough evidence that the user submitted an application." : "The message is unrelated to a submitted job application.", manual_review_required:jobish };
+}
+
+export interface ApplicationLearningFeatures {
+  domain: string;
+  sender: string;
+  subject_tokens: string[];
+  email_type: ApplicationEmailType;
+}
+
+export interface ApplicationFeedbackExample {
+  label: "application" | "not_application";
+  features: ApplicationLearningFeatures;
+}
+
+const LEARNING_STOP_WORDS = new Set("a an and application applying at candidate career for from in is job of on or position role the to update with your you".split(" "));
+
+export function applicationLearningFeatures(thread: Pick<Thread, "domain" | "subject" | "messages">): ApplicationLearningFeatures {
+  const messages = [...(thread.messages ?? [])].sort((a,b)=>a.date.localeCompare(b.date));
+  const latest = messages[messages.length - 1];
+  const sender = String(latest?.from ?? "").match(/<?([^<>\s]+@[^<>\s]+)>?/)?.[1]?.toLowerCase() ?? "";
+  const tokens = String(thread.subject ?? "").toLowerCase().match(/[a-z0-9]{3,}/g) ?? [];
+  return {
+    domain:String(thread.domain ?? "").toLowerCase(),
+    sender,
+    subject_tokens:[...new Set(tokens.filter((token)=>!LEARNING_STOP_WORDS.has(token)))].slice(0,18),
+    email_type:classifyApplicationExistence(thread).email_type,
+  };
+}
+
+export function learnedApplicationDecision(
+  thread: Pick<Thread, "domain" | "subject" | "messages">,
+  examples: ApplicationFeedbackExample[],
+): { decision:"application" | "not_application" | null; score:number; matches:number; positive_weight:number; negative_weight:number; features:ApplicationLearningFeatures } {
+  const target = applicationLearningFeatures(thread);
+  let positive = 0;
+  let negative = 0;
+  let matches = 0;
+  for (const example of examples ?? []) {
+    if (!example?.features || (example.label !== "application" && example.label !== "not_application")) continue;
+    const a = new Set(target.subject_tokens);
+    const b = new Set(example.features.subject_tokens ?? []);
+    const overlap = [...a].filter((token)=>b.has(token)).length;
+    const union = new Set([...a, ...b]).size || 1;
+    const similarity = overlap / union;
+    let weight = 0;
+    if (target.sender && target.sender === example.features.sender) weight += isAtsDomain(target.domain) ? 1.4 : 3.2;
+    if (target.domain && target.domain === example.features.domain && !isAtsDomain(target.domain)) weight += 1.2;
+    if (similarity >= 0.34) weight += similarity * 3;
+    if (target.email_type === example.features.email_type) weight += 0.35;
+    if (weight < 1.75) continue;
+    matches++;
+    if (example.label === "application") positive += weight; else negative += weight;
+  }
+  const total = positive + negative;
+  const score = total ? (positive - negative) / total : 0;
+  const decision = positive >= 2.8 && score >= 0.58 ? "application"
+    : negative >= 2.8 && score <= -0.58 ? "not_application" : null;
+  return { decision, score, matches, positive_weight:positive, negative_weight:negative, features:target };
+}
+
 /**
  * Whether a thread looks like a real job application (so it belongs on the board).
  * This is the SINGLE relevance decision applied to every inbox (Gmail + Outlook):
@@ -237,23 +393,8 @@ const ACCOUNT_NOISE_RE =
  * non-application emails — order receipts, shipping notices, meeting invites, promos.
  */
 export function looksLikeJobApplication(thread: Pick<Thread, "domain" | "subject" | "messages">): boolean {
-  const subject = thread.subject ?? "";
-  // Account/security mail never auto-passes on the sender alone (a Workday
-  // password reset is not an application) — content can still qualify it.
-  const accountNoise = ACCOUNT_NOISE_RE.test(subject);
-  if (!accountNoise && isAtsDomain(thread.domain) && !NOISY_JOB_BOARDS.has(rootName(thread.domain))) return true;
-  // A staffing agency is the counterparty itself: outreach ("I have a contract
-  // role for you") is real correspondence even without application phrasing —
-  // keep everything from them except job-alert digests and account mail.
-  if (!accountNoise && isStaffingDomain(thread.domain) && !STAFFING_DIGEST_RE.test(subject)) return true;
-  if (JOB_APPLICATION_RE.test(subject)) return true;
-  for (const m of thread.messages ?? []) {
-    const text = `${subject} ${m.body ?? ""}`;
-    if (JOB_APPLICATION_RE.test(text)) return true;
-    // Broad status signal is admitted ONLY alongside a job-context anchor.
-    if (JOB_CONTEXT_RE.test(text) && detectStatus(text)) return true;
-  }
-  return false;
+  if (ACCOUNT_NOISE_RE.test(thread.subject ?? "") && !(thread.messages ?? []).some((m) => DIRECT_APPLICATION_RE.test(m.body ?? ""))) return false;
+  return classifyApplicationExistence(thread).should_create_application;
 }
 
 /* ============================================================================

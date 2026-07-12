@@ -3,7 +3,8 @@
 // lives next to the classifier because "turn a thread into a record" is the
 // classifier's job applied across a whole thread. Shared by the API and the
 // sync engine so the live-mail and incremental paths derive identically.
-import { resolveCompany, detectStatus, classifyStatus, extractRole, isAtsDomain, isNonEmployerDomain, companyFromDomain, guessCompanyDomain, acceptCompany, tidy } from "./index";
+import { resolveCompany, extractRole, isAtsDomain, isNonEmployerDomain, companyFromDomain, guessCompanyDomain, acceptCompany, tidy } from "./index";
+import { classifyEmailEvent, resolveApplicationStatus, type EmailEventClassification, type EventTransition, type EmailEventType } from "./events";
 import {
   extractInterview,
   extractCompensation,
@@ -216,15 +217,28 @@ export function resolveCompanySmart(thread: Pick<Thread, "domain" | "subject" | 
   return found ? { company: found, domain: guessCompanyDomain(found) } : { company: platform, domain };
 }
 
-/** Current status of a thread = the latest non-null classification across its messages. */
-export function statusForThread(thread: Thread): Status {
+export interface ClassifiedThreadEvent {
+  date: string;
+  from: string;
+  classification: EmailEventClassification;
+  transition: EventTransition;
+}
+
+/** Extract chronological events first, then derive status through controlled transitions. */
+export function eventHistoryForThread(thread: Thread): { status: Status; currentEvent: EmailEventClassification | null; events: ClassifiedThreadEvent[] } {
   const msgs = [...thread.messages].sort(byDateAsc);
-  let status: Status = "applied"; // a thread we have at all has at least been applied to
-  for (const m of msgs) {
-    const s = detectStatus(thread.subject + " " + m.body);
-    if (s) status = s; // walk oldest -> newest; the last decisive signal wins
-  }
-  return status;
+  const classifications = msgs.map((m, i) => classifyEmailEvent({ subject: i === 0 ? thread.subject : "", body: m.body, from: m.from, attachments: m.attachments }));
+  const resolution = resolveApplicationStatus(classifications, "applied");
+  return {
+    status: resolution.status,
+    currentEvent: resolution.currentEvent,
+    events: classifications.map((classification, i) => ({ date: msgs[i]!.date, from: msgs[i]!.from, classification, transition: resolution.transitions[i]! })),
+  };
+}
+
+/** Current status of a thread derived from its validated chronological event history. */
+export function statusForThread(thread: Thread): Status {
+  return eventHistoryForThread(thread).status;
 }
 
 /** Flatten the rich classification's value-or-null fields into the persisted
@@ -262,6 +276,25 @@ export function threadToApplication(thread: Thread): Application {
     lastActivity: last?.date ?? "",
     snippet: (last?.body ?? "").slice(0, 600),
     confidence: c.confidence,
+    classification: {
+      eventType: c.eventType,
+      confidence: c.confidence,
+      evidence: c.evidence,
+      negativeEvidence: c.negativeEvidence,
+      requiresManualReview: c.requiresManualReview,
+      reason: c.classificationReason,
+    },
+    classificationEvents: c.events.map((event) => ({
+      date: event.date,
+      eventType: event.classification.eventType,
+      confidence: event.classification.confidence,
+      evidence: event.classification.evidence,
+      negativeEvidence: event.classification.negativeEvidence,
+      requiresManualReview: event.classification.requiresManualReview,
+      reason: event.classification.classificationReason,
+      suggestedStatus: event.classification.suggestedStatus,
+      transitionApplied: event.transition.applied,
+    })),
     enrichment: enrichmentFrom(c),
     // Only set when true (additive, like `manual`): a shared-platform identity
     // must never become a grouping key downstream.
@@ -309,6 +342,12 @@ export interface Classification {
   status: Status;
   confidence: number; // 0..1 overall; low = flag for review
   reasons: string[];
+  eventType: EmailEventType;
+  evidence: string[];
+  negativeEvidence: string[];
+  requiresManualReview: boolean;
+  classificationReason: string;
+  events: ClassifiedThreadEvent[];
   company: CompanyField;
   role: RoleField;
   interview: InterviewInfo | null;
@@ -346,19 +385,14 @@ export function classifyThread(thread: Thread): Classification {
   const sorted = [...thread.messages].sort(byDateAsc);
   const bodies = sorted.map((m) => m.body ?? "");
 
-  // Status — mirror statusForThread (last decisive message wins) and capture the
-  // confidence/reasons of that same decision, so they can never describe a
-  // different label than the board shows.
-  const status = statusForThread(thread);
-  let statusConf = 0.6;
-  let statusReasons: string[] = ["default_applied"];
-  for (const m of sorted) {
-    const r = classifyStatus(subject + " " + (m.body ?? ""));
-    if (r.status) {
-      statusConf = r.confidence;
-      statusReasons = r.reasons;
-    }
-  }
+  const eventHistory = eventHistoryForThread(thread);
+  const status = eventHistory.status;
+  const latestMeaningful = eventHistory.currentEvent;
+  const latestObserved = eventHistory.events[eventHistory.events.length - 1]?.classification ?? null;
+  const auditEvent = latestMeaningful ?? latestObserved;
+  const statusConf = auditEvent?.confidence ?? 0.6;
+  const statusReasons: string[] = auditEvent ? [`event:${auditEvent.eventType.toLowerCase()}`] : ["default_applied"];
+  if (latestObserved?.requiresManualReview) statusReasons.push("latest_event_needs_review");
 
   // Company — flag the ATS platform-fallback (employer couldn't be recovered).
   const resolved = resolveCompanySmart(thread);
@@ -393,6 +427,12 @@ export function classifyThread(thread: Thread): Classification {
     status,
     confidence: round2(confidence),
     reasons,
+    eventType: auditEvent?.eventType ?? "UNKNOWN",
+    evidence: auditEvent?.evidence ?? [],
+    negativeEvidence: auditEvent?.negativeEvidence ?? [],
+    requiresManualReview: !!latestObserved?.requiresManualReview,
+    classificationReason: auditEvent?.classificationReason ?? "No meaningful status event was extracted from the thread.",
+    events: eventHistory.events,
     company: { value: resolved.company, domain: resolved.domain, confidence: companyConf, isPlatformFallback },
     role: { value: roleValue, confidence: roleConf, isGenericFallback: roleGeneric },
     interview: firstField(texts, extractInterview),

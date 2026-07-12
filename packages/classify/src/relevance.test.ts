@@ -15,11 +15,10 @@ describe("@pipeline/classify — looksLikeJobApplication", () => {
     expect(looksLikeJobApplication(thread("figma.com", "We received your application", "We appreciate your interest and will review your application shortly."))).toBe(true);
   });
 
-  it("keeps ATS senders even without obvious keywords in the body", () => {
-    expect(looksLikeJobApplication(thread("greenhouse.io", "Update on your candidacy", "A short note from the team."))).toBe(true);
-    expect(looksLikeJobApplication(thread("myworkday.com", "Initech", "An update."))).toBe(true);
-    // Oracle Recruiting Cloud tenant hosts count as ATS mail too.
-    expect(looksLikeJobApplication(thread("initech.fa.us2.oraclecloud.com", "There is an update", "Sign in to view it."))).toBe(true);
+  it("does not trust an ATS sender without submitted-application evidence", () => {
+    expect(looksLikeJobApplication(thread("greenhouse.io", "Update on your candidacy", "A short note from the team."))).toBe(false);
+    expect(looksLikeJobApplication(thread("myworkday.com", "Initech", "An update."))).toBe(false);
+    expect(looksLikeJobApplication(thread("initech.fa.us2.oraclecloud.com", "There is an update", "Sign in to view it."))).toBe(false);
   });
 
   it("keeps interview, offer and rejection threads", () => {
@@ -67,12 +66,10 @@ describe("@pipeline/classify — looksLikeJobApplication", () => {
     }
   });
 
-  it("keeps staffing-agency application mail, drops their job-alert digests", () => {
+  it("keeps staffing-agency confirmations, drops alerts and unsolicited outreach", () => {
     expect(looksLikeJobApplication(thread("email.roberthalf.com", "Thank you for applying", "Your application has been received and a recruiter will review it shortly."))).toBe(true);
     expect(looksLikeJobApplication(thread("email.roberthalf.com", "New jobs for you", "12 new jobs match your saved search. Browse them now."))).toBe(false);
-    // Outreach IS the correspondence with a staffing agency — no application
-    // phrasing required (this is how Robert Half mail actually reads).
-    expect(looksLikeJobApplication(thread("email.roberthalf.com", "Senior Accountant contract opportunity", "I'm with Robert Half and would love to discuss a contract opening with one of our clients. Are you available for a quick call this week?"))).toBe(true);
+    expect(looksLikeJobApplication(thread("email.roberthalf.com", "Senior Accountant contract opportunity", "I'm with Robert Half and would love to discuss a contract opening with one of our clients. Are you available for a quick call this week?"))).toBe(false);
   });
 
   // Account/security housekeeping from an agency or ATS (sign-in alerts,
@@ -83,8 +80,8 @@ describe("@pipeline/classify — looksLikeJobApplication", () => {
     expect(looksLikeJobApplication(thread("roberthalf.com", "Look up your Robert Half username", "Here is the username you requested."))).toBe(false);
     expect(looksLikeJobApplication(thread("roberthalf.com", "Requested Information", "Here is the information you requested about your account."))).toBe(false);
     expect(looksLikeJobApplication(thread("myworkday.com", "Your Workday password was reset", "Your password has been reset."))).toBe(false);
-    // …but application content still wins over an account-ish subject.
-    expect(looksLikeJobApplication(thread("greenhouse.io", "Set a password to track your application", "Create an account to view the status of your application."))).toBe(true);
+    // A portal setup message alone references an application but does not prove submission.
+    expect(looksLikeJobApplication(thread("greenhouse.io", "Set a password to track your application", "Create an account to view the status of your application."))).toBe(false);
   });
 
   // oracle.com carries Oracle Recruiting mail AND cloud receipts/newsletters —

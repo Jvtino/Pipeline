@@ -15,8 +15,8 @@ const SCOPE = "openid email offline_access https://graph.microsoft.com/Mail.Read
 
 // Keyword search sent to Graph ($search). Broad on purpose — the app's own
 // classifier refines status afterward. Single words avoid nested-quote escaping.
-const SEARCH_KQL = "application OR applying OR interview OR candidacy OR candidate OR recruiting OR position OR offer";
-const MAX_MESSAGES = 1000;   // safety cap across all result pages
+const SEARCH_KQL = "application OR applying OR interview OR candidacy OR candidate OR recruiting OR position OR offer OR assessment OR resume OR hiring OR careers OR selected OR unfortunately OR rejected OR declined OR regret OR unsuccessful OR moving forward OR onboarding OR next steps";
+const MAX_MESSAGES = 2000;   // broad review import, still bounded for mailbox safety
 
 // ---------------------------------------------------------------------------
 // PKCE
@@ -102,6 +102,16 @@ function isoDate(s) {
   try { const d = new Date(s); return isNaN(d) ? new Date().toISOString().slice(0, 10) : d.toISOString().slice(0, 10); }
   catch (e) { return new Date().toISOString().slice(0, 10); }
 }
+function messageText(message) {
+  const raw = message && message.body && message.body.content || message && message.bodyPreview || "";
+  return String(raw)
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ").trim().slice(0, 5000);
+}
 function mapAttachments(list) {
   const named = (list || []).filter((a) => a && a.name && !a.isInline);
   return named.map((a) => ({ name: a.name, contentType: a.contentType || null, size: a.size ?? null }));
@@ -120,7 +130,7 @@ function mapMessagesToThreads(messages) {
       from: addr && name && name !== addr ? `${name} <${addr}>` : (addr || name || "unknown"),
       domain: domainOf(addr),
       subject: m.subject || "(no subject)",
-      body: String(m.bodyPreview || "").replace(/\s+/g, " ").trim().slice(0, 600),
+      body: messageText(m),
       ...(attachments.length ? { attachments } : {}),
       ...(m.webLink ? { webLink: m.webLink } : {}),
     });
@@ -154,7 +164,7 @@ async function fetchJobThreads(token) {
   // Page through ALL matching mail via @odata.nextLink (previously we read a
   // single page, which silently capped results at ~100 messages).
   const search = encodeURIComponent(`"${SEARCH_KQL}"`);
-  const select = "subject,from,receivedDateTime,bodyPreview,conversationId,hasAttachments,webLink";
+  const select = "subject,from,receivedDateTime,bodyPreview,body,conversationId,hasAttachments,webLink";
   const expand = "attachments($select=name,contentType,size,isInline)";
   const mkPath = (top, includeAttachments = true) =>
     `/v1.0/me/messages?$search=${search}` +
@@ -207,5 +217,5 @@ async function fetchJobThreads(token) {
 module.exports = {
   SCOPE, pkceVerifier, pkceChallenge, buildAuthUrl,
   exchangeCode, refresh, getEmail, fetchJobThreads,
-  mapMessagesToThreads, mapAttachments, domainOf, isoDate,
+  mapMessagesToThreads, mapAttachments, domainOf, isoDate, messageText,
 };

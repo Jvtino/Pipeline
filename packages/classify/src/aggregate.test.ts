@@ -74,4 +74,18 @@ describe("statusForThread — recognises moving forward and rejection", () => {
   it("recognises a rejection even after earlier progress", () => {
     expect(statusForThread(t("Thank you for applying.", "Let's set up an interview.", "Unfortunately we've decided to move forward with other candidates."))).toBe("rejected");
   });
+
+  it("does not replay an old interview subject after a newer rejection", () => {
+    const threadWithOldSubject: Thread = {
+      threadId: "old-subject",
+      domain: "greenhouse.io",
+      subject: "Interview scheduled for Engineer at Acme",
+      messages: [
+        { date:"2026-01-01", from:"x@greenhouse.io", body:"Your interview is scheduled for Monday." },
+        { date:"2026-02-01", from:"x@greenhouse.io", body:"We will not be moving forward with your application." },
+        { date:"2026-03-01", from:"x@greenhouse.io", body:"Thank you for confirming receipt of this message." },
+      ],
+    };
+    expect(statusForThread(threadWithOldSubject)).toBe("rejected");
+  });
 });

@@ -123,6 +123,14 @@ test("msgraph.mapMessagesToThreads tolerates empty input and missing from", () =
   assert.equal(t[0].subject, "(no subject)");
 });
 
+test("msgraph uses the full message body and strips HTML for classification", () => {
+  const body = `<html><style>.x{display:none}</style><p>Thank you for applying.</p><p>${"Application details ".repeat(50)}</p></html>`;
+  const [mapped] = msgraph.mapMessagesToThreads([{ conversationId:"full", receivedDateTime:"2026-01-01T00:00:00Z", subject:"Update", body:{ contentType:"html", content:body } }]);
+  assert.ok(mapped.messages[0].body.startsWith("Thank you for applying."));
+  assert.ok(mapped.messages[0].body.length > 600);
+  assert.ok(!mapped.messages[0].body.includes("display:none"));
+});
+
 // ---------------------------------------------------------------------------
 // Generic IMAP (mailparser shape)
 // ---------------------------------------------------------------------------

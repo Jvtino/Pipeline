@@ -65,9 +65,10 @@ describe("@pipeline/classify — classifyThread", () => {
 
   it("cold recruiter sourcing is NOT a confident interview", () => {
     const c = classifyThread(CASES.coldSourcing!);
-    expect(c.status).toBe("interview"); // the cue still fired…
-    expect(c.confidence).toBeLessThan(0.5); // …but it's flagged for review
-    expect(c.reasons).toContain("recruiter_sourcing_no_application");
+    expect(c.status).toBe("applied");
+    expect(c.confidence).toBeLessThan(0.5);
+    expect(c.eventType).toBe("UNKNOWN");
+    expect(c.requiresManualReview).toBe(true);
   });
 
   it("a genuine post-application interview is NOT mistaken for sourcing", () => {
@@ -76,11 +77,12 @@ describe("@pipeline/classify — classifyThread", () => {
     expect(c.reasons).not.toContain("recruiter_sourcing_no_application");
   });
 
-  it("a mixed-signal rejection keeps the label but is low-confidence", () => {
+  it("an explicit rejection overrides historical interview wording", () => {
     const c = classifyThread(CASES.mixed!);
     expect(c.status).toBe("rejected");
-    expect(c.confidence).toBeLessThan(0.5);
-    expect(c.reasons).toContain("mixed_signal");
+    expect(c.confidence).toBeGreaterThanOrEqual(0.75);
+    expect(c.eventType).toBe("REJECTION_RECEIVED");
+    expect(c.requiresManualReview).toBe(false);
   });
 
   it("threadToApplication carries the classifier confidence (live path)", () => {

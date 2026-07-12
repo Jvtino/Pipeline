@@ -16,6 +16,7 @@ const STATUS_CASES = [
   // interview
   ["We'd like to schedule a phone screen — please share your availability.", "interview"],
   ["Good news! We'd love to invite you for a first interview next week.", "interview"],
+  // The broad legacy heuristic still supports relevance; status updates use classifyEmailEvent().
   ["The next step is a technical assessment / coding challenge. Here's the link.", "interview"],
   ["Our hiring manager would like to set up a call. Are you available Thursday?", "interview"],
   ["We're moving you forward to the next round — please book a time via Calendly.", "interview"],
@@ -128,4 +129,25 @@ test("role extraction", () => {
   assert.equal(C.extractRole("Your application was sent to Initech"), "Application");  // no role in subject
   assert.equal(C.extractRole("Thank you for your interest in Initech"), "Application");
   assert.equal(C.extractRole("Software Engineer"), "Software Engineer");  // bare role preserved
+});
+
+test("feedback learner adapts to repeated sender and subject patterns", () => {
+  const approved = thread("careers.contoso.com", "Contoso Careers <updates@careers.contoso.com>",
+    "Thanks for your interest in Platform Engineer", "We will be in touch soon.");
+  const similar = thread("careers.contoso.com", "Contoso Careers <updates@careers.contoso.com>",
+    "Thanks for your interest in Backend Engineer", "Our team will be in touch soon.");
+  const features = C.applicationLearningFeatures(approved);
+  const result = C.learnedApplicationDecision(similar, [{ label:"application", features }]);
+  assert.equal(result.decision, "application");
+  assert.ok(result.score > 0.5);
+});
+
+test("feedback learner uses rejections and does not learn from ATS domain alone", () => {
+  const alert = thread("myworkday.com", "Workday <no-reply@myworkday.com>",
+    "New roles selected for you", "Review these roles.");
+  const unrelatedAts = thread("myworkday.com", "Workday <no-reply@myworkday.com>",
+    "Security code", "Use this code to sign in.");
+  const features = C.applicationLearningFeatures(alert);
+  assert.equal(C.learnedApplicationDecision(alert, [{ label:"not_application", features }]).decision, "not_application");
+  assert.equal(C.learnedApplicationDecision(unrelatedAts, [{ label:"not_application", features }]).decision, null);
 });

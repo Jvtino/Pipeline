@@ -46,6 +46,33 @@ describe("parity: legacy classify.js === @pipeline/classify", () => {
     }
   });
 
+  it("evidence events and transitions agree across desktop and shared runtimes", () => {
+    const texts = [
+      "We received your application and it is under review.",
+      "We will contact you if selected for an interview.",
+      "Please select a time for your first interview.",
+      "After your interview, we will not be moving forward with your application.",
+      "Please complete the technical assessment by Friday.",
+      "The position has been filled.",
+      "We are pleased to offer you the position.",
+      "Thanks for the update.\nOn Monday, Recruiter wrote:\n> Please book your interview.",
+    ];
+    const legacyEvents = texts.map((body) => legacy.classifyEmailEvent({ subject:"Application update", body }));
+    const sharedEvents = texts.map((body) => ts.classifyEmailEvent({ subject:"Application update", body }));
+    expect(legacyEvents).toEqual(sharedEvents);
+    expect(legacy.resolveApplicationStatus(legacyEvents)).toEqual(ts.resolveApplicationStatus(sharedEvents));
+  });
+
+  it("application-existence decisions agree across desktop and shared runtimes", () => {
+    const cases: Thread[] = [
+      { threadId:"a", domain:"acme.com", subject:"Application confirmation", messages:[{date:"2026-01-01",from:"jobs@acme.com",body:"Thank you for applying. We received your application."}] },
+      { threadId:"b", domain:"linkedin.com", subject:"Jobs for you", messages:[{date:"2026-01-01",from:"jobs@linkedin.com",body:"12 recommended jobs based on your profile. Apply now. Unsubscribe."}] },
+      { threadId:"c", domain:"agency.com", subject:"Opportunity", messages:[{date:"2026-01-01",from:"jane@agency.com",body:"I came across your profile. Would you be interested in this role?"}] },
+      { threadId:"d", domain:"acme.com", subject:"Update", messages:[{date:"2026-01-01",from:"jobs@acme.com",body:"We will not be moving forward with your application."}] },
+    ];
+    for (const input of cases) expect(legacy.classifyApplicationExistence(input)).toEqual(ts.classifyApplicationExistence(input));
+  });
+
   it("resolveCompany agrees on the labeled corpus", () => {
     for (const c of corpus.company as { domain: string; from: string; subject: string; body: string }[]) {
       const th: Thread = { threadId: "t", domain: c.domain, subject: c.subject, messages: [{ date: "2026-06-01", from: c.from, body: c.body }] };

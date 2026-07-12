@@ -13,6 +13,7 @@
 
 # Desktop app (Electron)
 node_modules/
+.pnpm-store/
 dist/
 config.json
 

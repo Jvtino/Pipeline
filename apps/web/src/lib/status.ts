@@ -7,7 +7,7 @@
 // duplicated in CSS. Deliberately muted (rejection red shouldn't feel like 911).
 import type { Status as ApiStatus } from "@pipeline/contracts";
 
-export type UiStatus = "wishlist" | "applied" | "screening" | "interview" | "offer" | "rejected" | "no_response";
+export type UiStatus = "wishlist" | "applied" | "screening" | "interview" | "offer" | "rejected" | "cancelled" | "no_response";
 
 export interface StatusStyle {
   label: string;
@@ -23,17 +23,18 @@ export const STATUS: Record<UiStatus, StatusStyle> = {
   interview: { label: "Interview", dot: "#c08a2a", fg: "#9a6a16", bg: "rgba(192,138,42,.16)" },
   offer: { label: "Offer", dot: "#2f9266", fg: "#1f7a52", bg: "rgba(47,146,102,.15)" },
   rejected: { label: "Rejected", dot: "#c06a57", fg: "#a85544", bg: "rgba(192,106,87,.15)" },
+  cancelled: { label: "Cancelled", dot: "#e58a2f", fg: "#b96616", bg: "rgba(229,138,47,.16)" },
   no_response: { label: "No Response", dot: "#b0a48f", fg: "#857a64", bg: "rgba(176,164,143,.2)" },
 };
 
 /** Tab/segment order used by Applications filter tabs and the donut/funnel. */
-export const STATUS_ORDER: UiStatus[] = ["wishlist", "applied", "screening", "interview", "offer", "rejected", "no_response"];
+export const STATUS_ORDER: UiStatus[] = ["wishlist", "applied", "screening", "interview", "offer", "rejected", "cancelled", "no_response"];
 
 /** Statuses offered in the New Application modal (matches the prototype's 6). */
-export const NEW_APP_STATUSES: UiStatus[] = ["wishlist", "applied", "screening", "interview", "offer", "rejected"];
+export const NEW_APP_STATUSES: UiStatus[] = ["wishlist", "applied", "screening", "interview", "offer", "rejected", "cancelled"];
 
 /** Statuses offered by the drawer's "Move stage" row. */
-export const MOVE_STAGES: UiStatus[] = ["wishlist", "applied", "screening", "interview", "offer", "rejected"];
+export const MOVE_STAGES: UiStatus[] = ["wishlist", "applied", "screening", "interview", "offer", "rejected", "cancelled"];
 
 /** A real API status is already a valid UiStatus — this just narrows the type. */
 export function fromApiStatus(s: ApiStatus): UiStatus {

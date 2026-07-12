@@ -32,6 +32,7 @@ const STATUS_CASES = [
   ["Thank you for applying. Unfortunately the role has been filled.", "rejected"], // mixed → rejected
   ["After your interview, we have decided to go in a different direction.", "rejected"], // mixed → rejected
   ["We are unable to offer you the position at this time.", "rejected"],              // negated offer
+  ["The position has been cancelled due to changing business needs.", "cancelled"],
   // none
   ["Here's our company newsletter for June.", null],
   ["Your package has shipped and will arrive tomorrow.", null],

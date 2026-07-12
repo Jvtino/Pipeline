@@ -255,7 +255,7 @@ export function mergeContacts(derived: ContactEntry[], manual: ContactEntry[]): 
 export type Counts = Record<UiStatus | "total", number>;
 
 export function statusCounts(apps: UiApplication[]): Counts {
-  const c: Counts = { wishlist: 0, applied: 0, screening: 0, interview: 0, offer: 0, rejected: 0, no_response: 0, total: 0 };
+  const c: Counts = { wishlist: 0, applied: 0, screening: 0, interview: 0, offer: 0, rejected: 0, cancelled: 0, no_response: 0, total: 0 };
   for (const a of apps) {
     c[a.status] += 1;
     c.total += 1;

@@ -10,7 +10,8 @@ const SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const GMAIL_Q =
   'in:anywhere newer_than:1y (subject:(application OR applying OR interview OR candidacy OR ' +
   'recruiting OR position OR offer) OR "thank you for applying" OR "your application" ' +
-  'OR "received your application")';
+  'OR "received your application" OR "position has been cancelled" OR "position has been canceled" ' +
+  'OR "requisition has been cancelled" OR "hiring has been paused")';
 const MAX_THREADS = 200;
 const MAX_IDS = 800;   // message-list paging cap
 

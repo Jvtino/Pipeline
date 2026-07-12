@@ -18,13 +18,14 @@
    ========================================================================== */
 
 // rank = how "advanced"/decisive a status is (used when blending subject + body)
-const STATUS_RANK = { applied: 1, interview: 2, offer: 3, rejected: 3 };
+const STATUS_RANK = { applied: 1, interview: 2, offer: 3, rejected: 3, cancelled: 3 };
 
 const OFFER_RE = /\b(pleased to offer|happy to offer|delighted to offer|excited to offer|we(?:'?d| would) like to offer|extend(?:ing)? (?:to )?you (?:an|our|a formal) offer|extend(?:ing)? an offer|offer of employment|formal (?:job )?offer|verbal offer|offer letter|employment agreement|appointment letter|official offer|written offer|offer package|acceptance deadline|review and sign|attached offer|offer (?:letter )?(?:is )?attached|(?:contingent|conditional) offer|(?:preparing|drafting) (?:your|an|the) offer|offer is (?:in|pending) approval|moving to (?:the )?offer stage|new hire paperwork|onboarding (?:documents|portal|paperwork|process)|benefits enrollment|i-9|w-4|we(?:'?re| are) (?:thrilled|excited|pleased|delighted) to extend|congratulations[^.]{0,40}\b(offer|join|aboard|team)\b|welcome (?:to the team|aboard)|your (?:start date|compensation package|signing bonus))\b/;
 // rejection that contains the word "offer" in a NEGATED form ("unable to offer", "cannot offer you")
 const NEG_OFFER_RE = /\b(cannot|can'?t|could ?n'?t|unable to|not able to|won'?t be able to|will not be able to|regret(?:tably)?[^.]{0,20})\b[^.]{0,25}\boffer\b/;
 
-const REJECT_RE = /\b(unfortunately|we regret|regret to inform|with (?:great |deep |sincere )?regret|we(?:'?ve| have) decided (?:not to|against)|we(?:'?ve| have) decided to (?:move|proceed|go)(?: forward| ahead)? with (?:(?:an)?other|a different)|(?:not|won'?t) be (?:moving|proceeding|progressing) (?:forward|ahead|further)|will not be (?:moving|proceeding|progressing)|mov(?:e|ing) forward with other|other (?:candidates|applicants)|pursu(?:e|ing) other (?:candidates|applicants)|(?:chose(?:n)?|selected|pursu(?:e|ed|ing)) another (?:candidate|applicant)|not (?:be )?(?:selected|shortlisted|successful|progressing|chosen)|not (?:been )?retained|declined your application|application (?:was|has been) declined|removed from consideration|(?:role|position) is no longer available|(?:position|role) has been (?:cancelled|canceled|closed)|unable to proceed|will not proceed|hiring needs have changed|more closely (?:match|align)|position (?:has been|is now) filled|role (?:has been|is now) filled|filled (?:the|this) (?:position|role)|no longer (?:moving|being considered|under consideration)|not (?:to )?(?:proceed|progress) (?:with|further)|different direction|unsuccessful (?:on this occasion|at this time|this time)|wish you (?:the best|well|success|luck)|keep your (?:details|resume|cv) on file|decided to go (?:with|in)|not a (?:fit|match) (?:at this|for this)|won'?t be (?:taking|progressing) your application)\b/;
+const REJECT_RE = /\b(unfortunately|we regret|regret to inform|with (?:great |deep |sincere )?regret|we(?:'?ve| have) decided (?:not to|against)|we(?:'?ve| have) decided to (?:move|proceed|go)(?: forward| ahead)? with (?:(?:an)?other|a different)|(?:not|won'?t) be (?:moving|proceeding|progressing) (?:forward|ahead|further)|will not be (?:moving|proceeding|progressing)|mov(?:e|ing) forward with other|other (?:candidates|applicants)|pursu(?:e|ing) other (?:candidates|applicants)|(?:chose(?:n)?|selected|pursu(?:e|ed|ing)) another (?:candidate|applicant)|not (?:be )?(?:selected|shortlisted|successful|progressing|chosen)|not (?:been )?retained|declined your application|application (?:was|has been) declined|removed from consideration|(?:role|position) is no longer available|unable to proceed|will not proceed|more closely (?:match|align)|position (?:has been|is now) filled|role (?:has been|is now) filled|filled (?:the|this) (?:position|role)|no longer (?:moving|being considered|under consideration)|not (?:to )?(?:proceed|progress) (?:with|further)|different direction|unsuccessful (?:on this occasion|at this time|this time)|wish you (?:the best|well|success|luck)|keep your (?:details|resume|cv) on file|decided to go (?:with|in)|not a (?:fit|match) (?:at this|for this)|won'?t be (?:taking|progressing) your application)\b/;
+const CANCELLED_RE = /\b(?:(?:position|role|requisition|opening|vacancy)(?:\s+\w+){0,8}\s+(?:has been |is |was |will be )?(?:cancelled|canceled|eliminated|withdrawn|discontinued)|(?:cancelled|canceled|eliminated|withdrew|withdrawn|discontinued)(?:\s+\w+){0,8}\s+(?:position|role|requisition|opening|vacancy)|hiring (?:for )?(?:this|the) (?:position|role) (?:has been |is |was )?(?:cancelled|canceled|paused|frozen)|(?:no longer|not currently) (?:hiring|recruiting|filling) (?:for )?(?:this|the) (?:position|role)|(?:position|role|requisition) (?:is |has been |was )?(?:closed|on hold) due to (?:changed|changing|business|budget|organizational|restructuring|internal) (?:needs|priorities|conditions|changes|constraints|reasons)|hiring needs have changed)\b/;
 
 const INTERVIEW_RE = /\b(phone (?:screen|interview|call)|technical (?:screen|interview|phone)|video (?:screen|interview|call)|first (?:round|interview)|final (?:round|interview|stage)|next (?:round|step|steps|stage)|coding (?:challenge|assessment|test|exercise|interview)|(?:online|technical|skills?|hackerrank|codility) assessment|take[- ]?home|invite(?:d|s)? you (?:to|for)|(?:would|we(?:'?d| would)) (?:like|love) to (?:schedule|set up|arrange|invite|meet|speak|chat|connect|talk|have)|schedule (?:a|an|some|your) (?:call|interview|meeting|screen|chat|conversation|time)|set up (?:a|an|some) (?:call|interview|meeting|time|chat)|book (?:a|some) time|find a time|(?:share|provide|confirm|send|let us know) (?:your )?availability|(?:are you|when are you) available|move (?:you )?(?:forward|to the next|ahead)|advanc(?:e|ing) (?:your|to)|progress(?:ing)? (?:your|to the next)|speak (?:with|to) (?:you|the)|meet (?:with )?(?:the|our) (?:team|hiring|manager)|hiring manager|meet the team|on-?site|panel interview|interview (?:invitation|invite|request)|calendly|book (?:a )?(?:slot|call)|calendar invite|invite has been sent|joining details|zoom link|google meet|microsoft teams|teams (?:link|meeting)|dial-?in|conference link|self-?schedul(?:e|ing)|scheduling link|(?:recruiter|talent) screen)\b/;
 
@@ -53,11 +54,12 @@ const TR_OFFER_RE = /(i̇?ş teklifi|teklif mektubu)/;
 
 function detectStatus(text) {
   const t = " " + String(text || "").toLowerCase().replace(/\s+/g, " ") + " ";
-  const score = { offer: 0, rejected: 0, interview: 0, applied: 0 };
+  const score = { offer: 0, rejected: 0, cancelled: 0, interview: 0, applied: 0 };
 
   const negOffer = NEG_OFFER_RE.test(t);
   if (OFFER_RE.test(t) && !negOffer) score.offer += 10;
   if (REJECT_RE.test(t)) score.rejected += 10;
+  if (CANCELLED_RE.test(t)) score.cancelled += 12;
   if (negOffer) score.rejected += 10;          // "unable to offer you the role" = rejection
   if (INTERVIEW_RE.test(t)) score.interview += 8;
   if (APPLIED_RE.test(t)) score.applied += 5;
@@ -82,7 +84,7 @@ function detectStatus(text) {
 
   // pick the highest; precedence offer > rejected > interview > applied on ties
   let best = null, bestScore = 0;
-  for (const k of ["offer", "rejected", "interview", "applied"]) {
+  for (const k of ["offer", "cancelled", "rejected", "interview", "applied"]) {
     if (score[k] > bestScore) { best = k; bestScore = score[k]; }
   }
   return best;   // null when nothing matched (caller keeps the prior status)
@@ -96,7 +98,8 @@ function detectStatus(text) {
    ========================================================================== */
 const REJECTION_EVENT_RE = /\b(?:regret to inform|not (?:been )?(?:selected|shortlisted|chosen|successful|retained|invited to (?:the )?next (?:stage|round))|unable to offer you (?:an? |the )?(?:interview|position|role|job)|(?:will not|won't|cannot|can't|unable to)(?: be)? (?:move|moving|advance|advancing|proceed|proceeding|progress|progressing|continue|continuing)(?: you| with you| your (?:application|candidacy))?(?: forward| further| to (?:the )?next (?:stage|round))?|not be moving forward|decided (?:not to (?:proceed|continue|advance)|to (?:move forward|proceed|continue|pursue) with (?:another|other|different)|to pursue other)|(?:moving|proceeding|continuing|pressing|going) (?:forward|ahead) with (?:another|other) (?:candidates?|applicants?)|pursu(?:e|ing) other (?:candidates|applicants)|(?:selected|chosen) (?:another|other) (?:candidate|applicant)|(?:experience|background|qualifications|skills) (?:more )?closely (?:match|align)|(?:application|candidacy) (?:will|does) not (?:advance|progress|continue|proceed|move forward)|no longer (?:under consideration|being considered)|removed from consideration|application (?:has been |was |is )?(?:declined|rejected|unsuccessful)|unable to proceed with your (?:application|candidacy)|go in a different direction|not (?:the right |a strong )?(?:fit|match) for (?:this|the) (?:role|position)|will not be considered further)\b/i;
 const EMAIL_EVENT_RULES = [
-  ["POSITION_CLOSED", "rejected", .97, "The position or requisition is explicitly closed, cancelled, or filled.", /\b(?:(?:position|role|requisition|opening|vacancy)(?:\s+\w+){0,8}\s+(?:has been |is |was )?(?:closed|cancelled|canceled|filled|eliminated|no longer available)|hiring (?:for )?(?:this|the) (?:position|role) (?:has been )?(?:cancelled|canceled|paused))\b/i],
+  ["POSITION_CANCELLED", "cancelled", .98, "The employer explicitly cancelled, eliminated, or stopped hiring for the position.", CANCELLED_RE],
+  ["POSITION_CLOSED", "rejected", .86, "The position is closed or filled, but the message does not explicitly say it was cancelled.", /\b(?:(?:position|role|requisition|opening|vacancy)(?:\s+\w+){0,8}\s+(?:has been |is |was )?(?:closed|filled|no longer available)|filled (?:the|this) (?:position|role))\b/i],
   ["WITHDRAWN", "rejected", .98, "The message explicitly records withdrawal of the application.", /\b(?:withdraw(?:n|ing)? (?:my|your|the) application|application (?:has been |was )?withdrawn|received your (?:request to )?withdraw|candidacy (?:has been |was )?withdrawn)\b/i],
   ["REJECTION_RECEIVED", "rejected", .97, "The latest message contains an explicit negative hiring decision.", REJECTION_EVENT_RE],
   ["OFFER_ACCEPTED", "offer", .98, "The message explicitly confirms acceptance of an employment offer.", /\b(?:offer (?:has been |was )?accepted|accepted (?:your|the|our) (?:job |employment )?offer|welcome aboard|acceptance of (?:your|the) offer|signed offer (?:letter|agreement))\b/i],
@@ -161,9 +164,10 @@ function applyEventTransition(current, event) {
   const target = event.suggestedStatus;
   if (!target) return { from:current, to:current, eventType:event.eventType, applied:false, reason:"The event does not imply a visible status change." };
   if (event.confidence < .75 || event.requiresManualReview) return { from:current, to:current, eventType:event.eventType, applied:false, reason:"Confidence is below the automatic-update threshold." };
-  if (current === "offer" && target !== "offer" && target !== "rejected") return { from:current, to:current, eventType:event.eventType, applied:false, reason:"A later low-stage event cannot downgrade an offer." };
+  if (current === "offer" && target !== "offer" && target !== "rejected" && target !== "cancelled") return { from:current, to:current, eventType:event.eventType, applied:false, reason:"A later low-stage event cannot downgrade an offer." };
   if (current === "interview" && target === "applied") return { from:current, to:current, eventType:event.eventType, applied:false, reason:"An early-stage event cannot downgrade an interview." };
   if (current === "rejected" && target === "applied") return { from:current, to:current, eventType:event.eventType, applied:false, reason:"An early-stage event cannot reopen a rejected application." };
+  if (current === "cancelled" && target === "applied") return { from:current, to:current, eventType:event.eventType, applied:false, reason:"An early-stage event cannot reopen a cancelled application." };
   return { from:current, to:target, eventType:event.eventType, applied:target !== current, reason:target === current ? "The event confirms the existing status." : "Explicit evidence permits this chronological transition." };
 }
 function resolveApplicationStatus(events, initial) {
@@ -196,7 +200,7 @@ function existenceEmailType(event) {
   if (/^(INTERVIEW|ASSESSMENT)_/.test(event.eventType)) return "INTERVIEW_OR_ASSESSMENT";
   if (event.eventType === "REJECTION_RECEIVED") return "REJECTION";
   if (/^OFFER_/.test(event.eventType)) return "OFFER";
-  if (["WITHDRAWN","POSITION_CLOSED"].includes(event.eventType)) return "WITHDRAWAL_OR_CLOSURE";
+  if (["WITHDRAWN","POSITION_CLOSED","POSITION_CANCELLED"].includes(event.eventType)) return "WITHDRAWAL_OR_CLOSURE";
   if (event.eventType === "RECRUITER_CONTACT") return "RECRUITER_OUTREACH";
   return event.eventType === "UNKNOWN" ? "UNCERTAIN" : "APPLICATION_STATUS_UPDATE";
 }
@@ -219,7 +223,7 @@ function classifyApplicationExistence(thread) {
   const multiple = existenceEvidence(combined, EXIST_MULTIPLE_RE);
   const against = [recommendation&&"Recommendation or saved-search language",advertisement&&"The message encourages the recipient to apply",newsletter&&"Newsletter, campaign, or unsubscribe language",outreach&&"Unsolicited recruiter outreach",incomplete&&"The message asks the recipient to finish an unsubmitted application",multiple&&"Multiple jobs are promoted in one message"].filter(Boolean);
   const confirmation = meaningful.find(e=>["APPLICATION_RECEIVED","APPLICATION_UNDER_REVIEW"].includes(e.eventType));
-  const downstreamCandidate = meaningful.find(e=>!["APPLICATION_RECEIVED","APPLICATION_UNDER_REVIEW","RECRUITER_CONTACT","POSITION_CLOSED","ON_HOLD"].includes(e.eventType));
+  const downstreamCandidate = meaningful.find(e=>!["APPLICATION_RECEIVED","APPLICATION_UNDER_REVIEW","RECRUITER_CONTACT","POSITION_CLOSED","POSITION_CANCELLED","ON_HOLD"].includes(e.eventType));
   const downstream = direct||directedOutcome ? downstreamCandidate : undefined;
   const resolved = resolveCompany(thread);
   const role = extractRole(subject);

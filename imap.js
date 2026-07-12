@@ -30,6 +30,8 @@ const SEARCH_TERMS = [
   { subject: "application" }, { subject: "applying" }, { subject: "interview" },
   { subject: "candidacy" }, { subject: "recruiting" }, { subject: "position" }, { subject: "offer" },
   { body: "thank you for applying" }, { body: "your application" },
+  { body: "position has been cancelled" }, { body: "position has been canceled" },
+  { body: "requisition has been cancelled" }, { body: "hiring has been paused" },
 ];
 
 // ---- pure mapping (testable) ----

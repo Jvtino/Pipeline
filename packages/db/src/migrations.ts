@@ -5,6 +5,7 @@ export const INIT_SQL = `
 DO $$ BEGIN CREATE TYPE plan AS ENUM ('free','pro','teams'); EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN CREATE TYPE provider AS ENUM ('google','microsoft','imap'); EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN CREATE TYPE app_status AS ENUM ('applied','interview','offer','rejected'); EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TYPE app_status ADD VALUE IF NOT EXISTS 'cancelled';
 DO $$ BEGIN CREATE TYPE conn_status AS ENUM ('active','reauth_required','disconnected'); EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 CREATE TABLE IF NOT EXISTS users (

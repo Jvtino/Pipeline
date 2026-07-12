@@ -7,7 +7,7 @@ import { pgTable, text, timestamp, boolean, real, pgEnum, uniqueIndex, index } f
 
 export const planEnum = pgEnum("plan", ["free", "pro", "teams"]);
 export const providerEnum = pgEnum("provider", ["google", "microsoft", "imap"]);
-export const appStatusEnum = pgEnum("app_status", ["applied", "interview", "offer", "rejected"]);
+export const appStatusEnum = pgEnum("app_status", ["applied", "interview", "offer", "rejected", "cancelled"]);
 export const connStatusEnum = pgEnum("conn_status", ["active", "reauth_required", "disconnected"]);
 
 export const users = pgTable("users", {

@@ -100,11 +100,12 @@ export function Dashboard(ctx: Ctx) {
         </>
       )}
 
-      <div className="rgrid rgrid-5">
+      <div className="rgrid rgrid-6">
         <StatCard label="Total Applications" value={counts.total} sub="vs last month" delta={totalDelta} />
         <StatCard label="In Interview" value={counts.interview} color={STATUS.interview.fg} sub="in your pipeline" />
         <StatCard label="Offers" value={counts.offer} color={STATUS.offer.fg} sub="in play" />
         <StatCard label="Rejected" value={counts.rejected} color={STATUS.rejected.fg} sub={`${pct(counts.rejected)}% of total`} />
+        <StatCard label="Cancelled" value={counts.cancelled} color={STATUS.cancelled.fg} sub={`${pct(counts.cancelled)}% of total`} />
         <StatCard label="No Response" value={counts.no_response} color={STATUS.no_response.fg} sub={`${pct(counts.no_response)}% awaiting reply`} />
       </div>
 
@@ -170,7 +171,7 @@ type CompanySort = "updated" | "applied" | "positions" | "furthest" | "name";
 type CompanyFilter = "all" | "active" | "offer" | "interview" | "needsReview";
 
 // How "far along" a status is, for the "Furthest along" sort.
-const PROGRESS_RANK: Record<UiStatus, number> = { offer: 5, interview: 4, screening: 3, applied: 2, no_response: 1, wishlist: 1, rejected: 0 };
+const PROGRESS_RANK: Record<UiStatus, number> = { offer: 5, interview: 4, screening: 3, applied: 2, no_response: 1, wishlist: 1, rejected: 0, cancelled: 0 };
 // Numeric max across the card's apps: date-only and full-timestamp ISO values
 // compare correctly, and a missing date sorts last instead of poisoning the max.
 const maxMs = (xs: (string | null)[]): number => xs.reduce<number>((m, s) => (s ? Math.max(m, parseIso(s)) : m), -Infinity);

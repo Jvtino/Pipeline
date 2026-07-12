@@ -131,6 +131,11 @@ test("msgraph uses the full message body and strips HTML for classification", ()
   assert.ok(!mapped.messages[0].body.includes("display:none"));
 });
 
+test("msgraph builds valid KQL with OR operators outside quoted clauses", () => {
+  assert.equal(msgraph.searchExpression(["application", "not selected", "regret"]),
+    `"application" OR "not selected" OR "regret"`);
+});
+
 // ---------------------------------------------------------------------------
 // Generic IMAP (mailparser shape)
 // ---------------------------------------------------------------------------

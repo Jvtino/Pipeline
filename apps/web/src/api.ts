@@ -108,7 +108,7 @@ export function getMessages(threadId: string): Promise<{ messages: ThreadMessage
 
 /** One recorded status transition (the drawer's real timeline). */
 export interface StatusEvent {
-  status: "applied" | "interview" | "offer" | "rejected";
+  status: "applied" | "interview" | "offer" | "rejected" | "cancelled";
   occurredAt: string;
   source: string;
 }

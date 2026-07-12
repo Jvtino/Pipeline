@@ -38,7 +38,10 @@ const NEG_OFFER_RE =
   /\b(cannot|can'?t|could ?n'?t|unable to|not able to|won'?t be able to|will not be able to|regret(?:tably)?[^.]{0,20})\b[^.]{0,25}\boffer\b/;
 
 const REJECT_RE =
-  /\b(unfortunately|we regret|regret to inform|with (?:great |deep |sincere )?regret|we(?:'?ve| have) decided (?:not to|against)|we(?:'?ve| have) decided to (?:move|proceed|go)(?: forward| ahead)? with (?:(?:an)?other|a different)|(?:not|won'?t) be (?:moving|proceeding|progressing) (?:forward|ahead|further)|will not be (?:moving|proceeding|progressing)|mov(?:e|ing) forward with other|other (?:candidates|applicants)|pursu(?:e|ing) other (?:candidates|applicants)|(?:chose(?:n)?|selected|pursu(?:e|ed|ing)) another (?:candidate|applicant)|not (?:be )?(?:selected|shortlisted|successful|progressing|chosen)|not (?:been )?retained|declined your application|application (?:was|has been) declined|removed from consideration|(?:role|position) is no longer available|(?:position|role) has been (?:cancelled|canceled|closed)|unable to proceed|will not proceed|hiring needs have changed|more closely (?:match|align)|position (?:has been|is now) filled|role (?:has been|is now) filled|filled (?:the|this) (?:position|role)|no longer (?:moving|being considered|under consideration)|not (?:to )?(?:proceed|progress) (?:with|further)|different direction|unsuccessful (?:on this occasion|at this time|this time)|wish you (?:the best|well|success|luck)|keep your (?:details|resume|cv) on file|decided to go (?:with|in)|not a (?:fit|match) (?:at this|for this)|won'?t be (?:taking|progressing) your application)\b/;
+  /\b(unfortunately|we regret|regret to inform|with (?:great |deep |sincere )?regret|we(?:'?ve| have) decided (?:not to|against)|we(?:'?ve| have) decided to (?:move|proceed|go)(?: forward| ahead)? with (?:(?:an)?other|a different)|(?:not|won'?t) be (?:moving|proceeding|progressing) (?:forward|ahead|further)|will not be (?:moving|proceeding|progressing)|mov(?:e|ing) forward with other|other (?:candidates|applicants)|pursu(?:e|ing) other (?:candidates|applicants)|(?:chose(?:n)?|selected|pursu(?:e|ed|ing)) another (?:candidate|applicant)|not (?:be )?(?:selected|shortlisted|successful|progressing|chosen)|not (?:been )?retained|declined your application|application (?:was|has been) declined|removed from consideration|(?:role|position) is no longer available|unable to proceed|will not proceed|more closely (?:match|align)|position (?:has been|is now) filled|role (?:has been|is now) filled|filled (?:the|this) (?:position|role)|no longer (?:moving|being considered|under consideration)|not (?:to )?(?:proceed|progress) (?:with|further)|different direction|unsuccessful (?:on this occasion|at this time|this time)|wish you (?:the best|well|success|luck)|keep your (?:details|resume|cv) on file|decided to go (?:with|in)|not a (?:fit|match) (?:at this|for this)|won'?t be (?:taking|progressing) your application)\b/;
+
+const CANCELLED_RE =
+  /\b(?:(?:position|role|requisition|opening|vacancy)(?:\s+\w+){0,8}\s+(?:has been |is |was |will be )?(?:cancelled|canceled|eliminated|withdrawn|discontinued)|(?:cancelled|canceled|eliminated|withdrew|withdrawn|discontinued)(?:\s+\w+){0,8}\s+(?:position|role|requisition|opening|vacancy)|hiring (?:for )?(?:this|the) (?:position|role) (?:has been |is |was )?(?:cancelled|canceled|paused|frozen)|(?:no longer|not currently) (?:hiring|recruiting|filling) (?:for )?(?:this|the) (?:position|role)|(?:position|role|requisition) (?:is |has been |was )?(?:closed|on hold) due to (?:changed|changing|business|budget|organizational|restructuring|internal) (?:needs|priorities|conditions|changes|constraints|reasons)|hiring needs have changed)\b/;
 
 const INTERVIEW_RE =
   /\b(phone (?:screen|interview|call)|technical (?:screen|interview|phone)|video (?:screen|interview|call)|first (?:round|interview)|final (?:round|interview|stage)|next (?:round|step|steps|stage)|coding (?:challenge|assessment|test|exercise|interview)|(?:online|technical|skills?|hackerrank|codility) assessment|take[- ]?home|invite(?:d|s)? you (?:to|for)|(?:would|we(?:'?d| would)) (?:like|love) to (?:schedule|set up|arrange|invite|meet|speak|chat|connect|talk|have)|schedule (?:a|an|some|your) (?:call|interview|meeting|screen|chat|conversation|time)|set up (?:a|an|some) (?:call|interview|meeting|time|chat)|book (?:a|some) time|find a time|(?:share|provide|confirm|send|let us know) (?:your )?availability|(?:are you|when are you) available|move (?:you )?(?:forward|to the next|ahead)|advanc(?:e|ing) (?:your|to)|progress(?:ing)? (?:your|to the next)|speak (?:with|to) (?:you|the)|meet (?:with )?(?:the|our) (?:team|hiring|manager)|hiring manager|meet the team|on-?site|panel interview|interview (?:invitation|invite|request)|calendly|book (?:a )?(?:slot|call)|calendar invite|invite has been sent|joining details|zoom link|google meet|microsoft teams|teams (?:link|meeting)|dial-?in|conference link|self-?schedul(?:e|ing)|scheduling link|(?:recruiter|talent) screen)\b/;
@@ -71,7 +74,7 @@ const TR_OFFER_RE = /(i̇?ş teklifi|teklif mektubu)/;
 // Precedence used to break score ties — the EARLIER status wins. detectStatus()
 // and classifyStatus() must argmax over this exact order (strict `>`), or their
 // labels drift apart and the parity gate breaks.
-const STATUS_PRECEDENCE = ["offer", "rejected", "interview", "applied"] as const;
+const STATUS_PRECEDENCE = ["offer", "cancelled", "rejected", "interview", "applied"] as const;
 
 // Strong, decisive phrases score high (8-10); weak single-word cues score low
 // (1-2) so they only decide when nothing stronger fired. Threshold above which a
@@ -85,11 +88,12 @@ const STRONG_SCORE = 3;
  */
 export function scoreStatus(text: string | null | undefined): Record<Status, number> {
   const t = " " + String(text || "").toLowerCase().replace(/\s+/g, " ") + " ";
-  const score: Record<Status, number> = { offer: 0, rejected: 0, interview: 0, applied: 0 };
+  const score: Record<Status, number> = { offer: 0, rejected: 0, cancelled: 0, interview: 0, applied: 0 };
 
   const negOffer = NEG_OFFER_RE.test(t);
   if (OFFER_RE.test(t) && !negOffer) score.offer += 10;
   if (REJECT_RE.test(t)) score.rejected += 10;
+  if (CANCELLED_RE.test(t)) score.cancelled += 12;
   if (negOffer) score.rejected += 10; // "unable to offer you the role" = rejection
   if (INTERVIEW_RE.test(t)) score.interview += 8;
   if (APPLIED_RE.test(t)) score.applied += 5;
@@ -263,7 +267,7 @@ function emailTypeForEvent(event: EmailEventClassification | null): ApplicationE
   if (event.eventType.startsWith("INTERVIEW_") || event.eventType.startsWith("ASSESSMENT_")) return "INTERVIEW_OR_ASSESSMENT";
   if (event.eventType === "REJECTION_RECEIVED") return "REJECTION";
   if (event.eventType.startsWith("OFFER_")) return "OFFER";
-  if (event.eventType === "WITHDRAWN" || event.eventType === "POSITION_CLOSED") return "WITHDRAWAL_OR_CLOSURE";
+  if (["WITHDRAWN", "POSITION_CLOSED", "POSITION_CANCELLED"].includes(event.eventType)) return "WITHDRAWAL_OR_CLOSURE";
   if (event.eventType === "RECRUITER_CONTACT") return "RECRUITER_OUTREACH";
   return event.eventType === "UNKNOWN" ? "UNCERTAIN" : "APPLICATION_STATUS_UPDATE";
 }
@@ -289,7 +293,7 @@ export function classifyApplicationExistence(thread: Pick<Thread, "domain" | "su
   const multipleJobs = evidenceMatch(combined, MULTIPLE_JOBS_RE);
   const evidenceAgainst = [recommendation && "Recommendation or saved-search language", advertisement && "The message encourages the recipient to apply", newsletter && "Newsletter, campaign, or unsubscribe language", recruiterOutreach && "Unsolicited recruiter outreach", incomplete && "The message asks the recipient to finish an unsubmitted application", multipleJobs && "Multiple jobs are promoted in one message"].filter(Boolean) as string[];
   const confirmation = meaningful.find((e) => e.eventType === "APPLICATION_RECEIVED" || e.eventType === "APPLICATION_UNDER_REVIEW");
-  const downstreamCandidate = meaningful.find((e) => !["APPLICATION_RECEIVED", "APPLICATION_UNDER_REVIEW", "RECRUITER_CONTACT", "POSITION_CLOSED", "ON_HOLD"].includes(e.eventType));
+  const downstreamCandidate = meaningful.find((e) => !["APPLICATION_RECEIVED", "APPLICATION_UNDER_REVIEW", "RECRUITER_CONTACT", "POSITION_CLOSED", "POSITION_CANCELLED", "ON_HOLD"].includes(e.eventType));
   const directedDownstream = directEvidence || directedOutcomeEvidence ? downstreamCandidate : undefined;
   const resolved = resolveCompany(thread);
   const role = extractRole(subject);

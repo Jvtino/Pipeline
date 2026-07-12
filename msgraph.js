@@ -15,8 +15,19 @@ const SCOPE = "openid email offline_access https://graph.microsoft.com/Mail.Read
 
 // Keyword search sent to Graph ($search). Broad on purpose — the app's own
 // classifier refines status afterward. Single words avoid nested-quote escaping.
-const SEARCH_KQL = "application OR applying OR interview OR candidacy OR candidate OR recruiting OR position OR offer OR assessment OR resume OR hiring OR careers OR selected OR unfortunately OR rejected OR declined OR regret OR unsuccessful OR moving forward OR onboarding OR next steps";
-const MAX_MESSAGES = 2000;   // broad review import, still bounded for mailbox safety
+function searchExpression(terms) { return terms.map((term) => `"${term}"`).join(" OR "); }
+const APPLICATION_SEARCH_KQL = searchExpression([
+  "application", "applying", "interview", "candidacy", "candidate", "recruiting",
+  "position", "offer", "assessment", "resume", "hiring", "careers", "onboarding", "next steps",
+]);
+const REJECTION_SEARCH_KQL = searchExpression([
+  "regret", "not selected", "moving forward", "other candidates", "other applicants",
+  "unsuccessful", "declined", "rejected", "not proceeding", "unable to advance",
+  "position has been filled", "no longer under consideration", "different direction",
+  "cancelled", "canceled", "requisition closed", "hiring paused", "position eliminated",
+]);
+const SEARCH_QUERIES = [APPLICATION_SEARCH_KQL, REJECTION_SEARCH_KQL];
+const MAX_MESSAGES_PER_QUERY = 1000; // Microsoft documents a 1,000-result $search ceiling
 
 // ---------------------------------------------------------------------------
 // PKCE
@@ -161,55 +172,55 @@ async function fetchJobThreads(token) {
   let account = "mailbox";
   try { account = await getEmail(token); } catch (e) { /* non-fatal */ }
 
-  // Page through ALL matching mail via @odata.nextLink (previously we read a
-  // single page, which silently capped results at ~100 messages).
-  const search = encodeURIComponent(`"${SEARCH_KQL}"`);
+  // Search application and rejection language separately. Microsoft requires
+  // each KQL clause to be quoted with OR outside the quotes; one broad search
+  // also lets confirmations crowd declines out of its 1,000-result ceiling.
   const select = "subject,from,receivedDateTime,bodyPreview,body,conversationId,hasAttachments,webLink";
   const expand = "attachments($select=name,contentType,size,isInline)";
-  const mkPath = (top, includeAttachments = true) =>
-    `/v1.0/me/messages?$search=${search}` +
+  const mkPath = (search, top, includeAttachments = true, folder = "") =>
+    `/v1.0/me/${folder}messages?$search=${encodeURIComponent(search)}` +
     `&$select=${select}${includeAttachments ? `&$expand=${expand}` : ""}&$top=${top}`;
   const all = [];
   const seen = new Set();
-  let includeAttachments = true;
-  let path = mkPath(100, includeAttachments);
-  let firstPage = true;
-  while (path && all.length < MAX_MESSAGES) {
-    let data;
-    try {
-      data = await getJson("graph.microsoft.com", path, token);
-    } catch (e) {
-      if (includeAttachments) {
-        includeAttachments = false;
-        path = mkPath(25, false);
-        firstPage = false;
-        continue;
+  for (const query of SEARCH_QUERIES) {
+    let includeAttachments = true;
+    let path = mkPath(query, 100, includeAttachments);
+    let firstPage = true;
+    let queryCount = 0;
+    while (path && queryCount < MAX_MESSAGES_PER_QUERY) {
+      let data;
+      try {
+        data = await getJson("graph.microsoft.com", path, token);
+      } catch (e) {
+        if (includeAttachments) {
+          includeAttachments = false;
+          path = mkPath(query, 25, false);
+          firstPage = false;
+          continue;
+        }
+        if (firstPage) { firstPage = false; path = mkPath(query, 25, false); continue; }
+        throw e;
       }
-      // Some tenants cap $top on $search queries — retry once with a small page.
-      if (firstPage) { firstPage = false; path = mkPath(25, false); continue; }
-      throw e;
+      firstPage = false;
+      for (const m of data.value || []) {
+        queryCount++;
+        if (m.id && seen.has(m.id)) continue;
+        if (m.id) seen.add(m.id);
+        all.push(m);
+      }
+      const next = data["@odata.nextLink"];
+      path = next ? next.replace(/^https:\/\/graph\.microsoft\.com/, "") : null;
     }
-    firstPage = false;
-    for (const m of data.value || []) {
-      if (m.id && seen.has(m.id)) continue;
-      if (m.id) seen.add(m.id);
-      all.push(m);
-    }
-    const next = data["@odata.nextLink"];
-    path = next ? next.replace(/^https:\/\/graph\.microsoft\.com/, "") : null;
+    // Consumer mailboxes can omit Junk from the mailbox-wide search.
+    try {
+      const junk = await getJson("graph.microsoft.com", mkPath(query, 50, includeAttachments, "mailFolders/junkemail/"), token);
+      for (const m of junk.value || []) {
+        if (m.id && seen.has(m.id)) continue;
+        if (m.id) seen.add(m.id);
+        all.push(m);
+      }
+    } catch (e) { /* non-fatal — junk folder unavailable */ }
   }
-  // Also search the Junk Email folder — the main /me/messages search may miss it
-  // on consumer accounts. Well-known folder id "junkemail" works for all personal mailboxes.
-  try {
-    const junkPath = `/v1.0/me/mailFolders/junkemail/messages?$search=${search}` +
-      `&$select=${select}${includeAttachments ? `&$expand=${expand}` : ""}&$top=50`;
-    const junk = await getJson("graph.microsoft.com", junkPath, token);
-    for (const m of junk.value || []) {
-      if (m.id && seen.has(m.id)) continue;
-      if (m.id) seen.add(m.id);
-      all.push(m);
-    }
-  } catch (e) { /* non-fatal — junk folder unavailable */ }
 
   return { account, threads: mapMessagesToThreads(all) };
 }
@@ -217,5 +228,5 @@ async function fetchJobThreads(token) {
 module.exports = {
   SCOPE, pkceVerifier, pkceChallenge, buildAuthUrl,
   exchangeCode, refresh, getEmail, fetchJobThreads,
-  mapMessagesToThreads, mapAttachments, domainOf, isoDate, messageText,
+  mapMessagesToThreads, mapAttachments, domainOf, isoDate, messageText, searchExpression,
 };

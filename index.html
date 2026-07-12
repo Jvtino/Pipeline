@@ -29,6 +29,7 @@
     --c-interview:#f5c542; /* yellow— meeting / interview*/
     --c-offer:    #34d399; /* green — offer / accepted   */
     --c-rejected: #f0556b; /* red   — rejected           */
+    --c-cancelled:#f59e42; /* orange— position cancelled */
 
     --radius: 16px;
     --shadow: 0 10px 30px rgba(0,0,0,.45);
@@ -96,7 +97,8 @@
   .btn svg{width:16px;height:16px}
 
   /* ---------------- Stats ---------------- */
-  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:18px 0 14px}
+  .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:18px 0 14px}
+  @media (max-width:980px){.stats{grid-template-columns:repeat(3,1fr)}}
   @media (max-width:760px){.stats{grid-template-columns:repeat(2,1fr)}}
   .stat{
     text-align:left;cursor:pointer;color:var(--text);border:1px solid var(--border);border-radius:14px;
@@ -136,11 +138,13 @@
   .s-interview{background:var(--c-interview);box-shadow:0 0 9px rgba(245,197,66,.55)}
   .s-offer    {background:var(--c-offer);    box-shadow:0 0 9px rgba(52,211,153,.6)}
   .s-rejected {background:var(--c-rejected); box-shadow:0 0 8px rgba(240,85,107,.5)}
+  .s-cancelled{background:var(--c-cancelled);box-shadow:0 0 8px rgba(245,158,66,.55)}
   .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px 3px 8px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid transparent;white-space:nowrap}
   .pill.s-applied  {color:#cdd5e1;background:rgba(139,151,168,.12);border-color:rgba(139,151,168,.28)}
   .pill.s-interview{color:#f7d272;background:rgba(245,197,66,.12);border-color:rgba(245,197,66,.30)}
   .pill.s-offer    {color:#5fe0b0;background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.30)}
   .pill.s-rejected {color:#ff7d90;background:rgba(240,85,107,.12);border-color:rgba(240,85,107,.30)}
+  .pill.s-cancelled{color:#ffb86d;background:rgba(245,158,66,.12);border-color:rgba(245,158,66,.32)}
   .pill .dot{box-shadow:none}
 
   /* ---------------- Company cards ---------------- */
@@ -624,6 +628,7 @@
           <option value="interview">Interview</option>
           <option value="offer">Offer</option>
           <option value="rejected">Rejected</option>
+          <option value="cancelled">Cancelled</option>
         </select>
       </div>
       <div><label for="add-date">Date</label><input id="add-date" type="date"></div>
@@ -798,9 +803,10 @@ const STATUS = {
   interview:{ key:"interview", label:"Interview", cls:"s-interview", color:"var(--c-interview)" },
   offer:    { key:"offer",     label:"Offer",     cls:"s-offer",     color:"var(--c-offer)"     },
   rejected: { key:"rejected",  label:"Rejected",  cls:"s-rejected",  color:"var(--c-rejected)"  },
+  cancelled:{ key:"cancelled", label:"Cancelled", cls:"s-cancelled", color:"var(--c-cancelled)" },
 };
 // precedence for a company's "headline" status (most exciting first)
-const HEADLINE_ORDER = ["offer","interview","applied","rejected"];
+const HEADLINE_ORDER = ["offer","interview","applied","cancelled","rejected"];
 
 /* ============================================================================
    3) AGGREGATION  —  emails → applications → grouped by company
@@ -854,6 +860,33 @@ function pendingReviewThreads(){
     return bd.localeCompare(ad);
   });
 }
+function statusReviewCandidate(th){
+  const messages = th.messages || [];
+  for (let i=messages.length-1; i>=0; i--){
+    const message = messages[i];
+    const event = classifyEmailEvent({ subject:i === 0 ? th.subject : "", body:message.body, from:message.from, attachments:message.attachments });
+    if (event.eventType === "POSITION_CANCELLED" || event.eventType === "POSITION_CLOSED") return { message, event };
+  }
+  return null;
+}
+function pendingStatusReviewThreads(){
+  return (state.rawThreads || []).filter(th => {
+    if (state.statusFeedback && state.statusFeedback[th.threadId]) return false;
+    return !!statusReviewCandidate(th);
+  }).sort((a,b) => {
+    const ad = a.messages && a.messages.length ? a.messages[a.messages.length-1].date : "";
+    const bd = b.messages && b.messages.length ? b.messages[b.messages.length-1].date : "";
+    return bd.localeCompare(ad);
+  });
+}
+function pendingReviewItems(){
+  const existence = pendingReviewThreads().map(thread => ({ mode:"existence", thread }));
+  const terminal = pendingStatusReviewThreads().map(thread => ({ mode:"terminal", thread }));
+  return [...terminal, ...existence].sort((a,b) => {
+    const am = a.thread.messages || [], bm = b.thread.messages || [];
+    return String(bm[bm.length-1]?.date || "").localeCompare(String(am[am.length-1]?.date || ""));
+  });
+}
 
 function buildApplications(threads){
   return threads.filter(th => th.manual || effectiveApplicationExistence(th).should_create_application).map(th => {
@@ -890,6 +923,12 @@ function buildApplications(threads){
     // outcome can't be inferred from mail. Recorded as a timeline event and treated
     // as the latest activity so the position resurfaces in "Recent".
     const ov = state.statusOverrides && state.statusOverrides.get(th.threadId);
+    const reviewedStatus = state.statusFeedback && state.statusFeedback[th.threadId];
+    if (reviewedStatus && STATUS[reviewedStatus.label]){
+      status = reviewedStatus.label;
+      const reviewedDate = reviewedStatus.date || lastDate;
+      timeline.push({ date:reviewedDate, from:"Reviewed by you", body:`Marked ${STATUS[status].label} during classification review.`, status, manual:true, eventType:"USER_STATUS_REVIEW" });
+    }
     if (ov && STATUS[ov.status]){
       status = ov.status;
       const od = ov.date || new Date().toISOString().slice(0,10);
@@ -918,7 +957,7 @@ function groupByCompany(apps){
     // platform's domain (resolveCompany only guesses a company domain on success).
     // A shared platform identity must never merge records — distinct companies
     // flow through one platform — so each fallback record stays its own card.
-    const key = (!a.manual && isAtsDomain(a.domain)) ? " " + a.id : a.company;
+    const key = (!a.manual && isAtsDomain(a.domain)) ? "__ats__:" + a.id : a.company;
     if (!map.has(key)) map.set(key, { company:a.company, domain:a.domain, apps:[] });
     map.get(key).apps.push(a);
   }
@@ -981,6 +1020,7 @@ const state = { filter:"all", query:"", sort:loadSort(), timeframe:loadTimeframe
                 contacts:loadJson("pipeline.contacts", []),
                 docs:loadJson("pipeline.documents", []),
                 feedback:loadJson("pipeline.applicationFeedback", {}),
+                statusFeedback:loadJson("pipeline.statusFeedback", {}),
                 ignored:loadSet("pipeline.ignored"), apps:[], rawThreads:[] };
 const $ = sel => document.querySelector(sel);
 
@@ -997,7 +1037,7 @@ const PIN_SVG  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const IGN_SVG  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>`;
 const PREP_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6"/><path d="M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`;
 const CARET_SVG = `<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
-const STATUS_ORDER = ["applied","interview","offer","rejected"];
+const STATUS_ORDER = ["applied","interview","offer","rejected","cancelled"];
 const NAV = [
   { key:"applications", label:"Applications", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>` },
   { key:"calendar", label:"Calendar", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>` },
@@ -1023,7 +1063,7 @@ function setView(view){
 }
 
 function counts(apps){
-  const c = { all:apps.length, applied:0, interview:0, offer:0, rejected:0 };
+  const c = { all:apps.length, applied:0, interview:0, offer:0, rejected:0, cancelled:0 };
   apps.forEach(a => c[a.status]++);
   return c;
 }
@@ -1073,6 +1113,7 @@ function renderStats(){
     { key:"interview", n:c.interview, label:"Interview", cls:"s-interview" },
     { key:"offer",     n:c.offer,     label:"Offers",    cls:"s-offer" },
     { key:"rejected",  n:c.rejected,  label:"Rejected",  cls:"s-rejected" },
+    { key:"cancelled", n:c.cancelled, label:"Cancelled", cls:"s-cancelled" },
   ];
   $("#stats").innerHTML = tiles.map(t => `
     <button class="stat ${state.filter===t.key?"active":""}" data-filter="${t.key}">
@@ -1383,7 +1424,7 @@ function renderDetailStatistics(app){
   const nextAction = app.status === "applied" && daysSince >= 14 ? "Follow up" :
     app.status === "interview" ? "Prepare" :
     app.status === "offer" ? "Review offer" :
-    app.status === "rejected" ? "Closed" : "Monitor";
+    app.status === "rejected" || app.status === "cancelled" ? "Closed" : "Monitor";
   const stageBars = STATUS_ORDER.map((key, i) => {
     const st = STATUS[key];
     const on = i <= stageIndex;
@@ -1683,7 +1724,7 @@ function render(){
   else renderFeatureView();
   renderApplicationOverlay();
   renderReviewOverlay();
-  const pending = pendingReviewThreads();
+  const pending = pendingReviewItems();
   const reviewBtn = $("#reviewBtn");
   if (reviewBtn){ reviewBtn.hidden = !appsView || !pending.length; $("#reviewCount").textContent = pending.length; }
   renderFoot();
@@ -1700,18 +1741,25 @@ function renderApplicationOverlay(){
 function renderReviewOverlay(){
   const overlay = $("#reviewOverlay");
   if (!overlay) return;
-  const pending = pendingReviewThreads();
-  const th = pending[0];
-  if (!state.reviewOpen || !th){
+  const pending = pendingReviewItems();
+  const item = pending[0];
+  const th = item && item.thread;
+  if (!state.reviewOpen || !item || !th){
     state.reviewOpen = false;
     overlay.classList.remove("open");
     overlay.innerHTML = "";
     return;
   }
-  const result = classifyApplicationExistence(th);
+  const result = item.mode === "terminal" ? null : classifyApplicationExistence(th);
   const messages = [...(th.messages || [])].sort((a,b)=>a.date.localeCompare(b.date));
-  const latest = messages[messages.length - 1] || {};
-  const reviewed = feedbackExamples().length;
+  const latest = item.mode === "terminal" ? statusReviewCandidate(th).message : (messages[messages.length - 1] || {});
+  const event = item.mode === "terminal" ? statusReviewCandidate(th).event : null;
+  const reviewed = feedbackExamples().length + Object.keys(state.statusFeedback || {}).length;
+  const confidence = item.mode === "terminal" ? event.confidence : result.confidence;
+  const type = item.mode === "terminal" ? "REJECTED OR CANCELLED" : result.email_type.replaceAll("_"," ");
+  const reason = item.mode === "terminal"
+    ? `${event.classificationReason} Confirm whether this was a decision about you or the employer cancelled the position itself.`
+    : result.reasoning_summary;
   overlay.classList.add("open");
   overlay.innerHTML = `<section class="app-island review-island" role="dialog" aria-modal="true" aria-labelledby="review-title">
     <header class="review-head">
@@ -1719,14 +1767,17 @@ function renderReviewOverlay(){
       <button class="iconbtn island-close" type="button" data-closereview title="Close review"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <div class="review-body">
-      <div class="review-meta"><span class="review-tag">${esc(result.email_type.replaceAll("_"," "))}</span><span class="review-tag">${Math.round(result.confidence*100)}% classifier confidence</span>${latest.date?`<span class="review-tag">${fmtDate(latest.date)}</span>`:""}</div>
+      <div class="review-meta"><span class="review-tag">${esc(type)}</span><span class="review-tag">${Math.round(confidence*100)}% classifier confidence</span>${latest.date?`<span class="review-tag">${fmtDate(latest.date)}</span>`:""}</div>
       <h3 class="review-subject">${esc(String(th.subject || "(no subject)"))}</h3>
       <div class="review-from">${esc(String(latest.from || th.domain || "Unknown sender"))}</div>
       <div class="review-excerpt">${esc(String(latest.body || "No message preview available.").slice(0,900))}</div>
-      <div class="review-reason"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>${esc(result.reasoning_summary)}</span></div>
+      <div class="review-reason"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>${esc(reason)}</span></div>
       <div class="review-actions">
-        <button class="btn secondary reject-review" type="button" data-reviewdecision="not_application">Not an application</button>
-        <button class="btn" type="button" data-reviewdecision="application">Yes, I applied</button>
+        ${item.mode === "terminal" ? `
+          <button class="btn secondary reject-review" type="button" data-reviewdecision="rejected">Rejected</button>
+          <button class="btn" style="background:var(--c-cancelled);box-shadow:0 6px 16px rgba(245,158,66,.25)" type="button" data-reviewdecision="cancelled">Cancelled</button>` : `
+          <button class="btn secondary reject-review" type="button" data-reviewdecision="not_application">Not an application</button>
+          <button class="btn" type="button" data-reviewdecision="application">Yes, I applied</button>`}
       </div>
       <div class="review-learned"><span>Learning locally from ${reviewed} decision${reviewed===1?"":"s"}. Message bodies are not stored in the learning profile.</span>${reviewed?`<button type="button" data-resetlearning>Reset learning</button>`:""}</div>
     </div>
@@ -1734,15 +1785,24 @@ function renderReviewOverlay(){
 }
 
 function reviewCurrent(label){
-  const th = pendingReviewThreads()[0];
-  if (!th || !["application","not_application"].includes(label)) return;
-  state.feedback[th.threadId] = {
-    label,
-    features:applicationLearningFeatures(th),
-    subject:String(th.subject || ""),
-    decided_at:new Date().toISOString(),
-  };
-  saveJson("pipeline.applicationFeedback", state.feedback);
+  const item = pendingReviewItems()[0];
+  if (!item) return;
+  const th = item.thread;
+  if (item.mode === "terminal"){
+    if (!["rejected","cancelled"].includes(label)) return;
+    const candidate = statusReviewCandidate(th);
+    state.statusFeedback[th.threadId] = { label, date:candidate?.message?.date || todayISO(), subject:String(th.subject || ""), decided_at:new Date().toISOString() };
+    saveJson("pipeline.statusFeedback", state.statusFeedback);
+  } else {
+    if (!["application","not_application"].includes(label)) return;
+    state.feedback[th.threadId] = {
+      label,
+      features:applicationLearningFeatures(th),
+      subject:String(th.subject || ""),
+      decided_at:new Date().toISOString(),
+    };
+    saveJson("pipeline.applicationFeedback", state.feedback);
+  }
   rebuildApps();
   render();
 }
@@ -1750,7 +1810,9 @@ function reviewCurrent(label){
 function resetApplicationLearning(){
   if (!window.confirm("Reset all application review decisions and learned patterns?")) return;
   state.feedback = {};
+  state.statusFeedback = {};
   saveJson("pipeline.applicationFeedback", state.feedback);
+  saveJson("pipeline.statusFeedback", state.statusFeedback);
   rebuildApps();
   render();
 }
@@ -2133,7 +2195,7 @@ document.addEventListener("click", e => {
 $("#q").addEventListener("input", e => { state.query = e.target.value.trim(); state.selectedAppId = null; renderBoard(); });
 
 // keyboard shortcuts: "/" focus search · Esc clear/close · 1–5 status filters
-const FILTER_KEYS = { "1":"all", "2":"applied", "3":"interview", "4":"offer", "5":"rejected" };
+const FILTER_KEYS = { "1":"all", "2":"applied", "3":"interview", "4":"offer", "5":"rejected", "6":"cancelled" };
 document.addEventListener("keydown", e => {
   const inField = /^(INPUT|SELECT|TEXTAREA)$/.test((e.target.tagName||"")) ;
   if (e.key === "Escape"){

@@ -18,7 +18,7 @@ describe("buildBoard", () => {
 
   it("counts every demo thread exactly once", () => {
     expect(board.counts.total).toBe(DEMO_THREADS.length);
-    const summed = board.counts.applied + board.counts.interview + board.counts.offer + board.counts.rejected;
+    const summed = board.counts.applied + board.counts.interview + board.counts.offer + board.counts.rejected + board.counts.cancelled;
     expect(summed).toBe(board.counts.total);
   });
 

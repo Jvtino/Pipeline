@@ -34,6 +34,7 @@ const GMAIL_Q =
   '"your candidacy" OR "schedule an interview" OR "interview invitation" OR ' +
   '"offer of employment" OR "offer letter" OR "pleased to offer" OR "your offer from" OR ' +
   '"position has been filled" OR "move forward with your application" OR "unfortunately, after" OR ' +
+  '"position has been cancelled" OR "position has been canceled" OR "requisition has been cancelled" OR "hiring has been paused" OR ' +
   'subject:(application OR applying OR interview OR candidacy OR recruiting OR "job application")' +
   ")";
 

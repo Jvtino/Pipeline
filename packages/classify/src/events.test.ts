@@ -25,7 +25,7 @@ const CASES: Array<[string, string, EmailEventType, string | null, boolean]> = [
   ["recruiter question", "I have a few questions about your application.", "RECRUITER_CONTACT", "applied", false],
   ["unrelated recruiter marketing", "I came across your profile and have a different contract opportunity.", "UNKNOWN", null, true],
   ["offer letter", "We are pleased to offer you the position. Your offer letter is attached.", "OFFER_RECEIVED", "offer", false],
-  ["position cancelled", "The position has been cancelled due to changing needs.", "POSITION_CLOSED", "rejected", false],
+  ["position cancelled", "The position has been cancelled due to changing needs.", "POSITION_CANCELLED", "cancelled", false],
   ["position filled", "The position has been filled.", "POSITION_CLOSED", "rejected", false],
   ["withdrawn", "Your application has been withdrawn as requested.", "WITHDRAWN", "rejected", false],
   ["ambiguous", "We have an update about the next steps for candidates.", "UNKNOWN", null, true],

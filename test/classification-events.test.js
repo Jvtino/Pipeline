@@ -15,6 +15,7 @@ const CASES = [
   ["assessment is not interview", "Please complete the technical assessment by Friday.", "ASSESSMENT_REQUESTED", "applied"],
   ["rejection overrides interview wording", "After your interview, we will not be moving forward with your application.", "REJECTION_RECEIVED", "rejected"],
   ["position filled is closed", "The position has been filled.", "POSITION_CLOSED", "rejected"],
+  ["position cancelled is not rejection", "The requisition has been cancelled due to changing business needs.", "POSITION_CANCELLED", "cancelled"],
   ["offer is explicit", "We are pleased to offer you the position.", "OFFER_RECEIVED", "offer"],
 ];
 

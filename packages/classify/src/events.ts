@@ -15,6 +15,7 @@ export const EMAIL_EVENT_TYPES = [
   "OFFER_RECEIVED",
   "OFFER_ACCEPTED",
   "REJECTION_RECEIVED",
+  "POSITION_CANCELLED",
   "WITHDRAWN",
   "POSITION_CLOSED",
   "ON_HOLD",
@@ -64,9 +65,14 @@ const RULES: Array<{
   re: RegExp;
 }> = [
   {
-    eventType: "POSITION_CLOSED", suggestedStatus: "rejected", confidence: 0.97,
-    reason: "The position or requisition is explicitly closed, cancelled, or filled.",
-    re: /\b(?:(?:position|role|requisition|opening|vacancy)(?:\s+\w+){0,8}\s+(?:has been |is |was )?(?:closed|cancelled|canceled|filled|eliminated|no longer available)|hiring (?:for )?(?:this|the) (?:position|role) (?:has been )?(?:cancelled|canceled|paused))\b/i,
+    eventType: "POSITION_CANCELLED", suggestedStatus: "cancelled", confidence: 0.98,
+    reason: "The employer explicitly cancelled, eliminated, or stopped hiring for the position.",
+    re: /\b(?:(?:position|role|requisition|opening|vacancy)(?:\s+\w+){0,8}\s+(?:has been |is |was |will be )?(?:cancelled|canceled|eliminated|withdrawn|discontinued)|(?:cancelled|canceled|eliminated|withdrew|withdrawn|discontinued)(?:\s+\w+){0,8}\s+(?:position|role|requisition|opening|vacancy)|hiring (?:for )?(?:this|the) (?:position|role) (?:has been |is |was )?(?:cancelled|canceled|paused|frozen)|(?:no longer|not currently) (?:hiring|recruiting|filling) (?:for )?(?:this|the) (?:position|role)|(?:position|role|requisition) (?:is |has been |was )?(?:closed|on hold) due to (?:changed|changing|business|budget|organizational|restructuring|internal) (?:needs|priorities|conditions|changes|constraints|reasons)|hiring needs have changed)\b/i,
+  },
+  {
+    eventType: "POSITION_CLOSED", suggestedStatus: "rejected", confidence: 0.86,
+    reason: "The position is closed or filled, but the message does not explicitly say it was cancelled.",
+    re: /\b(?:(?:position|role|requisition|opening|vacancy)(?:\s+\w+){0,8}\s+(?:has been |is |was )?(?:closed|filled|no longer available)|filled (?:the|this) (?:position|role))\b/i,
   },
   {
     eventType: "WITHDRAWN", suggestedStatus: "rejected", confidence: 0.98,
@@ -177,7 +183,8 @@ export function classifyEmailEvent(input: EmailEventInput | string | null | unde
   const attachmentText = (obj.attachments ?? []).map((a) => `${a.name ?? ""} ${a.contentType ?? ""}`).join(" ");
   const text = `${subject} ${body} ${attachmentText}`.replace(/\s+/g, " ").trim();
 
-  const rejectionEvidence = evidenceFor(text, RULES[2]!.re);
+  const rejectionRule = RULES.find((r) => r.eventType === "REJECTION_RECEIVED")!;
+  const rejectionEvidence = evidenceFor(text, rejectionRule.re);
   const interviewRule = RULES.find((r) => r.eventType === "INTERVIEW_REQUESTED")!;
   const interviewEvidence = CONDITIONAL_INTERVIEW_RE.test(text) ? [] : evidenceFor(text, interviewRule.re);
 
@@ -218,7 +225,7 @@ export function applyEventTransition(current: Status, event: EmailEventClassific
   if (event.confidence < 0.75 || event.requiresManualReview) {
     return { from: current, to: current, eventType: event.eventType, applied: false, reason: "Confidence is below the automatic-update threshold." };
   }
-  if (current === "offer" && target !== "offer" && target !== "rejected") {
+  if (current === "offer" && target !== "offer" && target !== "rejected" && target !== "cancelled") {
     return { from: current, to: current, eventType: event.eventType, applied: false, reason: "A later low-stage event cannot downgrade an offer." };
   }
   if (current === "interview" && target === "applied") {
@@ -226,6 +233,9 @@ export function applyEventTransition(current: Status, event: EmailEventClassific
   }
   if (current === "rejected" && target === "applied") {
     return { from: current, to: current, eventType: event.eventType, applied: false, reason: "An early-stage event cannot reopen a rejected application." };
+  }
+  if (current === "cancelled" && target === "applied") {
+    return { from: current, to: current, eventType: event.eventType, applied: false, reason: "An early-stage event cannot reopen a cancelled application." };
   }
   return { from: current, to: target, eventType: event.eventType, applied: target !== current, reason: target === current ? "The event confirms the existing status." : "Explicit evidence permits this chronological transition." };
 }

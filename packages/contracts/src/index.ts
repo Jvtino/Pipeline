@@ -11,8 +11,8 @@
 // returned. See docs/Pipeline-Transformation-Plan.md §7 (Data Model) and §6.
 import { z } from "zod";
 
-/** The four application states the classifier resolves, in precedence order. */
-export const STATUSES = ["applied", "interview", "offer", "rejected"] as const;
+/** The application states the classifier resolves, in precedence order. */
+export const STATUSES = ["applied", "interview", "offer", "rejected", "cancelled"] as const;
 export const statusSchema = z.enum(STATUSES);
 export type Status = z.infer<typeof statusSchema>;
 
@@ -25,6 +25,7 @@ export const STATUS_RANK: Readonly<Record<Status, number>> = Object.freeze({
   interview: 2,
   offer: 3,
   rejected: 3,
+  cancelled: 3,
 });
 
 /** Attachment METADATA only (name/type/size) — the file content is never fetched or stored. */
@@ -167,6 +168,7 @@ export const boardSchema = z.object({
     interview: z.number(),
     offer: z.number(),
     rejected: z.number(),
+    cancelled: z.number(),
     total: z.number(),
   }),
   source: z.string(), // e.g. "demo" | a connected mailbox label
@@ -197,7 +199,7 @@ export function boardFromApplications(apps: Application[], source: string): Boar
     g.applications.reduce((max, a) => (a.lastActivity > max ? a.lastActivity : max), "");
   const groups = [...byCompany.values()].sort((x, y) => latest(y).localeCompare(latest(x)));
 
-  const counts = { applied: 0, interview: 0, offer: 0, rejected: 0, total: 0 };
+  const counts = { applied: 0, interview: 0, offer: 0, rejected: 0, cancelled: 0, total: 0 };
   for (const a of apps) {
     counts[a.status] += 1;
     counts.total += 1;

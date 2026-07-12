@@ -24,8 +24,8 @@ describe("@pipeline/contracts", () => {
     expect(safeParseThread(bad).success).toBe(false);
   });
 
-  it("exposes the four statuses and their ranks", () => {
-    expect(STATUSES).toEqual(["applied", "interview", "offer", "rejected"]);
+  it("exposes the application statuses and their ranks", () => {
+    expect(STATUSES).toEqual(["applied", "interview", "offer", "rejected", "cancelled"]);
     expect(statusSchema.parse("offer")).toBe("offer");
     expect(STATUS_RANK.offer).toBe(3);
     expect(STATUS_RANK.applied).toBeLessThan(STATUS_RANK.interview);

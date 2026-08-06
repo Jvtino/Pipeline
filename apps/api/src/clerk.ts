@@ -46,6 +46,20 @@ type KeySource = Parameters<typeof jwtVerify>[1];
  * Every failure mode — bad signature, expiry, wrong issuer, foreign azp, missing
  * sub — resolves to null (the request simply stays unauthenticated), never throws.
  */
+/** IdP-side user deletion for full account erasure (enabled by CLERK_SECRET_KEY).
+ *  404 counts as success — the identity is already gone. */
+export function clerkIdentityDeleter(env: NodeJS.ProcessEnv = process.env): ((userId: string) => Promise<void>) | null {
+  const key = env.CLERK_SECRET_KEY;
+  if (!key) return null;
+  return async (userId) => {
+    const res = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    if (!res.ok && res.status !== 404) throw new Error(`clerk user delete failed: ${res.status}`);
+  };
+}
+
 export function createBearerVerifier(cfg: ClerkConfig, keySource?: KeySource): BearerVerifier {
   const keys: KeySource = keySource ?? createRemoteJWKSet(new URL(cfg.jwksUrl ?? `${cfg.issuer}/.well-known/jwks.json`));
   const parties = cfg.authorizedParties?.length ? new Set(cfg.authorizedParties) : null;

@@ -27,7 +27,8 @@ import { loadProviderConfigs } from "./config";
 import { registerOAuthRoutes } from "./oauth-routes";
 import { registerAuthRoutes, resolveDevLoginEnabled } from "./auth-routes";
 import { registerProRoutes } from "./pro-routes";
-import { clerkConfigFromEnv, createBearerVerifier, type BearerVerifier } from "./clerk";
+import { clerkConfigFromEnv, createBearerVerifier, clerkIdentityDeleter, type BearerVerifier } from "./clerk";
+import { registerMobileRoutes } from "./mobile-routes";
 import { memoryPendingStore, redisPendingStore } from "./pending-store";
 import { backgroundSyncStatus, setBackgroundSync } from "./background-sync";
 import { startSyncScheduler } from "./scheduler";
@@ -284,6 +285,18 @@ export async function buildServer(opts: ServerOptions = {}) {
     publicUrl: process.env.PUBLIC_URL ?? "http://localhost:3001",
     webUrl: process.env.WEB_URL ?? "http://localhost:5173",
     pending,
+  });
+
+  // Mobile endpoints: devices/push, server-side writes, review queue, connect
+  // tokens (shares the OAuth pending store), account deletion, meta/flags.
+  registerMobileRoutes(app, {
+    db: store.db,
+    masterKey,
+    configs,
+    transport: opts.transport,
+    pending,
+    forgetUser: (userId) => void provisioned.delete(userId),
+    deleteIdentity: clerkIdentityDeleter() ?? undefined,
   });
 
   // Background sync scheduler — opt-in via SYNC_INTERVAL_MS (off in tests/dev by default).

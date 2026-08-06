@@ -10,6 +10,7 @@ import {
   listUserIdsWithConnections,
   deleteDemoApplications,
   type Database,
+  type StatusTransition,
 } from "@pipeline/db";
 import type { ProviderConfigs } from "./config";
 
@@ -30,6 +31,10 @@ export interface SyncDeps {
   configs: ProviderConfigs;
   transport?: HttpTransport;
   makeSource?: SourceFactory; // injectable for tests
+  /** Called with each round's observed status changes (push-notification feed).
+   *  Never invoked for backfill rounds — a first sync would "transition" every
+   *  record at once and flood the phone. */
+  onTransitions?: (userId: string, transitions: StatusTransition[]) => void | Promise<void>;
 }
 
 export async function syncAllConnections(deps: SyncDeps): Promise<SyncSummary> {
@@ -62,6 +67,14 @@ export async function syncAllConnections(deps: SyncDeps): Promise<SyncSummary> {
       const source = makeSource(provider, token, deps.transport);
       const result = await runSync(deps.db, { userId: deps.userId, connectionId: c.id, source });
       results.push({ email: c.email, provider, result });
+      if (deps.onTransitions && !result.backfill && result.transitions.length) {
+        try {
+          await deps.onTransitions(deps.userId, result.transitions);
+        } catch {
+          // A notification failure must never fail (or retry) the sync itself —
+          // the board is already updated; the in-app list backstops missed pushes.
+        }
+      }
     } catch (e) {
       results.push({ email: c.email, provider, error: e instanceof Error ? e.message : String(e) });
     }

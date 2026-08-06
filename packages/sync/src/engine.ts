@@ -5,7 +5,7 @@
 // does a backfill; every sync after is a delta.
 import { threadsToApplications, looksLikeJobApplication } from "@pipeline/classify";
 import type { Thread } from "@pipeline/contracts";
-import { upsertApplications, upsertThreadMessages, saveCursor, getCursor, type Database } from "@pipeline/db";
+import { upsertApplications, upsertThreadMessages, saveCursor, getCursor, type Database, type StatusTransition } from "@pipeline/db";
 
 export interface FetchResult {
   threads: Thread[];
@@ -22,6 +22,12 @@ export interface SyncResult {
   fetched: number; // threads returned by the source
   relevant: number; // threads that look like job applications (kept)
   upserted: number; // derived records written
+  /** Status changes this round observed (additive). Raw material for push
+   *  notifications — consumers must respect `backfill` before notifying. */
+  transitions: StatusTransition[];
+  /** True when this round had no prior cursor (first sync / rebuild): every
+   *  record is a "transition" then, so notifiers must stay silent. */
+  backfill: boolean;
 }
 
 /** Run one sync round for a connection and persist the new cursor. */
@@ -38,11 +44,12 @@ export async function runSync(
   // promos) before it reaches the board.
   const relevant = threads.filter(looksLikeJobApplication);
   const apps = threadsToApplications(relevant);
+  let transitions: StatusTransition[] = [];
   if (apps.length) {
-    await upsertApplications(db, params.userId, apps);
+    transitions = await upsertApplications(db, params.userId, apps);
     // Per-message previews (Email tab) — after the application rows they FK to.
     await upsertThreadMessages(db, params.userId, relevant.filter((t) => t.messages.length > 0));
   }
   await saveCursor(db, params.connectionId, cursor);
-  return { cursor, fetched: threads.length, relevant: relevant.length, upserted: apps.length };
+  return { cursor, fetched: threads.length, relevant: relevant.length, upserted: apps.length, transitions, backfill: prev === undefined };
 }

@@ -17,6 +17,7 @@ import {
   listReviewQueue,
   markReviewed,
   listStatusEvents,
+  rebuildSyncedApplications,
   upsertDevice,
   listDevices,
   listActiveDevices,
@@ -92,6 +93,44 @@ describe("status overrides", () => {
     ]);
   });
 
+  it("a retried/no-op override never duplicates timeline events (but still pins)", async () => {
+    await upsertApplications(h.db, "u1", [appFixture("t1", "Acme", "applied")]);
+    await setStatusOverride(h.db, "u1", "t1", "offer");
+    await setStatusOverride(h.db, "u1", "t1", "offer"); // network-retry double tap
+    expect((await listStatusEvents(h.db, "u1", "t1")).map((e) => e.source)).toEqual(["sync", "user"]);
+
+    // pinning the CURRENT classifier status stores no event but still protects
+    // the record against future classifier drift
+    await upsertApplications(h.db, "u1", [appFixture("t2", "Globex", "interview")]);
+    await setStatusOverride(h.db, "u1", "t2", "interview");
+    expect((await listStatusEvents(h.db, "u1", "t2")).map((e) => e.source)).toEqual(["sync"]);
+    await upsertApplications(h.db, "u1", [appFixture("t2", "Globex", "rejected")]);
+    expect((await getApplicationForUser(h.db, "u1", "t2"))?.status).toBe("interview");
+  });
+
+  it("overriding a status also resolves the record's review-queue membership", async () => {
+    await upsertApplications(h.db, "u1", [appFixture("t-low", "Acme", "applied", { classification: flaggedAudit, confidence: 0.3 })]);
+    expect((await listReviewQueue(h.db, "u1")).map((a) => a.threadId)).toEqual(["t-low"]);
+    await setStatusOverride(h.db, "u1", "t-low", "interview");
+    expect(await listReviewQueue(h.db, "u1")).toEqual([]);
+  });
+
+  it("rebuild (resync recovery) preserves overridden and reviewed rows", async () => {
+    await upsertApplications(h.db, "u1", [
+      appFixture("t-corrected", "Acme", "rejected"),
+      appFixture("t-reviewed", "Globex", "applied", { classification: flaggedAudit }),
+      appFixture("t-plain", "Initech", "applied"),
+    ]);
+    await setStatusOverride(h.db, "u1", "t-corrected", "interview");
+    await markReviewed(h.db, "u1", "t-reviewed");
+
+    const { removed } = await rebuildSyncedApplications(h.db, "u1");
+    expect(removed).toBe(1); // only the untouched synced row is cleared
+    expect((await getApplicationForUser(h.db, "u1", "t-corrected"))?.status).toBe("interview");
+    expect(await getApplicationForUser(h.db, "u1", "t-reviewed")).not.toBeNull();
+    expect(await getApplicationForUser(h.db, "u1", "t-plain")).toBeNull();
+  });
+
   it("is user-scoped: cannot override someone else's application", async () => {
     await upsertApplications(h.db, "u1", [appFixture("t1", "Acme", "applied")]);
     expect(await setStatusOverride(h.db, "u2", "t1", "offer")).toBeNull();
@@ -160,11 +199,14 @@ describe("devices", () => {
     const d = await upsertDevice(h.db, { userId: "u1", platform: "ios", expoPushToken: "tok-1", deviceName: "iPhone" });
     expect(d.notifyStatusChanges).toBe(true);
 
-    // same token signs in on another account → row moves, is re-enabled
+    // same token signs in on another account → row moves, is re-enabled, and the
+    // NEW owner starts from default prefs (not the previous owner's choices)
+    await updateDevice(h.db, "u1", d.id, { notifyStatusChanges: false });
     await disableDeviceByToken(h.db, "tok-1");
     const moved = await upsertDevice(h.db, { userId: "u2", platform: "ios", expoPushToken: "tok-1" });
     expect(moved.id).toBe(d.id);
     expect(moved.disabled).toBe(false);
+    expect(moved.notifyStatusChanges).toBe(true);
     expect(await listDevices(h.db, "u1")).toEqual([]);
     expect((await listDevices(h.db, "u2")).map((x) => x.expoPushToken)).toEqual(["tok-1"]);
 

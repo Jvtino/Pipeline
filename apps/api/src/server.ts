@@ -58,7 +58,11 @@ export interface ServerOptions {
 
 export async function buildServer(opts: ServerOptions = {}) {
   const local = opts.local ?? false;
-  const app = Fastify({ logger: true });
+  // trustProxy: hosted deploys sit behind Render's router (and Vercel's /api
+  // rewrite), so req.ip must come from X-Forwarded-For or every client shares
+  // the proxy's address — which would make the per-IP rate limits one global
+  // bucket. Harmless locally (no proxy → header absent).
+  const app = Fastify({ logger: true, trustProxy: true });
   app.register(cors, { origin: true });
 
   const store = await initStore(local);
@@ -92,16 +96,22 @@ export async function buildServer(opts: ServerOptions = {}) {
     return cfg ? createBearerVerifier(cfg) : null;
   })();
 
-  // First-sight provisioning cache: one DB existence check per user per process.
-  // Account deletion must evict its entry (see /api/account) or a deleted user's
-  // still-valid token would skip re-provisioning and hit FK failures on writes.
-  const provisioned = new Set<string>();
-  const ensureBearerUser = async (identity: { id: string; email: string }) => {
-    if (provisioned.has(identity.id)) return identity;
-    const existing = await getUser(store.db, identity.id);
-    if (existing) {
-      identity = { ...identity, email: existing.email }; // DB email is authoritative once created
-    } else {
+  // First-sight provisioning, deduplicated by IN-FLIGHT promise (not a done-set):
+  // a phone's first launch fires several API calls in parallel with the same
+  // token, and seedDemoForUser is check-then-act — concurrent racers would seed
+  // duplicate demo timeline events. Sharing one promise per user id makes every
+  // concurrent request await the same provisioning pass. Account deletion must
+  // evict its entry (see /api/account) or a deleted user's still-valid token
+  // would skip re-provisioning and hit FK failures on writes.
+  const provisioning = new Map<string, Promise<{ id: string; email: string }>>();
+  const ensureBearerUser = (identity: { id: string; email: string }) => {
+    const inFlight = provisioning.get(identity.id);
+    if (inFlight) return inFlight;
+    const work = (async () => {
+      const existing = await getUser(store.db, identity.id);
+      if (existing) {
+        return { ...identity, email: existing.email }; // DB email is authoritative once created
+      }
       try {
         await upsertUser(store.db, { id: identity.id, email: identity.email });
       } catch {
@@ -112,9 +122,18 @@ export async function buildServer(opts: ServerOptions = {}) {
         await upsertUser(store.db, { id: identity.id, email: identity.email });
       }
       await seedDemoForUser(store.db, identity.id); // a first board is never empty
-    }
-    provisioned.add(identity.id);
-    return identity;
+      return identity;
+    })();
+    // Cache the settled promise for process lifetime; drop it on failure so a
+    // transient DB error doesn't poison the user forever.
+    provisioning.set(
+      identity.id,
+      work.catch((err) => {
+        provisioning.delete(identity.id);
+        throw err;
+      }),
+    );
+    return provisioning.get(identity.id)!;
   };
 
   app.addHook("preHandler", async (req) => {
@@ -296,7 +315,7 @@ export async function buildServer(opts: ServerOptions = {}) {
     configs,
     transport: opts.transport,
     pending,
-    forgetUser: (userId) => void provisioned.delete(userId),
+    forgetUser: (userId) => void provisioning.delete(userId),
     deleteIdentity: clerkIdentityDeleter() ?? undefined,
   });
 

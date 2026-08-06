@@ -121,6 +121,29 @@ describe("bearer path through the server", () => {
     }
   });
 
+  it("parallel first-sight requests share ONE provisioning pass (no duplicate demo seed)", async () => {
+    const app = await buildServer({ verifyBearer });
+    try {
+      // a phone's first launch fires several calls concurrently with the same token
+      const [a, b, c] = await Promise.all([
+        app.inject({ method: "GET", url: "/api/applications", headers: { authorization: "Bearer good" } }),
+        app.inject({ method: "GET", url: "/auth/me", headers: { authorization: "Bearer good" } }),
+        app.inject({ method: "GET", url: "/api/devices", headers: { authorization: "Bearer good" } }),
+      ]);
+      expect([a.statusCode, b.statusCode, c.statusCode]).toEqual([200, 200, 200]);
+      // duplicated seeding would double every demo application's first event
+      const threadId = a.json().groups[0].applications[0].threadId as string;
+      const events = await app.inject({
+        method: "GET",
+        url: `/api/applications/${encodeURIComponent(threadId)}/events`,
+        headers: { authorization: "Bearer good" },
+      });
+      expect(events.json().events).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("keeps identities separate when a legacy account already owns the email", async () => {
     const app = await buildServer({
       verifyBearer: async (authz) => (authz === "Bearer good" ? { id: "user_9", email: "taken@example.com" } : null),

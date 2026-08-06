@@ -14,6 +14,12 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      # Dev login is now FAIL-CLOSED under NODE_ENV=production; this deploy's web
+      # app still signs in through it (demo experience), so it stays EXPLICITLY
+      # enabled here. ⚠ REMOVE this key the day Clerk auth goes live on web —
+      # public launch must not ship passwordless login.
+      - key: ENABLE_DEV_LOGIN
+        value: "true"
       - key: DATABASE_URL
         fromDatabase:
           name: pipeline-db

@@ -18,7 +18,7 @@ import {
   type ProviderId,
   type HttpTransport,
 } from "@pipeline/providers";
-import { saveMailConnection, type Database } from "@pipeline/db";
+import { saveMailConnection, getUser, type Database } from "@pipeline/db";
 import type { FastifyRequest } from "fastify";
 import type { ProviderConfigs } from "./config";
 import { CONNECT_TOKEN_PREFIX, type PendingStore } from "./pending-store";
@@ -47,6 +47,24 @@ function isProvider(p: string): p is ProviderId {
 // The outcome the web app shows as a toast after a connect round-trip. Kept in
 // one place so the start/callback handlers stay consistent (and typo-proof).
 type ConnectStatus = "ok" | "error" | "unconfigured";
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+/** Mobile connect confirmation interstitial (see the connect-CSRF note at the
+ *  call site). Deliberately dependency-free inline HTML in the desktop theme. */
+function confirmPage(provider: ProviderId, ownerEmail: string, authUrl: string): string {
+  const providerName = provider === "google" ? "Google" : "Microsoft";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect mailbox — Pipeline</title></head>
+<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#07090e;color:#e8edf5;font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+<div style="max-width:420px;padding:32px;text-align:center">
+<h1 style="font-size:20px;margin:0 0 12px">Connect a ${providerName} mailbox</h1>
+<p style="color:#9aa6b8;margin:0 0 8px">The mailbox you pick next will be attached to the Pipeline account</p>
+<p style="font-weight:600;margin:0 0 20px">${escapeHtml(ownerEmail)}</p>
+<p style="color:#9aa6b8;font-size:13px;margin:0 0 24px">Not your account? Close this page — someone may have sent you this link to read your email.</p>
+<a href="${escapeHtml(authUrl)}" style="display:inline-block;background:#2f81f7;color:#fff;text-decoration:none;padding:12px 28px;border-radius:16px;font-weight:600">Continue with ${providerName}</a>
+</div></body></html>`;
+}
 
 export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
   const transport = d.transport ?? fetchTransport;
@@ -84,7 +102,18 @@ export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
     const verifier = pkceVerifier();
     const state = randomBytes(16).toString("base64url");
     await d.pending.set(state, { provider, verifier, userId, returnTo }, PENDING_TTL_MS);
-    return reply.redirect(buildAuthUrl(provider, conf.clientId, redirectUri(provider), pkceChallenge(verifier), state));
+    const authUrl = buildAuthUrl(provider, conf.clientId, redirectUri(provider), pkceChallenge(verifier), state);
+    if (isMobile) {
+      // A connect token is a transferable bearer nonce: anyone holding the link
+      // could complete consent and the mailbox would attach to the MINTER's
+      // account (connect-CSRF). The web flow is immune (start is bound to the
+      // session cookie); the mobile flow can't be, so before handing off to the
+      // provider we show which Pipeline account will own the mailbox — a wrong
+      // email here is the victim's signal to stop.
+      const owner = await getUser(d.db, userId);
+      return reply.type("text/html; charset=utf-8").send(confirmPage(provider, owner?.email ?? "your account", authUrl));
+    }
+    return reply.redirect(authUrl);
   });
 
   app.get("/auth/:provider/callback", async (req, reply) => {

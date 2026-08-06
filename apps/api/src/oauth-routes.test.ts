@@ -100,11 +100,16 @@ describe("mobile connect flow (system browser + connect token)", () => {
   const seedConnectToken = (token: string, provider: "google" | "microsoft" = "google", userId = "u1") =>
     pending.set(`${CONNECT_TOKEN_PREFIX}${token}`, { provider, verifier: "", userId, returnTo: "mobile" }, 60_000);
 
-  it("start honors a valid connect token and the whole flow lands on the universal link", async () => {
+  it("start shows the connect-CSRF interstitial, then the whole flow lands on the universal link", async () => {
     await seedConnectToken("tok-1");
     const start = await app.inject({ method: "GET", url: "/auth/google/start?ct=tok-1" });
-    expect(start.statusCode).toBe(302);
-    const loc = new URL(start.headers.location as string);
+    // Not a silent redirect: the page names the account that will own the
+    // mailbox, so a victim of a forwarded link sees a foreign email and stops.
+    expect(start.statusCode).toBe(200);
+    expect(start.headers["content-type"]).toContain("text/html");
+    expect(start.body).toContain("u1@x.com");
+    const href = start.body.match(/href="([^"]+)"/)?.[1]?.replace(/&#38;/g, "&");
+    const loc = new URL(href!);
     expect(loc.origin + loc.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
 
     const state = loc.searchParams.get("state")!;

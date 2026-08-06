@@ -47,9 +47,9 @@ export function redisPendingStore(redisUrl: string): PendingStore {
       await redis.set(key(state), JSON.stringify(entry), "PX", ttlMs);
     },
     async take(state) {
-      const k = key(state);
-      const v = await redis.get(k);
-      if (v) await redis.del(k);
+      // GETDEL (Redis ≥ 6.2) keeps fetch+remove atomic — a plain GET-then-DEL
+      // lets two replicas both consume the same one-time state/connect-token.
+      const v = await redis.getdel(key(state));
       return v ? (JSON.parse(v) as PendingEntry) : null;
     },
   };

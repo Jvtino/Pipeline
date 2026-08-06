@@ -1,6 +1,6 @@
 // Repository — the only place app code touches the tables. Encrypts mail secrets
 // on write, decrypts on read, and enforces per-user scoping on every query.
-import { and, asc, eq, like, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, like, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { encryptJson, decryptJson } from "@pipeline/crypto";
 import {
@@ -489,6 +489,16 @@ export async function rebuildSyncedApplications(
   const annotated = new Set<string>([
     ...(await db.select({ id: notes.applicationId }).from(notes).where(eq(notes.userId, userId))).map((r) => r.id),
     ...(await db.select({ id: contacts.applicationId }).from(contacts).where(eq(contacts.userId, userId))).map((r) => r.id),
+    // Status overrides and review resolutions are user work exactly like notes:
+    // deleting the row would cascade its timeline and silently revert the user's
+    // correction to whatever the re-derive classifies. Keep those rows too — a
+    // re-synced thread upserts onto the same id, so the correction stays applied.
+    ...(
+      await db
+        .select({ id: applications.id })
+        .from(applications)
+        .where(and(eq(applications.userId, userId), or(isNotNull(applications.overrideStatus), isNotNull(applications.reviewedAt))))
+    ).map((r) => r.id),
     ...keepThreadIds.map((t) => `${userId}:${t}`),
   ]);
   const synced = await db
@@ -531,19 +541,27 @@ export async function getCursor(db: Database, connectionId: string): Promise<str
  * null when no such application belongs to the user.
  */
 export async function setStatusOverride(db: Database, userId: string, threadId: string, status: Status): Promise<Application | null> {
-  const rows = await db
+  // Coalesced status BEFORE the write: a retry/double-tap of the same status must
+  // not add a duplicate timeline event (the analytics funnel counts events).
+  const before = await getApplicationForUser(db, userId, threadId);
+  if (!before) return null;
+  // The override is stored even when it matches the current classifier status —
+  // that's a PIN, protecting the record against future classifier drift. A user
+  // correcting a status has also definitionally reviewed it, so the row leaves
+  // the review queue too.
+  await db
     .update(applications)
-    .set({ overrideStatus: status, overrideAt: new Date(), updatedAt: new Date() })
-    .where(and(eq(applications.userId, userId), eq(applications.threadId, threadId)))
-    .returning({ id: applications.id });
-  if (!rows.length) return null;
-  await db.insert(applicationEvents).values({
-    id: randomUUID(),
-    applicationId: `${userId}:${threadId}`,
-    status,
-    occurredAt: new Date().toISOString(),
-    source: "user",
-  });
+    .set({ overrideStatus: status, overrideAt: new Date(), reviewedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(applications.userId, userId), eq(applications.threadId, threadId)));
+  if (before.status !== status) {
+    await db.insert(applicationEvents).values({
+      id: randomUUID(),
+      applicationId: `${userId}:${threadId}`,
+      status,
+      occurredAt: new Date().toISOString(),
+      source: "user",
+    });
+  }
   return getApplicationForUser(db, userId, threadId);
 }
 
@@ -625,6 +643,10 @@ export async function upsertDevice(
         platform: p.platform,
         deviceName: p.deviceName ?? null,
         disabled: false,
+        // A re-registration is a fresh registration: prefs reset to the schema
+        // defaults rather than leaking the previous owner's choices.
+        notifyStatusChanges: true,
+        notifyReminders: true,
         lastSeenAt: new Date(),
       },
     })

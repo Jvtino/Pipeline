@@ -285,6 +285,7 @@ export async function buildServer(opts: ServerOptions = {}) {
     publicUrl: process.env.PUBLIC_URL ?? "http://localhost:3001",
     webUrl: process.env.WEB_URL ?? "http://localhost:5173",
     pending,
+    mobileReturnUrl: process.env.MOBILE_REDIRECT_URL,
   });
 
   // Mobile endpoints: devices/push, server-side writes, review queue, connect

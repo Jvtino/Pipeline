@@ -29,7 +29,7 @@ import {
 import { fetchTransport, type HttpTransport, type OAuthTokens } from "@pipeline/providers";
 import { requireUser, rateLimited, clearSessionCookie } from "./auth";
 import type { ProviderConfigs } from "./config";
-import type { PendingStore } from "./pending-store";
+import { CONNECT_TOKEN_PREFIX, type PendingStore } from "./pending-store";
 
 export interface MobileRouteDeps {
   db: Database;
@@ -46,8 +46,7 @@ export interface MobileRouteDeps {
 }
 
 const CONNECT_TOKEN_TTL_MS = 10 * 60 * 1000;
-/** Namespaces connect tokens away from OAuth `state` values in the shared store. */
-export const CONNECT_TOKEN_PREFIX = "ct:";
+export { CONNECT_TOKEN_PREFIX } from "./pending-store";
 
 const PLATFORMS = new Set(["ios", "android", "web"]);
 
@@ -206,7 +205,7 @@ export function registerMobileRoutes(app: FastifyInstance, d: MobileRouteDeps): 
       return reply.code(403).send({ error: "gmail connect is not yet available" });
     }
     const connectToken = randomBytes(32).toString("base64url");
-    await d.pending.set(`${CONNECT_TOKEN_PREFIX}${connectToken}`, { provider, verifier: "", userId: user.id }, CONNECT_TOKEN_TTL_MS);
+    await d.pending.set(`${CONNECT_TOKEN_PREFIX}${connectToken}`, { provider, verifier: "", userId: user.id, returnTo: "mobile" }, CONNECT_TOKEN_TTL_MS);
     return { connectToken, expiresInSeconds: CONNECT_TOKEN_TTL_MS / 1000, startPath: `/auth/${provider}/start?ct=${connectToken}` };
   });
 

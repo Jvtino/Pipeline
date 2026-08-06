@@ -21,7 +21,7 @@ import {
 import { saveMailConnection, type Database } from "@pipeline/db";
 import type { FastifyRequest } from "fastify";
 import type { ProviderConfigs } from "./config";
-import type { PendingStore } from "./pending-store";
+import { CONNECT_TOKEN_PREFIX, type PendingStore } from "./pending-store";
 
 const PENDING_TTL_MS = 10 * 60 * 1000; // an OAuth round-trip should finish well within 10 min
 
@@ -34,6 +34,10 @@ export interface OAuthDeps {
   publicUrl: string; // where the API is reachable (for the redirect_uri)
   webUrl: string; // where to send the user back after connect
   pending: PendingStore;
+  /** Where a MOBILE-started flow lands after the callback — a universal link the
+   *  phone app owns (https://<domain>/connect/done), so the system browser hands
+   *  control back to the app. Defaults to `${webUrl}/connect/done`. */
+  mobileReturnUrl?: string;
 }
 
 function isProvider(p: string): p is ProviderId {
@@ -47,22 +51,39 @@ type ConnectStatus = "ok" | "error" | "unconfigured";
 export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
   const transport = d.transport ?? fetchTransport;
   const redirectUri = (p: ProviderId) => `${d.publicUrl}/auth/${p}/callback`;
-  const connectBack = (status: ConnectStatus) => `${d.webUrl}?connect=${status}`;
+  const mobileReturnUrl = d.mobileReturnUrl ?? `${d.webUrl}/connect/done`;
+  // Web flows land on the web app; mobile-started flows land on the universal
+  // link the phone app owns, so the system browser hands control back to it.
+  const connectBack = (status: ConnectStatus, returnTo?: "web" | "mobile") =>
+    returnTo === "mobile" ? `${mobileReturnUrl}?connect=${status}` : `${d.webUrl}?connect=${status}`;
 
   app.get("/auth/:provider/start", async (req, reply) => {
     // These are browser navigations, so on any failure send the user back to the
     // app with a reason (a toast) rather than dumping raw JSON in the tab.
     const { provider } = req.params as { provider: string };
-    if (!isProvider(provider)) return reply.redirect(connectBack("error"));
-    const userId = d.resolveUserId(req);
-    if (!userId) return reply.redirect(connectBack("error"));
+    const q = req.query as Record<string, string | undefined>;
+    // A mobile-minted connect token (POST /api/connect-token) identifies the user
+    // when the flow runs in the system browser, which carries no cookie/bearer.
+    const isMobile = typeof q.ct === "string" && q.ct.length > 0;
+    if (!isProvider(provider)) return reply.redirect(connectBack("error", isMobile ? "mobile" : "web"));
+    let userId: string | null;
+    let returnTo: "web" | "mobile";
+    if (isMobile) {
+      const entry = await d.pending.take(`${CONNECT_TOKEN_PREFIX}${q.ct}`); // one-time use
+      userId = entry && entry.provider === provider ? entry.userId : null;
+      returnTo = "mobile";
+    } else {
+      userId = d.resolveUserId(req);
+      returnTo = "web";
+    }
+    if (!userId) return reply.redirect(connectBack("error", returnTo));
     const conf = d.configs[provider];
     if (!conf?.clientId || (PROVIDERS[provider].needsSecret && !conf.clientSecret)) {
-      return reply.redirect(connectBack("unconfigured"));
+      return reply.redirect(connectBack("unconfigured", returnTo));
     }
     const verifier = pkceVerifier();
     const state = randomBytes(16).toString("base64url");
-    await d.pending.set(state, { provider, verifier, userId }, PENDING_TTL_MS);
+    await d.pending.set(state, { provider, verifier, userId, returnTo }, PENDING_TTL_MS);
     return reply.redirect(buildAuthUrl(provider, conf.clientId, redirectUri(provider), pkceChallenge(verifier), state));
   });
 
@@ -70,9 +91,10 @@ export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
     const { provider } = req.params as { provider: string };
     const q = req.query as Record<string, string | undefined>;
     const pend = q.state ? await d.pending.take(q.state) : null;
+    const returnTo = pend?.returnTo ?? "web";
 
     if (!isProvider(provider) || !q.code || !pend || pend.provider !== provider) {
-      return reply.redirect(connectBack("error"));
+      return reply.redirect(connectBack("error", returnTo));
     }
     try {
       const conf = d.configs[provider]!;
@@ -90,10 +112,10 @@ export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
         email,
         secret: tokens,
       });
-      return reply.redirect(connectBack("ok"));
+      return reply.redirect(connectBack("ok", returnTo));
     } catch (err) {
       app.log.error(err);
-      return reply.redirect(connectBack("error"));
+      return reply.redirect(connectBack("error", returnTo));
     }
   });
 }

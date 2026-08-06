@@ -9,7 +9,14 @@ export interface PendingEntry {
   provider: ProviderId;
   verifier: string;
   userId: string;
+  /** Where the user lands after the callback: the web app (default) or the
+   *  mobile app's universal link. Set on flows started with a connect token. */
+  returnTo?: "web" | "mobile";
 }
+
+/** Namespaces mobile connect-token nonces away from OAuth `state` values —
+ *  both ride the same store so multi-replica deploys need only one Redis. */
+export const CONNECT_TOKEN_PREFIX = "ct:";
 
 export interface PendingStore {
   set(state: string, entry: PendingEntry, ttlMs: number): Promise<void>;

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
+    "@fastify/rate-limit": "^11.2.0",
     "@pipeline/classify": "workspace:*",
     "@pipeline/contracts": "workspace:*",
     "@pipeline/crypto": "workspace:*",
@@ -20,7 +21,8 @@
     "@pipeline/providers": "workspace:*",
     "@pipeline/sync": "workspace:*",
     "fastify": "^5.1.0",
-    "ioredis": "^5.4.1"
+    "ioredis": "^5.4.1",
+    "jose": "^6.2.8"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

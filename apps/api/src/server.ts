@@ -5,9 +5,12 @@
 // already in place), and incremental sync are the next steps (plan §8/§10).
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import { boardSchema } from "@pipeline/contracts";
 import {
   getBoardForUser,
+  getUser,
+  upsertUser,
   setUserPlan,
   getMailConnections,
   rebuildSyncedApplications,
@@ -22,8 +25,9 @@ import type { HttpTransport } from "@pipeline/providers";
 import { initStore, seedDemoForUser, resolveMasterKey } from "./store";
 import { loadProviderConfigs } from "./config";
 import { registerOAuthRoutes } from "./oauth-routes";
-import { registerAuthRoutes } from "./auth-routes";
+import { registerAuthRoutes, resolveDevLoginEnabled } from "./auth-routes";
 import { registerProRoutes } from "./pro-routes";
+import { clerkConfigFromEnv, createBearerVerifier, type BearerVerifier } from "./clerk";
 import { memoryPendingStore, redisPendingStore } from "./pending-store";
 import { backgroundSyncStatus, setBackgroundSync } from "./background-sync";
 import { startSyncScheduler } from "./scheduler";
@@ -34,6 +38,7 @@ import {
   verifySession,
   readCookie,
   requireUser,
+  rateLimited,
   SESSION_COOKIE,
   type RequestWithUser,
 } from "./auth";
@@ -45,6 +50,9 @@ export interface ServerOptions {
   // restart. Defaults to off, so tests stay ephemeral + isolated. Hosted
   // deployments leave this off and supply the secrets/DATABASE_URL via env.
   local?: boolean;
+  // Bearer identity verifier (mobile clients). Injected in tests; defaults to
+  // the Clerk JWKS verifier when CLERK_ISSUER is set, else bearer auth is off.
+  verifyBearer?: BearerVerifier;
 }
 
 export async function buildServer(opts: ServerOptions = {}) {
@@ -70,9 +78,52 @@ export async function buildServer(opts: ServerOptions = {}) {
     }
   });
 
-  // Resolve the authenticated user from the session cookie on every request.
+  // Rate limiting is opt-in per route (config.rateLimit) — registered here so
+  // sensitive routes (auth, sync, devices) can throttle without slowing reads.
+  await app.register(rateLimit, { global: false });
+
+  // Resolve the authenticated user on every request: a Bearer token (mobile,
+  // verified against the IdP's JWKS) outranks the legacy session cookie
+  // (web/desktop) — both land on the same `req.user` seam.
   const sessionSecret = resolveSessionSecret(local);
+  const verifyBearer = opts.verifyBearer ?? (() => {
+    const cfg = clerkConfigFromEnv();
+    return cfg ? createBearerVerifier(cfg) : null;
+  })();
+
+  // First-sight provisioning cache: one DB existence check per user per process.
+  // Account deletion must evict its entry (see /api/account) or a deleted user's
+  // still-valid token would skip re-provisioning and hit FK failures on writes.
+  const provisioned = new Set<string>();
+  const ensureBearerUser = async (identity: { id: string; email: string }) => {
+    if (provisioned.has(identity.id)) return identity;
+    const existing = await getUser(store.db, identity.id);
+    if (existing) {
+      identity = { ...identity, email: existing.email }; // DB email is authoritative once created
+    } else {
+      try {
+        await upsertUser(store.db, { id: identity.id, email: identity.email });
+      } catch {
+        // The email already belongs to a different (legacy cookie-era) user id.
+        // Deliberately do NOT link the accounts — a per-subject sentinel keeps
+        // the UNIQUE email column valid and the identities separate.
+        identity = { ...identity, email: `${identity.id}@clerk.local` };
+        await upsertUser(store.db, { id: identity.id, email: identity.email });
+      }
+      await seedDemoForUser(store.db, identity.id); // a first board is never empty
+    }
+    provisioned.add(identity.id);
+    return identity;
+  };
+
   app.addHook("preHandler", async (req) => {
+    if (verifyBearer) {
+      const identity = await verifyBearer(req.headers.authorization);
+      if (identity) {
+        (req as RequestWithUser).user = await ensureBearerUser(identity);
+        return;
+      }
+    }
     const user = verifySession(sessionSecret, readCookie(req, SESSION_COOKIE));
     if (user) (req as RequestWithUser).user = user;
   });
@@ -80,7 +131,7 @@ export async function buildServer(opts: ServerOptions = {}) {
   registerAuthRoutes(app, {
     db: store.db,
     sessionSecret,
-    devLoginEnabled: process.env.DISABLE_DEV_LOGIN !== "true",
+    devLoginEnabled: resolveDevLoginEnabled(process.env, local),
     onNewUser: seedDemoForUser,
   });
 
@@ -94,7 +145,7 @@ export async function buildServer(opts: ServerOptions = {}) {
   });
 
   // Trigger an incremental sync of the signed-in user's connected mailboxes.
-  app.post("/api/sync", async (req, reply) => {
+  app.post("/api/sync", rateLimited(12), async (req, reply) => {
     const user = requireUser(req, reply);
     if (!user) return reply;
     return syncAllConnections({ db: store.db, masterKey, userId: user.id, configs, transport: opts.transport });
@@ -105,7 +156,7 @@ export async function buildServer(opts: ServerOptions = {}) {
   // runs a full sync so only mail that passes the CURRENT relevance gate is
   // re-listed. This is the recovery path after a bad sync floods the board with
   // non-application mail — the gate fix stops new floods; this clears an old one.
-  app.post("/api/resync", async (req, reply) => {
+  app.post("/api/resync", rateLimited(6), async (req, reply) => {
     const user = requireUser(req, reply);
     if (!user) return reply;
     // No mailbox to rebuild from → safe no-op (don't clear the seeded demo board).

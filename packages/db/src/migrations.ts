@@ -109,4 +109,39 @@ CREATE INDEX IF NOT EXISTS idx_appmsg_app ON application_messages (application_i
 CREATE INDEX IF NOT EXISTS idx_appmsg_user ON application_messages (user_id);
 -- Deep link to the original message in the provider's web mail (additive).
 ALTER TABLE application_messages ADD COLUMN IF NOT EXISTS web_link text;
+
+-- ── Mobile (additive) ─────────────────────────────────────────────────────────
+-- Sticky user status override: sync upserts never write these columns, so a
+-- manual correction survives every re-classification; reads coalesce
+-- override_status ?? status. reviewed_at resolves the review queue.
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS override_status app_status;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS override_at timestamptz;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
+
+DO $$ BEGIN CREATE TYPE device_platform AS ENUM ('ios','android','web'); EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+-- One row per push token; re-registration moves the token to the signing-in user.
+CREATE TABLE IF NOT EXISTS devices (
+  id                     text PRIMARY KEY,
+  user_id                text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  platform               device_platform NOT NULL,
+  expo_push_token        text NOT NULL UNIQUE,
+  device_name            text,
+  notify_status_changes  boolean NOT NULL DEFAULT true,
+  notify_reminders       boolean NOT NULL DEFAULT true,
+  disabled               boolean NOT NULL DEFAULT false,
+  created_at             timestamptz NOT NULL DEFAULT now(),
+  last_seen_at           timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_devices_user ON devices (user_id);
+
+-- Send-once ledger: a unique dedupe key per logical notification, so retries and
+-- overlapping sync ticks can never double-send.
+CREATE TABLE IF NOT EXISTS push_log (
+  id          text PRIMARY KEY,
+  user_id     text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind        text NOT NULL,
+  dedupe_key  text NOT NULL UNIQUE,
+  sent_at     timestamptz NOT NULL DEFAULT now()
+);
 `;

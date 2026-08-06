@@ -1,6 +1,6 @@
 // Repository — the only place app code touches the tables. Encrypts mail secrets
 // on write, decrypts on read, and enforces per-user scoping on every query.
-import { and, asc, eq, like, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, like, inArray, isNotNull, isNull } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { encryptJson, decryptJson } from "@pipeline/crypto";
 import {
@@ -16,7 +16,7 @@ import {
   type Thread,
 } from "@pipeline/contracts";
 import type { Database } from "./client";
-import { users, mailConnections, applications, applicationEvents, applicationMessages, syncState, notes, contacts } from "./schema";
+import { users, mailConnections, applications, applicationEvents, applicationMessages, syncState, notes, contacts, devices, pushLog } from "./schema";
 
 export type Plan = "free" | "pro" | "teams";
 export type Provider = "google" | "microsoft" | "imap";
@@ -119,16 +119,37 @@ export async function updateMailConnectionSecret(
     .where(eq(mailConnections.id, connectionId));
 }
 
+/** One classified-status change observed by an upsert batch — the raw material
+ *  for push notifications. `overridden` flags records the user has manually
+ *  corrected (their word outranks the classifier, so notifiers should skip). */
+export interface StatusTransition {
+  threadId: string;
+  company: string;
+  role: string;
+  from?: Status;
+  to: Status;
+  isNew: boolean;
+  overridden: boolean;
+}
+
 /** Idempotently upsert derived applications for a user (current status overwrites).
  *  Status TRANSITIONS are recorded as application_events rows (the real per-stage
- *  timeline): one event when a row first appears, one whenever its status changes. */
-export async function upsertApplications(db: Database, userId: string, apps: Application[]): Promise<void> {
+ *  timeline): one event when a row first appears, one whenever its status changes.
+ *  Returns the batch's transitions (additive — existing callers ignore it). */
+export async function upsertApplications(
+  db: Database,
+  userId: string,
+  apps: Application[],
+  opts: { eventSource?: string } = {},
+): Promise<StatusTransition[]> {
   // Previous statuses, read once — the transition detector for the whole batch.
   const existing = await db
-    .select({ threadId: applications.threadId, status: applications.status })
+    .select({ threadId: applications.threadId, status: applications.status, overrideStatus: applications.overrideStatus })
     .from(applications)
     .where(eq(applications.userId, userId));
   const prev = new Map(existing.map((r) => [r.threadId, r.status as Status]));
+  const overridden = new Set(existing.filter((r) => r.overrideStatus != null).map((r) => r.threadId));
+  const transitions: StatusTransition[] = [];
   for (const a of apps) {
     const id = `${userId}:${a.threadId}`;
     const values = {
@@ -180,10 +201,20 @@ export async function upsertApplications(db: Database, userId: string, apps: App
         status: a.status,
         // occurred_at: the activity that carried the change (first sight uses firstSeen).
         occurredAt: (was === undefined ? a.firstSeen : a.lastActivity) || a.lastActivity || a.firstSeen,
-        source: "sync",
+        source: opts.eventSource ?? "sync",
+      });
+      transitions.push({
+        threadId: a.threadId,
+        company: a.company,
+        role: a.role,
+        from: was,
+        to: a.status,
+        isNew: was === undefined,
+        overridden: overridden.has(a.threadId),
       });
     }
   }
+  return transitions;
 }
 
 export interface StatusEventRow {
@@ -203,15 +234,17 @@ export async function listStatusEvents(db: Database, userId: string, threadId: s
   return rows.map((r) => ({ status: r.status as Status, occurredAt: r.occurredAt, source: r.source }));
 }
 
-export async function getApplicationsForUser(db: Database, userId: string): Promise<Application[]> {
-  const rows = await db.select().from(applications).where(eq(applications.userId, userId));
-  return rows.map((r) => ({
+/** Row → contract mapper. The user's sticky override, when set, IS the status
+ *  everywhere downstream (board, analytics, export) — the classifier's word only
+ *  shows through where no correction exists. */
+function rowToApplication(r: typeof applications.$inferSelect): Application {
+  return {
     id: r.id,
     threadId: r.threadId,
     company: r.company,
     companyDomain: r.companyDomain,
     role: r.role,
-    status: r.status as Status,
+    status: (r.overrideStatus ?? r.status) as Status,
     firstSeen: r.firstSeen,
     lastActivity: r.lastActivity,
     snippet: r.snippet,
@@ -221,7 +254,21 @@ export async function getApplicationsForUser(db: Database, userId: string): Prom
     classification: r.classification ? (JSON.parse(r.classification) as ClassificationAudit) : undefined,
     classificationEvents: r.classificationEvents ? (JSON.parse(r.classificationEvents) as ClassificationEvent[]) : undefined,
     platformFallback: r.platformFallback ?? undefined,
-  }));
+  };
+}
+
+export async function getApplicationsForUser(db: Database, userId: string): Promise<Application[]> {
+  const rows = await db.select().from(applications).where(eq(applications.userId, userId));
+  return rows.map(rowToApplication);
+}
+
+/** One application by thread id, user-scoped (override coalesced like the board read). */
+export async function getApplicationForUser(db: Database, userId: string, threadId: string): Promise<Application | null> {
+  const rows = await db
+    .select()
+    .from(applications)
+    .where(and(eq(applications.userId, userId), eq(applications.threadId, threadId)));
+  return rows[0] ? rowToApplication(rows[0]) : null;
 }
 
 /** The board read for a user, grouped identically to the live-mail path. */
@@ -473,4 +520,188 @@ export async function saveCursor(db: Database, connectionId: string, cursor: str
 export async function getCursor(db: Database, connectionId: string): Promise<string | null> {
   const rows = await db.select().from(syncState).where(eq(syncState.connectionId, connectionId));
   return rows[0]?.cursor ?? null;
+}
+
+// ── Status override + review queue (mobile writes) ───────────────────────────
+
+/**
+ * Sticky user correction of an application's status. Sync upserts never write
+ * override_status, so the correction survives every re-classification. Records a
+ * `source:'user'` timeline event and returns the updated record (coalesced), or
+ * null when no such application belongs to the user.
+ */
+export async function setStatusOverride(db: Database, userId: string, threadId: string, status: Status): Promise<Application | null> {
+  const rows = await db
+    .update(applications)
+    .set({ overrideStatus: status, overrideAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(applications.userId, userId), eq(applications.threadId, threadId)))
+    .returning({ id: applications.id });
+  if (!rows.length) return null;
+  await db.insert(applicationEvents).values({
+    id: randomUUID(),
+    applicationId: `${userId}:${threadId}`,
+    status,
+    occurredAt: new Date().toISOString(),
+    source: "user",
+  });
+  return getApplicationForUser(db, userId, threadId);
+}
+
+/** Confidence floor below which an unreviewed record joins the review queue,
+ *  even when the classifier didn't flag it outright. */
+const REVIEW_CONFIDENCE_FLOOR = 0.5;
+
+/**
+ * Applications awaiting human review: synced records the classifier flagged
+ * (`requiresManualReview`) or scored under the confidence floor, not yet
+ * resolved by the user (`reviewed_at IS NULL`). Filtered in code — the audit
+ * lives in a JSON text column and boards are small at v1 scale.
+ */
+export async function listReviewQueue(db: Database, userId: string): Promise<Application[]> {
+  const rows = await db
+    .select()
+    .from(applications)
+    .where(and(eq(applications.userId, userId), eq(applications.manual, false), isNull(applications.reviewedAt)));
+  return rows
+    .filter((r) => {
+      const audit = r.classification ? (JSON.parse(r.classification) as ClassificationAudit) : null;
+      if (audit?.requiresManualReview) return true;
+      return r.confidence != null && r.confidence < REVIEW_CONFIDENCE_FLOOR;
+    })
+    .map(rowToApplication);
+}
+
+/** Resolve a record's review-queue membership. Returns false when the user owns no such record. */
+export async function markReviewed(db: Database, userId: string, threadId: string): Promise<boolean> {
+  const rows = await db
+    .update(applications)
+    .set({ reviewedAt: new Date() })
+    .where(and(eq(applications.userId, userId), eq(applications.threadId, threadId)))
+    .returning({ id: applications.id });
+  return rows.length > 0;
+}
+
+// ── Devices (push registration) ──────────────────────────────────────────────
+
+export interface DeviceRow {
+  id: string;
+  platform: "ios" | "android" | "web";
+  expoPushToken: string;
+  deviceName: string | null;
+  notifyStatusChanges: boolean;
+  notifyReminders: boolean;
+  disabled: boolean;
+}
+
+const deviceColumns = {
+  id: devices.id,
+  platform: devices.platform,
+  expoPushToken: devices.expoPushToken,
+  deviceName: devices.deviceName,
+  notifyStatusChanges: devices.notifyStatusChanges,
+  notifyReminders: devices.notifyReminders,
+  disabled: devices.disabled,
+};
+
+/** Register a push token. One row per token: re-registration moves the token to
+ *  the signing-in user (phones change hands between accounts) and re-enables it. */
+export async function upsertDevice(
+  db: Database,
+  p: { userId: string; platform: "ios" | "android" | "web"; expoPushToken: string; deviceName?: string | null },
+): Promise<DeviceRow> {
+  const rows = await db
+    .insert(devices)
+    .values({
+      id: randomUUID(),
+      userId: p.userId,
+      platform: p.platform,
+      expoPushToken: p.expoPushToken,
+      deviceName: p.deviceName ?? null,
+    })
+    .onConflictDoUpdate({
+      target: devices.expoPushToken,
+      set: {
+        userId: p.userId,
+        platform: p.platform,
+        deviceName: p.deviceName ?? null,
+        disabled: false,
+        lastSeenAt: new Date(),
+      },
+    })
+    .returning(deviceColumns);
+  return rows[0]!;
+}
+
+export async function listDevices(db: Database, userId: string): Promise<DeviceRow[]> {
+  return db.select(deviceColumns).from(devices).where(eq(devices.userId, userId));
+}
+
+/** Active (enabled) devices for a user — the push send list. */
+export async function listActiveDevices(db: Database, userId: string): Promise<DeviceRow[]> {
+  return db
+    .select(deviceColumns)
+    .from(devices)
+    .where(and(eq(devices.userId, userId), eq(devices.disabled, false)));
+}
+
+/** Update a device's notification preferences (user-scoped). Null when not the user's device. */
+export async function updateDevice(
+  db: Database,
+  userId: string,
+  deviceId: string,
+  prefs: { notifyStatusChanges?: boolean; notifyReminders?: boolean },
+): Promise<DeviceRow | null> {
+  const set: Partial<{ notifyStatusChanges: boolean; notifyReminders: boolean; lastSeenAt: Date }> = { lastSeenAt: new Date() };
+  if (prefs.notifyStatusChanges !== undefined) set.notifyStatusChanges = prefs.notifyStatusChanges;
+  if (prefs.notifyReminders !== undefined) set.notifyReminders = prefs.notifyReminders;
+  const rows = await db
+    .update(devices)
+    .set(set)
+    .where(and(eq(devices.id, deviceId), eq(devices.userId, userId)))
+    .returning(deviceColumns);
+  return rows[0] ?? null;
+}
+
+/** Remove a device registration (sign-out cleanup). */
+export async function deleteDevice(db: Database, userId: string, deviceId: string): Promise<boolean> {
+  const rows = await db
+    .delete(devices)
+    .where(and(eq(devices.id, deviceId), eq(devices.userId, userId)))
+    .returning({ id: devices.id });
+  return rows.length > 0;
+}
+
+/** Stop sending to a token the push provider reported dead (DeviceNotRegistered). */
+export async function disableDeviceByToken(db: Database, expoPushToken: string): Promise<void> {
+  await db.update(devices).set({ disabled: true }).where(eq(devices.expoPushToken, expoPushToken));
+}
+
+// ── Push send-once ledger ────────────────────────────────────────────────────
+
+/**
+ * Claim a notification's dedupe key. True → newly claimed, caller should send;
+ * false → an earlier tick already sent this logical notification. The unique
+ * index makes the claim atomic under concurrent sync ticks.
+ */
+export async function recordPushOnce(db: Database, p: { userId: string; kind: string; dedupeKey: string }): Promise<boolean> {
+  const rows = await db
+    .insert(pushLog)
+    .values({ id: randomUUID(), userId: p.userId, kind: p.kind, dedupeKey: p.dedupeKey })
+    .onConflictDoNothing({ target: pushLog.dedupeKey })
+    .returning({ id: pushLog.id });
+  return rows.length > 0;
+}
+
+// ── Account deletion ─────────────────────────────────────────────────────────
+
+/**
+ * Erase a user entirely. Every table hangs off users(id) with ON DELETE CASCADE
+ * (directly or via applications), so one delete removes connections + secrets,
+ * sync cursors, applications, events, messages, notes, contacts, devices, and
+ * push log. Provider-side token revocation is the caller's job BEFORE this —
+ * the encrypted secrets are unreadable afterwards.
+ */
+export async function deleteUser(db: Database, userId: string): Promise<boolean> {
+  const rows = await db.delete(users).where(eq(users.id, userId)).returning({ id: users.id });
+  return rows.length > 0;
 }

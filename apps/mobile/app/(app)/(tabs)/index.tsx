@@ -1,0 +1,160 @@
+// The board: server-grouped company cards, search, status-chip filtering,
+// pull-to-refresh. Read-only in this phase — status changes and manual adds
+// arrive with the actions phase. Offline shows the persisted cache + a banner.
+import { useMemo, useState } from "react";
+import { FlatList, Pressable, RefreshControl, Text, TextInput, View } from "react-native";
+import { useRouter } from "expo-router";
+import type { CompanyGroup, Status } from "@pipeline/contracts";
+import { useBoard } from "../../../src/api/queries";
+import { AuthError } from "../../../src/api/client";
+import { countChips, filterBoard, filterByStatus } from "../../../src/lib/board";
+import { formatDate } from "../../../src/lib/format";
+import { Avatar, EmptyState, ErrorState, Loading, Panel, Screen, StatusDot } from "../../../src/ui/components";
+import { color, radius, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
+
+export default function BoardScreen() {
+  const board = useBoard();
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<Status | null>(null);
+
+  const groups = useMemo(
+    () => (board.data ? filterByStatus(filterBoard(board.data.groups, query), status) : []),
+    [board.data, query, status],
+  );
+
+  if (board.isPending && !board.data) return <Loading />;
+  if (board.isError && !board.data) {
+    const msg = board.error instanceof AuthError ? "Your session ended — sign in again." : "Couldn't load your board.";
+    return (
+      <Screen>
+        <ErrorState message={msg} onRetry={() => void board.refetch()} />
+      </Screen>
+    );
+  }
+
+  const counts = board.data!.counts;
+  const offline = board.isError && !!board.data;
+
+  return (
+    <Screen>
+      {offline ? (
+        <View style={{ backgroundColor: color.blueDeep, paddingVertical: space.xs, alignItems: "center" }}>
+          <Text style={text.faint}>Offline — showing your last sync</Text>
+        </View>
+      ) : null}
+      <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: space.md }}>
+        <TextInput
+          style={{
+            backgroundColor: color.elev,
+            borderColor: color.border,
+            borderWidth: 1,
+            borderRadius: radius.sm,
+            paddingHorizontal: space.lg,
+            paddingVertical: space.sm + 2,
+            color: color.text,
+            fontSize: 15,
+          }}
+          placeholder="Search company or role"
+          placeholderTextColor={color.textFaint}
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+        />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+          {countChips(counts).map((chip) => {
+            const active = status === chip.status;
+            return (
+              <Pressable
+                key={chip.status}
+                onPress={() => setStatus(active ? null : chip.status)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: space.xs + 2,
+                  borderRadius: radius.pill,
+                  borderWidth: 1,
+                  borderColor: active ? statusColor[chip.status] : color.border,
+                  backgroundColor: active ? `${statusColor[chip.status]}22` : color.panel,
+                  paddingHorizontal: space.md,
+                  paddingVertical: space.xs + 1,
+                }}
+              >
+                <StatusDot status={chip.status} size={7} />
+                <Text style={[text.faint, active && { color: statusColor[chip.status] }]}>
+                  {statusLabel[chip.status]} {chip.count}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+      <FlatList
+        data={groups}
+        keyExtractor={(g) => g.company + g.domain}
+        contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: space.xxl }}
+        refreshControl={
+          <RefreshControl refreshing={board.isRefetching} onRefresh={() => void board.refetch()} tintColor={color.blue} />
+        }
+        ListEmptyComponent={
+          <EmptyState
+            title={query || status ? "No matches" : "No applications yet"}
+            hint={
+              query || status
+                ? "Try a different search or clear the filter."
+                : "Connect a mailbox in Settings (coming next) or add positions on the web — the board fills itself."
+            }
+          />
+        }
+        renderItem={({ item }) => <CompanyCard group={item} onOpen={(id) => router.push(`/(app)/application/${encodeURIComponent(id)}`)} />}
+      />
+    </Screen>
+  );
+}
+
+function CompanyCard({ group, onOpen }: { group: CompanyGroup; onOpen: (threadId: string) => void }) {
+  return (
+    <Panel style={{ padding: 0, overflow: "hidden" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md, padding: space.lg }}>
+        <Avatar company={group.company} />
+        <View style={{ flex: 1 }}>
+          <Text style={[text.base, { fontWeight: "600" }]} numberOfLines={1}>
+            {group.company}
+          </Text>
+          <Text style={text.faint} numberOfLines={1}>
+            {group.applications.length === 1 ? "1 position" : `${group.applications.length} positions`}
+          </Text>
+        </View>
+      </View>
+      {group.applications.map((a) => (
+        <Pressable
+          key={a.threadId}
+          onPress={() => onOpen(a.threadId)}
+          style={({ pressed }) => [
+            {
+              flexDirection: "row",
+              alignItems: "center",
+              gap: space.md,
+              paddingHorizontal: space.lg,
+              paddingVertical: space.md,
+              borderTopWidth: 1,
+              borderTopColor: color.border,
+            },
+            pressed && { backgroundColor: color.elev },
+          ]}
+        >
+          <StatusDot status={a.status} />
+          <View style={{ flex: 1 }}>
+            <Text style={text.base} numberOfLines={1}>
+              {a.role}
+            </Text>
+            <Text style={text.faint}>
+              {statusLabel[a.status]} · {formatDate(a.lastActivity)}
+            </Text>
+          </View>
+          <Text style={[text.faint, { fontSize: 18 }]}>›</Text>
+        </Pressable>
+      ))}
+    </Panel>
+  );
+}

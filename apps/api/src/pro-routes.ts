@@ -1,5 +1,8 @@
-// Pro-tier routes (all server-side entitlement-gated): analytics, follow-up
-// reminders, CSV export, and notes/contacts per application.
+// Pro-tier routes (server-side entitlement-gated): analytics, follow-up
+// reminders, and notes/contacts per application. CSV export lives here too but
+// is deliberately UN-gated — the launch pricing decision is "free for now,
+// billing dormant", and a user's own data must never sit behind a paywall
+// nobody can pay. (Re-gate it if/when billing turns on.)
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   getApplicationsForUser,
@@ -12,6 +15,7 @@ import {
   type Database,
 } from "@pipeline/db";
 import { requireProUser, type GateDeps } from "./gate";
+import { requireUser, rateLimited } from "./auth";
 import { computeNudges } from "./reminders";
 import { toCsv } from "./export";
 
@@ -40,8 +44,8 @@ export function registerProRoutes(app: FastifyInstance, deps: ProRouteDeps): voi
     return { nudges: computeNudges(apps, Date.now()) };
   });
 
-  app.get("/api/export.csv", async (req, reply) => {
-    const user = await gate(req, reply);
+  app.get("/api/export.csv", rateLimited(10), async (req, reply) => {
+    const user = requireUser(req, reply); // signed-in is enough — your data is yours
     if (!user) return reply;
     const apps = await getApplicationsForUser(deps.db, user.id);
     reply.header("Content-Type", "text/csv; charset=utf-8");

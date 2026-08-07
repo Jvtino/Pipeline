@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { useBoard } from "../../../src/api/queries";
 import { agenda, boardEvents, upcomingInterviews, type CalendarEvent } from "../../../src/lib/calendar";
 import { formatDate } from "../../../src/lib/format";
-import { EmptyState, ErrorState, Loading, Panel, Screen, StatusDot } from "../../../src/ui/components";
+import { EmptyState, ErrorState, ListSkeleton, Panel, Screen, StatusDot } from "../../../src/ui/components";
 import { color, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
 import { Pressable } from "react-native";
 
@@ -13,7 +13,13 @@ export default function CalendarScreen() {
   const board = useBoard();
   const router = useRouter();
 
-  if (board.isPending && !board.data) return <Loading />;
+  if (board.isPending && !board.data) {
+    return (
+      <Screen>
+        <ListSkeleton />
+      </Screen>
+    );
+  }
   if (board.isError && !board.data) {
     return (
       <Screen>

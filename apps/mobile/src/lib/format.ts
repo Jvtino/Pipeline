@@ -31,6 +31,19 @@ export function monogram(company: string): string {
   );
 }
 
+/** Compact relative time for list rows: "today", "3d", "2w", "4mo" — a
+ *  glanceable age, not a timestamp (detail views show real dates). Future or
+ *  unparseable dates fall back to the formatted date. */
+export function relativeAge(iso: string, now: Date = new Date()): string {
+  const then = Date.parse(iso.length === 10 ? `${iso}T12:00:00Z` : iso);
+  if (Number.isNaN(then) || then > now.getTime() + 24 * 60 * 60 * 1000) return formatDate(iso);
+  const days = Math.max(0, Math.floor((now.getTime() - then) / (24 * 60 * 60 * 1000)));
+  if (days === 0) return "today";
+  if (days < 14) return `${days}d`;
+  if (days < 60) return `${Math.floor(days / 7)}w`;
+  return `${Math.floor(days / 30)}mo`;
+}
+
 /** Deterministic avatar hue from the company name (desktop's hueFor). */
 export function hueFor(company: string): number {
   let h = 0;

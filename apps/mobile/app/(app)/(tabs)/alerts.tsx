@@ -5,14 +5,20 @@ import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useReview } from "../../../src/api/queries";
 import { formatDate } from "../../../src/lib/format";
-import { Avatar, EmptyState, ErrorState, Loading, Panel, Screen, StatusPill } from "../../../src/ui/components";
+import { Avatar, EmptyState, ErrorState, ListSkeleton, Panel, Screen, StatusPill } from "../../../src/ui/components";
 import { color, space, text } from "../../../src/ui/theme";
 
 export default function AlertsScreen() {
   const review = useReview();
   const router = useRouter();
 
-  if (review.isPending && !review.data) return <Loading label="Checking for items to review…" />;
+  if (review.isPending && !review.data) {
+    return (
+      <Screen>
+        <ListSkeleton />
+      </Screen>
+    );
+  }
   if (review.isError && !review.data) {
     return (
       <Screen>

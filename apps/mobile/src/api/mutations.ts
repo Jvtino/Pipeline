@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { applicationSchema, boardSchema, type Application, type Board, type Status } from "@pipeline/contracts";
 import { request } from "./client";
+import { hapticError, hapticSuccess } from "../ui/feedback";
 
 const applicationEnvelope = z.object({ application: applicationSchema });
 const reviewResolveEnvelope = z.object({ ok: z.boolean(), application: applicationSchema.nullable() });
@@ -46,8 +47,10 @@ export function useOverrideStatus() {
       if (before) qc.setQueryData(["board"], patchBoard(before, threadId, (a) => ({ ...a, status })));
       return { before };
     },
+    onSuccess: () => hapticSuccess(),
     onError: (_err, _vars, ctx) => {
       if (ctx?.before) qc.setQueryData(["board"], ctx.before); // rollback — server said no
+      hapticError();
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ["board"] });
@@ -62,7 +65,11 @@ export function useAddPosition() {
   return useMutation({
     mutationFn: (input: { company: string; role: string; status?: Status; appliedOn?: string }) =>
       request("/api/applications", applicationEnvelope, { method: "POST", body: JSON.stringify(input) }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["board"] }),
+    onSuccess: () => {
+      hapticSuccess();
+      void qc.invalidateQueries({ queryKey: ["board"] });
+    },
+    onError: () => hapticError(),
   });
 }
 
@@ -76,10 +83,12 @@ export function useResolveReview() {
         body: JSON.stringify({ action, status }),
       }),
     onSuccess: () => {
+      hapticSuccess();
       void qc.invalidateQueries({ queryKey: ["review"] });
       void qc.invalidateQueries({ queryKey: ["board"] });
       void qc.invalidateQueries({ queryKey: ["events"] });
     },
+    onError: () => hapticError(),
   });
 }
 

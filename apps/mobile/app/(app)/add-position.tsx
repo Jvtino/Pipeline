@@ -5,6 +5,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput,
 import { Stack, useRouter } from "expo-router";
 import { STATUSES, type Status } from "@pipeline/contracts";
 import { useAddPosition } from "../../src/api/mutations";
+import { hapticSelect } from "../../src/ui/feedback";
 import { Button, Label, Panel, Screen, StatusDot } from "../../src/ui/components";
 import { color, radius, space, statusColor, statusLabel, text } from "../../src/ui/theme";
 
@@ -55,7 +56,10 @@ export default function AddPositionScreen() {
                   return (
                     <Pressable
                       key={s}
-                      onPress={() => setStatus(s)}
+                      onPress={() => {
+                        hapticSelect();
+                        setStatus(s);
+                      }}
                       accessibilityRole="button"
                       accessibilityLabel={`Status ${statusLabel[s]}`}
                       accessibilityState={{ selected: active }}

@@ -4,7 +4,8 @@ import { describe, it, expect } from "vitest";
 import type { Application, CompanyGroup } from "@pipeline/contracts";
 import { filterBoard, filterByStatus, countChips } from "./board";
 import { boardEvents, agenda, upcomingInterviews } from "./calendar";
-import { formatDate, senderName, monogram, hueFor } from "./format";
+import { formatDate, relativeAge, senderName, monogram, hueFor } from "./format";
+import { sortPinnedFirst } from "./pins";
 import { versionAtLeast } from "./version";
 
 const app = (role: string, status: Application["status"] = "applied"): Application => ({
@@ -70,6 +71,22 @@ describe("format", () => {
     expect(formatDate("2026-11-23T10:00:00Z")).toBe("Nov 23, 2026");
     expect(formatDate("soon")).toBe("soon");
   });
+  it("relative ages: today/days/weeks/months, future falls back to the date", () => {
+    const now = new Date("2026-08-07T12:00:00Z");
+    expect(relativeAge("2026-08-07", now)).toBe("today");
+    expect(relativeAge("2026-08-04", now)).toBe("3d");
+    expect(relativeAge("2026-07-17", now)).toBe("3w");
+    expect(relativeAge("2026-05-01", now)).toBe("3mo");
+    expect(relativeAge("2026-09-01", now)).toBe("Sep 1, 2026");
+    expect(relativeAge("garbage", now)).toBe("garbage");
+  });
+
+  it("sortPinnedFirst floats pinned groups, keeps order within halves", () => {
+    const gs = [{ company: "A" }, { company: "B" }, { company: "C" }];
+    expect(sortPinnedFirst(gs, new Set(["C"])).map((g) => g.company)).toEqual(["C", "A", "B"]);
+    expect(sortPinnedFirst(gs, new Set()).map((g) => g.company)).toEqual(["A", "B", "C"]);
+  });
+
   it("extracts sender display names", () => {
     expect(senderName("Acme via Greenhouse <no-reply@greenhouse.io>")).toBe("Acme via Greenhouse");
     expect(senderName("no-reply@acme.com")).toBe("no-reply@acme.com");

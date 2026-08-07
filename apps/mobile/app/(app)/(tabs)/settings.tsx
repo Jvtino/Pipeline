@@ -118,6 +118,11 @@ export default function SettingsScreen() {
           </Text>
         </Panel>
 
+        <Panel style={{ gap: space.sm }}>
+          <Label>Insights</Label>
+          <Button title="Your numbers" kind="ghost" onPress={() => router.push("/(app)/stats")} />
+        </Panel>
+
         <NotificationsPanel />
 
         <Panel style={{ gap: space.xs }}>

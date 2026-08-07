@@ -8,6 +8,7 @@ import { STATUSES, type Application } from "@pipeline/contracts";
 import { useReview } from "../../../src/api/queries";
 import { useResolveReview } from "../../../src/api/mutations";
 import { formatDate } from "../../../src/lib/format";
+import { toast } from "../../../src/ui/toast";
 import { Avatar, Button, EmptyState, Label, Panel, Screen, StatusDot, StatusPill } from "../../../src/ui/components";
 import { color, radius, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
 
@@ -29,7 +30,10 @@ export default function ReviewModal() {
     );
   }
 
-  const done = () => router.back();
+  const done = () => {
+    toast("Thanks — board updated");
+    router.back();
+  };
 
   return (
     <Screen>

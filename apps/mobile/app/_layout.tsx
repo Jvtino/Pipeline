@@ -14,6 +14,7 @@ import { AUTH_MODE } from "../src/auth/mode";
 import { ClerkAuth } from "../src/auth/clerk";
 import { DevAuthProvider } from "../src/auth/dev";
 import { configureNotificationHandling } from "../src/notifications";
+import { ToastHost } from "../src/ui/toast";
 import { useMeta } from "../src/api/queries";
 import { versionAtLeast } from "../src/lib/version";
 import { Centered, Screen } from "../src/ui/components";
@@ -69,6 +70,7 @@ export default function RootLayout() {
               contentStyle: { backgroundColor: color.bg },
             }}
           />
+          <ToastHost />
         </MetaGate>
       </AuthProvider>
     </PersistQueryClientProvider>

@@ -6,6 +6,7 @@ import { Stack, useRouter } from "expo-router";
 import { STATUSES, type Status } from "@pipeline/contracts";
 import { useAddPosition } from "../../src/api/mutations";
 import { hapticSelect } from "../../src/ui/feedback";
+import { toast } from "../../src/ui/toast";
 import { Button, Label, Panel, Screen, StatusDot } from "../../src/ui/components";
 import { color, radius, space, statusColor, statusLabel, text } from "../../src/ui/theme";
 
@@ -30,7 +31,12 @@ export default function AddPositionScreen() {
   const submit = () => {
     add.mutate(
       { company, role, status },
-      { onSuccess: () => router.back() },
+      {
+        onSuccess: () => {
+          toast(`${company.trim()} added to your board`);
+          router.back();
+        },
+      },
     );
   };
 

@@ -7,10 +7,12 @@ import { Redirect, Stack, useRouter } from "expo-router";
 import { useSession } from "../../src/auth/session";
 import { onNotificationTap, registerForPush } from "../../src/notifications";
 import { Loading, Screen } from "../../src/ui/components";
+import { Welcome, useWelcomed } from "../../src/ui/welcome";
 import { color } from "../../src/ui/theme";
 
 export default function AppLayout() {
   const session = useSession();
+  const welcome = useWelcomed();
   const router = useRouter();
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export default function AppLayout() {
       off();
     };
   }, [session.isSignedIn, router]);
-  if (!session.isLoaded) {
+  if (!session.isLoaded || !welcome.isLoaded) {
     return (
       <Screen>
         <Loading label="Starting Pipeline…" />
@@ -30,6 +32,7 @@ export default function AppLayout() {
     );
   }
   if (!session.isSignedIn) return <Redirect href="/(auth)/sign-in" />;
+  if (!welcome.welcomed) return <Welcome onDone={welcome.markWelcomed} />;
   return (
     <Stack
       screenOptions={{
@@ -45,6 +48,7 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="application/[threadId]" options={{ title: "" }} />
       <Stack.Screen name="add-position" options={{ presentation: "modal", title: "Add position" }} />
+      <Stack.Screen name="stats" options={{ title: "Your numbers" }} />
       <Stack.Screen name="review/[threadId]" options={{ presentation: "modal", title: "Review" }} />
     </Stack>
   );

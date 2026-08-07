@@ -47,7 +47,7 @@ export default function AlertsScreen() {
           ) : null
         }
         ListEmptyComponent={
-          <EmptyState title="Nothing needs review" hint="When an email is hard to classify, it will show up here for a quick confirmation." />
+          <EmptyState title="All caught up" hint="When an email is hard to classify, it lands here for a two-tap confirmation. Right now the board speaks for itself." />
         }
         renderItem={({ item }) => (
           <Pressable

@@ -33,7 +33,18 @@ function seed(): DemoState {
   const acme = apps.get("demo:acme");
   if (acme) {
     const soon = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-    acme.enrichment = { ...acme.enrichment, interviewDateTime: `${soon.toISOString().slice(0, 10)}T14:30:00Z` };
+    acme.enrichment = {
+      ...acme.enrichment,
+      interviewDateTime: `${soon.toISOString().slice(0, 10)}T14:30:00Z`,
+      location: "Berlin · hybrid",
+      recruiterName: "Maya Lindqvist",
+      recruiterTitle: "Talent Partner",
+      recruiterEmail: "maya@acmerobotics.example",
+    };
+  }
+  const stripe = apps.get("demo:stripe");
+  if (stripe) {
+    stripe.enrichment = { ...stripe.enrichment, compensation: "€95k–110k + equity", location: "Remote (EU)" };
   }
   const umbrella = apps.get("demo:umbrella");
   if (umbrella) {

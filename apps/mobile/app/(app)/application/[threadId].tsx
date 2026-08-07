@@ -1,16 +1,20 @@
 // Application detail: status (with the "move stage" picker — the user's word
-// outranks the classifier), timeline of recorded events, the ≤600-char
-// snippet, message previews with attachment metadata. The record itself comes
-// from the board cache — no extra fetch for the header.
-import { Pressable, ScrollView, Text, View } from "react-native";
+// outranks the classifier), a railed timeline of recorded events, facts the
+// classifier extracted from the mail (compensation/location/recruiter/
+// interview), the ≤600-char snippet, and message previews with attachment
+// metadata + open-in-mailbox links. The record itself comes from the board
+// cache — no extra fetch for the header.
+import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { STATUSES, type Application, type Board, type Status } from "@pipeline/contracts";
 import { useEvents, useMessages } from "../../../src/api/queries";
 import { useOverrideStatus } from "../../../src/api/mutations";
 import { formatDate, senderName } from "../../../src/lib/format";
-import { Avatar, EmptyState, Label, Panel, Screen, StatusDot, StatusPill } from "../../../src/ui/components";
+import { Avatar, EmptyState, FadeIn, Label, Panel, Screen, StatusDot, StatusPill } from "../../../src/ui/components";
 import { color, radius, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
+
+const open = (url: string) => void Linking.openURL(url).catch(() => {});
 
 export default function ApplicationDetail() {
   const { threadId: raw } = useLocalSearchParams<{ threadId: string }>();
@@ -84,31 +88,36 @@ export default function ApplicationDetail() {
           )}
         </Panel>
 
-        <Panel style={{ gap: space.sm }}>
-          <Label>Timeline</Label>
-          {events.data?.events.length ? (
-            events.data.events.map((e, i) => (
-              <View key={`${e.occurredAt}-${i}`} style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-                <StatusDot status={e.status as Status} />
+        <Panel style={{ gap: 0 }}>
+          <Label style={{ marginBottom: space.sm }}>Timeline</Label>
+          {(events.data?.events.length
+            ? events.data.events
+            : [{ status: app.status as string, occurredAt: app.lastActivity, source: "sync" }]
+          ).map((e, i, all) => (
+            <View key={`${e.occurredAt}-${i}`} style={{ flexDirection: "row", gap: space.md }}>
+              {/* the rail: dot + connecting line to the next event */}
+              <View style={{ alignItems: "center", width: 10 }}>
+                <View style={{ paddingTop: 5 }}>
+                  <StatusDot status={e.status as Status} size={9} />
+                </View>
+                {i < all.length - 1 ? <View style={{ flex: 1, width: 2, backgroundColor: color.border, marginVertical: 3 }} /> : null}
+              </View>
+              <View style={{ flex: 1, flexDirection: "row", paddingBottom: i < all.length - 1 ? space.lg : 0 }}>
                 <Text style={[text.base, { flex: 1 }]}>{statusLabel[e.status as Status] ?? e.status}</Text>
                 <Text style={text.faint}>
                   {formatDate(e.occurredAt)}
                   {e.source === "user" ? " · you" : ""}
                 </Text>
               </View>
-            ))
-          ) : (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-              <StatusDot status={app.status} />
-              <Text style={[text.base, { flex: 1 }]}>{statusLabel[app.status]}</Text>
-              <Text style={text.faint}>{formatDate(app.lastActivity)}</Text>
             </View>
-          )}
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: space.sm }}>
+          ))}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: space.md }}>
             <Text style={text.faint}>First seen {formatDate(app.firstSeen)}</Text>
             <Text style={text.faint}>Last activity {formatDate(app.lastActivity)}</Text>
           </View>
         </Panel>
+
+        <FactsPanel app={app} />
 
         {app.snippet ? (
           <Panel style={{ gap: space.sm }}>
@@ -136,6 +145,11 @@ export default function ApplicationDetail() {
                     {m.attachments.map((a) => a.name).join(" · ")}
                   </Text>
                 ) : null}
+                {m.webLink ? (
+                  <Pressable onPress={() => open(m.webLink!)} accessibilityRole="link" accessibilityLabel="Open in mailbox" hitSlop={6}>
+                    <Text style={[text.faint, { color: color.blue2 }]}>Open in mailbox ↗</Text>
+                  </Pressable>
+                ) : null}
               </View>
             ))}
           </Panel>
@@ -144,5 +158,49 @@ export default function ApplicationDetail() {
         {app.manual ? <Text style={[text.faint, { textAlign: "center" }]}>Added by hand — no email thread attached.</Text> : null}
       </ScrollView>
     </Screen>
+  );
+}
+
+/** Facts the classifier extracted from the thread — shown only when present,
+ *  each actionable where it can be (call, email, join link). */
+function FactsPanel({ app }: { app: Application }) {
+  const e = app.enrichment;
+  if (!e) return null;
+  const rows: { label: string; value: string; action?: () => void; hint?: string }[] = [];
+  if (e.interviewDateTime) {
+    rows.push({ label: "Interview", value: formatDate(e.interviewDateTime) + (/T(\d{2}:\d{2})/.exec(e.interviewDateTime)?.[1] ? ` at ${/T(\d{2}:\d{2})/.exec(e.interviewDateTime)![1]}` : "") });
+  }
+  if (e.interviewLink) rows.push({ label: "Join link", value: e.interviewLink, action: () => open(e.interviewLink!), hint: "opens the meeting" });
+  if (e.compensation) rows.push({ label: "Compensation", value: e.compensation });
+  if (e.location) rows.push({ label: "Location", value: e.location });
+  if (e.recruiterName) {
+    rows.push({
+      label: "Recruiter",
+      value: e.recruiterName + (e.recruiterTitle ? ` · ${e.recruiterTitle}` : ""),
+    });
+  }
+  if (e.recruiterEmail) rows.push({ label: "Email", value: e.recruiterEmail, action: () => open(`mailto:${e.recruiterEmail}`) });
+  if (e.recruiterPhone) rows.push({ label: "Phone", value: e.recruiterPhone, action: () => open(`tel:${e.recruiterPhone!.replace(/[^+\d]/g, "")}`) });
+  if (!rows.length) return null;
+  return (
+    <Panel style={{ gap: space.sm }}>
+      <Label>From your email</Label>
+      {rows.map((r) => (
+        <Pressable
+          key={r.label + r.value}
+          disabled={!r.action}
+          onPress={r.action}
+          accessibilityRole={r.action ? "link" : undefined}
+          accessibilityLabel={`${r.label}: ${r.value}`}
+          style={{ flexDirection: "row", gap: space.md }}
+        >
+          <Text style={[text.faint, { width: 108 }]}>{r.label}</Text>
+          <Text style={[text.dim, { flex: 1 }, r.action && { color: color.blue2 }]} numberOfLines={2}>
+            {r.value}
+          </Text>
+        </Pressable>
+      ))}
+      <Text style={text.faint}>Pulled automatically from the thread — verify anything important against the original email.</Text>
+    </Panel>
   );
 }

@@ -4,7 +4,7 @@
 // overrides, review resolution, no-op-safe timelines). Nothing here runs in a
 // real build — client.ts routes to it only when EXPO_PUBLIC_DEMO is set.
 import { threadsToApplications } from "@pipeline/classify";
-import { boardFromApplications, type Application, type Status } from "@pipeline/contracts";
+import { boardFromApplications, toCsv, type Application, type Status } from "@pipeline/contracts";
 import { DEMO_THREADS } from "./data";
 
 interface EventRow {
@@ -70,6 +70,12 @@ const db = (): DemoState => (state ??= seed());
 
 export function resetDemo(): void {
   state = null;
+}
+
+/** The demo build's export — the SAME builder the server route uses, so what
+ *  the demo hands you and what a real account downloads are identical. */
+export function demoCsv(): string {
+  return toCsv([...db().apps.values()].map(coalesced));
 }
 
 const coalesced = (a: Application & { overrideStatus?: Status }): Application => ({

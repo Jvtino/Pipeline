@@ -95,7 +95,14 @@ export async function syncAllUsers(deps: Omit<SyncDeps, "userId">): Promise<{ us
   const userIds = await listUserIdsWithConnections(deps.db);
   const summaries: SyncSummary[] = [];
   for (const userId of userIds) {
-    summaries.push(await syncAllConnections({ ...deps, userId }));
+    // Per-user isolation: syncAllConnections already guards each mailbox, but a
+    // failure OUTSIDE that loop (connection lookup, the demo-data cleanup) would
+    // otherwise abort every remaining user's sync for this tick.
+    try {
+      summaries.push(await syncAllConnections({ ...deps, userId }));
+    } catch (e) {
+      summaries.push({ connections: 0, results: [{ email: "", provider: "google", error: e instanceof Error ? e.message : String(e) }] });
+    }
   }
   return { users: userIds.length, summaries };
 }

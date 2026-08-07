@@ -766,6 +766,17 @@ export async function recordPushOnce(db: Database, p: { userId: string; kind: st
   return rows.length > 0;
 }
 
+/**
+ * Give a claim back when the send it guarded never left the building. The
+ * ledger is claim-FIRST (that's what makes send-once hold under concurrent
+ * ticks), so without this a transient gateway failure would leave the key
+ * claimed forever and the notification silently lost. Only ever called when
+ * nothing was delivered — releasing after a successful send would double-send.
+ */
+export async function releasePushClaim(db: Database, dedupeKey: string): Promise<void> {
+  await db.delete(pushLog).where(eq(pushLog.dedupeKey, dedupeKey));
+}
+
 // ── Account deletion ─────────────────────────────────────────────────────────
 
 /**

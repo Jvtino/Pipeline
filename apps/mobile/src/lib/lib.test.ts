@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 import type { Application, CompanyGroup } from "@pipeline/contracts";
 import { filterBoard, filterByStatus, countChips } from "./board";
 import { boardEvents, agenda, daysUntil, localToday, parseInterview, untilLabel, upcomingInterviews } from "./calendar";
-import { formatDate, relativeAge, senderName, monogram, hueFor } from "./format";
+import { formatDate, relativeAge, senderName, monogram, hueFor, exportFilename } from "./format";
 import { sortPinnedFirst } from "./pins";
 import { versionAtLeast } from "./version";
 
@@ -181,5 +181,12 @@ describe("versionAtLeast (meta gate)", () => {
   });
   it("malformed input can never lock users out", () => {
     expect(versionAtLeast("0.1.0", "not-a-version")).toBe(true);
+  });
+});
+
+describe("export filename", () => {
+  it("is dated from the LOCAL day, so exports don't collide or mislabel", () => {
+    expect(exportFilename(new Date(2026, 7, 7, 23, 30))).toBe("pipeline-2026-08-07.csv");
+    expect(exportFilename(new Date(2026, 0, 1, 0, 5))).toBe("pipeline-2026-01-01.csv"); // zero-padded
   });
 });

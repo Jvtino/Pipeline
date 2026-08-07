@@ -11,7 +11,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useConnections, useDevices, useMeta } from "../../../src/api/queries";
 import { useConnectToken, useDeleteAccount, useUpdateDevice } from "../../../src/api/mutations";
 import { currentPushToken } from "../../../src/notifications";
-import { hapticWarn } from "../../../src/ui/feedback";
+import { hapticSuccess, hapticWarn } from "../../../src/ui/feedback";
+import { shareApplicationsCsv } from "../../../src/lib/export";
 import { API_URL } from "../../../src/api/client";
 import { AUTH_MODE } from "../../../src/auth/mode";
 import { useSession } from "../../../src/auth/session";
@@ -41,6 +42,24 @@ export default function SettingsScreen() {
 
   const [connectError, setConnectError] = useState<string | null>(null);
   const [confirmText, setConfirmText] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  // Fetch the server's CSV, write it to the app's own cache, open the share
+  // sheet. Failure is shown in place — an export that quietly does nothing is
+  // worse than one that says why.
+  const exportData = async () => {
+    setExportError(null);
+    setExporting(true);
+    try {
+      await shareApplicationsCsv();
+      hapticSuccess();
+    } catch {
+      setExportError("Couldn't build your export — check your connection and try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const signOut = async () => {
     await session.signOut();
@@ -121,6 +140,25 @@ export default function SettingsScreen() {
         <Panel style={{ gap: space.sm }}>
           <Label>Insights</Label>
           <Button title="Your numbers" kind="ghost" onPress={() => router.push("/(app)/stats")} />
+        </Panel>
+
+        <Panel style={{ gap: space.sm }}>
+          <Label>Your data</Label>
+          <Text style={text.dim}>
+            A spreadsheet of every application Pipeline is tracking for you — company, role, stage, dates, and the facts it
+            pulled from your email.
+          </Text>
+          <Button
+            title={exporting ? "Preparing…" : "Export as a spreadsheet"}
+            kind="ghost"
+            onPress={() => void exportData()}
+            disabled={exporting}
+          />
+          {exportError ? (
+            <Text style={[text.faint, { color: statusColor.rejected }]}>{exportError}</Text>
+          ) : (
+            <Text style={text.faint}>Yours to keep — nothing leaves your phone unless you choose where to send it.</Text>
+          )}
         </Panel>
 
         <NotificationsPanel />

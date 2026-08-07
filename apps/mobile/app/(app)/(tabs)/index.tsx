@@ -11,7 +11,7 @@ import { countChips, filterBoard, filterByStatus } from "../../../src/lib/board"
 import { relativeAge } from "../../../src/lib/format";
 import { usePins, sortPinnedFirst } from "../../../src/lib/pins";
 import { hapticSelect } from "../../../src/ui/feedback";
-import { Avatar, BoardSkeleton, EmptyState, ErrorState, FadeIn, Panel, Screen, StatusDot } from "../../../src/ui/components";
+import { Avatar, BoardSkeleton, Button, EmptyState, ErrorState, FadeIn, Panel, Screen, StatusDot } from "../../../src/ui/components";
 import { color, radius, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
 
 export default function BoardScreen() {
@@ -125,14 +125,18 @@ export default function BoardScreen() {
           <RefreshControl refreshing={board.isRefetching} onRefresh={() => void board.refetch()} tintColor={color.blue} />
         }
         ListEmptyComponent={
-          <EmptyState
-            title={query || status ? "No matches" : "No applications yet"}
-            hint={
-              query || status
-                ? "Try a different search or clear the filter."
-                : "Connect a mailbox in Settings (coming next) or add positions on the web — the board fills itself."
-            }
-          />
+          query || status ? (
+            <EmptyState title="No matches" hint="Try a different search or clear the filter." />
+          ) : (
+            <View style={{ alignItems: "center", padding: space.xxl, gap: space.md }}>
+              <Text style={[text.title, { textAlign: "center" }]}>Your board is empty</Text>
+              <Text style={[text.dim, { textAlign: "center", marginBottom: space.sm }]}>
+                Connect a mailbox and it fills itself — or start by hand.
+              </Text>
+              <Button title="Connect a mailbox" onPress={() => router.push("/(app)/(tabs)/settings")} style={{ alignSelf: "stretch" }} />
+              <Button title="Add a position" kind="ghost" onPress={() => router.push("/(app)/add-position")} style={{ alignSelf: "stretch" }} />
+            </View>
+          )
         }
         renderItem={({ item }) => (
           <CompanyCard

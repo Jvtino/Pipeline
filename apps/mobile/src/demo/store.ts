@@ -32,7 +32,7 @@ function seed(): DemoState {
   // one upcoming interview (calendar) and one hesitant classification (review).
   const acme = apps.get("demo:acme");
   if (acme) {
-    const soon = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const soon = new Date(Date.now() + 26 * 60 * 60 * 1000); // ~tomorrow: inside the 48h "interview soon" window
     acme.enrichment = {
       ...acme.enrichment,
       interviewDateTime: `${soon.toISOString().slice(0, 10)}T14:30:00Z`,

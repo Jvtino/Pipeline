@@ -1,8 +1,9 @@
 # Pipeline — hosted app (Phase 2)
 
-The hosted product from `docs/Pipeline-Transformation-Plan.md`, in progress. Two apps over the shared packages (`@pipeline/contracts`, `@pipeline/classify`):
+The hosted product from `docs/Pipeline-Transformation-Plan.md`, in progress. Three apps over the shared packages (`@pipeline/contracts`, `@pipeline/classify`, `@pipeline/tokens`):
 
 - **`apps/api`** — Fastify (TypeScript). Reduces threads through `@pipeline/classify` into **derived application records** (company, role, status, dates, ≤600-char snippet — never raw email) and serves them, contract-validated, at `GET /api/applications`.
+- **`apps/mobile`** — Expo/React Native (iOS + Android), in the desktop app's dark theme via `@pipeline/tokens`. A full-journey client of the API — board, detail with extracted facts, review queue, calendar, stats, push notifications — that **never scans a mailbox or holds a mail token**. Ships a no-server demo mode (`EXPO_PUBLIC_DEMO=1`). See `apps/mobile/README.md` and `docs/MOBILE-PLAN.md`.
 - **`apps/web`** — React + Vite. A warm, light "leather-and-paper" workspace built on the API's
   derived records: a sidebar-and-header shell over Dashboard, Applications, Companies, Contacts,
   Calendar, Tasks, Statistics, Documents, Templates and Settings, plus an application detail drawer,

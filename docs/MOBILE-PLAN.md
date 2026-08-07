@@ -1,5 +1,10 @@
 # Pipeline: Desktop App → Public Mobile App (iOS + Android)
 
+> **Status (2026-08-07):** Phases 1–5 are built, reviewed, and merged (#30); a
+> premium refinement pass (motion, board/detail depth, welcome, stats, alerts
+> badge, two independent bug-hunt reviews) is in PR #31. What remains is
+> owner-side only — see `docs/LAUNCH-CHECKLIST.md` for the sign-ups and 💰 gates.
+
 ## Context
 
 Pipeline turns job-application emails into a board showing where every application stands. Today it exists as an Electron desktop app (`index.html` + `main.js`, dark theme), a frozen Python local build, and a newer hosted web product (`apps/web` React + `apps/api` Fastify + Postgres, pnpm monorepo). The owner wants a **real, downloadable mobile app on both the Apple App Store and Google Play, usable by the general public** — not a PWA.

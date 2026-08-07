@@ -4,32 +4,52 @@
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import { Redirect, Stack, useRouter } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "../../src/auth/session";
-import { onNotificationTap, registerForPush } from "../../src/notifications";
-import { Loading, Screen } from "../../src/ui/components";
+import { consumeColdStartTap, onNotificationTap, registerForPush } from "../../src/notifications";
+import { Booting, Screen } from "../../src/ui/components";
+import { Welcome, useWelcomed } from "../../src/ui/welcome";
 import { color } from "../../src/ui/theme";
 
 export default function AppLayout() {
   const session = useSession();
+  const welcome = useWelcomed();
   const router = useRouter();
+  const qc = useQueryClient();
 
   useEffect(() => {
-    if (!session.isSignedIn) return;
-    const t = setTimeout(() => void registerForPush(), 1500); // let the board render first
-    const off = onNotificationTap(({ threadId }) => router.push(`/(app)/application/${encodeURIComponent(threadId)}`));
+    // Register only once the user is PAST the welcome screen — the OS
+    // permission dialog must never interrupt the three promises they're
+    // reading on a fresh install (and iOS only asks once, ever).
+    if (!session.isSignedIn || !welcome.welcomed) return;
+    const toDetail = ({ threadId }: { threadId: string }) => router.push(`/(app)/application/${encodeURIComponent(threadId)}`);
+    const t = setTimeout(
+      () =>
+        void registerForPush().then((registered) => {
+          // surface the Settings notification toggles without an app restart
+          if (registered) void qc.invalidateQueries({ queryKey: ["devices"] });
+        }),
+      1500, // let the board render first
+    );
+    const off = onNotificationTap(toDetail);
+    // A push tapped while the app was KILLED launched us — its event predates
+    // any listener, so it's only visible via the last-response API. Now is the
+    // first moment routing is safe (signed in, past the welcome gate).
+    consumeColdStartTap(toDetail);
     return () => {
       clearTimeout(t);
       off();
     };
-  }, [session.isSignedIn, router]);
-  if (!session.isLoaded) {
+  }, [session.isSignedIn, welcome.welcomed, router, qc]);
+  if (!session.isLoaded || !welcome.isLoaded) {
     return (
       <Screen>
-        <Loading label="Starting Pipeline…" />
+        <Booting />
       </Screen>
     );
   }
   if (!session.isSignedIn) return <Redirect href="/(auth)/sign-in" />;
+  if (!welcome.welcomed) return <Welcome onDone={welcome.markWelcomed} />;
   return (
     <Stack
       screenOptions={{
@@ -45,6 +65,7 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="application/[threadId]" options={{ title: "" }} />
       <Stack.Screen name="add-position" options={{ presentation: "modal", title: "Add position" }} />
+      <Stack.Screen name="stats" options={{ title: "Your numbers" }} />
       <Stack.Screen name="review/[threadId]" options={{ presentation: "modal", title: "Review" }} />
     </Stack>
   );

@@ -1,7 +1,7 @@
 // Unauthenticated group: anyone already signed in skips straight to the app.
 import { Redirect, Stack } from "expo-router";
 import { useSession } from "../../src/auth/session";
-import { Loading, Screen } from "../../src/ui/components";
+import { Booting, Screen } from "../../src/ui/components";
 import { color } from "../../src/ui/theme";
 
 export default function AuthLayout() {
@@ -9,7 +9,7 @@ export default function AuthLayout() {
   if (!session.isLoaded) {
     return (
       <Screen>
-        <Loading label="Starting Pipeline…" />
+        <Booting />
       </Screen>
     );
   }

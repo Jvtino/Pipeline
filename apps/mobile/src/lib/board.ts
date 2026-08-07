@@ -32,8 +32,10 @@ export function filterByStatus(groups: CompanyGroup[], status: Status | null): C
   return out;
 }
 
-/** The count chips in board order, non-zero first, total last. */
-export function countChips(counts: Board["counts"]): { status: Status; count: number }[] {
+/** The count chips in board order, zeros dropped — EXCEPT the active filter,
+ *  which must stay visible (and tappable to clear) even when its count falls
+ *  to zero, or the board shows a filtered-empty state with no visible cause. */
+export function countChips(counts: Board["counts"], active?: Status | null): { status: Status; count: number }[] {
   const order: Status[] = ["applied", "interview", "offer", "rejected", "cancelled"];
-  return order.map((status) => ({ status, count: counts[status] })).filter((c) => c.count > 0);
+  return order.map((status) => ({ status, count: counts[status] })).filter((c) => c.count > 0 || c.status === active);
 }

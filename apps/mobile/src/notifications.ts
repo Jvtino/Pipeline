@@ -40,14 +40,16 @@ export function configureNotificationHandling(): void {
 /**
  * Ask permission (the caller times this for AFTER the first board render —
  * never at cold start) and register the token server-side. Safe to call
- * repeatedly; re-registration just bumps the row.
+ * repeatedly; re-registration just bumps the row. Returns true when a device
+ * row was (re)registered — the caller invalidates the devices query so the
+ * Settings toggles appear without an app restart.
  */
-export async function registerForPush(): Promise<void> {
-  if (DEMO || Platform.OS === "web" || !Device.isDevice) return; // simulator/web: pull-only
+export async function registerForPush(): Promise<boolean> {
+  if (DEMO || Platform.OS === "web" || !Device.isDevice) return false; // simulator/web: pull-only
   try {
     const perm = await Notifications.getPermissionsAsync();
     const granted = perm.granted ? perm : await Notifications.requestPermissionsAsync();
-    if (!granted.granted) return;
+    if (!granted.granted) return false;
 
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("status-changes", {
@@ -67,9 +69,11 @@ export async function registerForPush(): Promise<void> {
       method: "POST",
       body: JSON.stringify({ expoPushToken: token, platform: Platform.OS, deviceName: Device.deviceName ?? undefined }),
     });
+    return true;
   } catch {
     // No EAS project yet, or a transient failure: the app works pull-only and
     // the next launch retries. Registration is never worth an error screen.
+    return false;
   }
 }
 
@@ -91,4 +95,23 @@ export function onNotificationTap(handle: (t: NotificationTarget) => void): () =
     if (target) handle(target);
   });
   return () => sub.remove();
+}
+
+let coldStartTapConsumed = false;
+
+/**
+ * The tap that LAUNCHED the app: when a push is tapped while the app is killed,
+ * the response event fires before any JS listener exists — it's only reachable
+ * via the last-response API. Consumed at most once per process, by the shell
+ * layout once routing is safe (signed in, past the welcome gate).
+ */
+export function consumeColdStartTap(handle: (t: NotificationTarget) => void): void {
+  if (DEMO || Platform.OS === "web" || coldStartTapConsumed) return;
+  coldStartTapConsumed = true;
+  Notifications.getLastNotificationResponseAsync()
+    .then((response) => {
+      const target = response ? targetFromResponse(response) : null;
+      if (target) handle(target);
+    })
+    .catch(() => {});
 }

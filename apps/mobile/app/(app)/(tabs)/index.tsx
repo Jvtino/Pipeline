@@ -1,6 +1,6 @@
 // The board: server-grouped company cards, search, status-chip filtering,
-// pull-to-refresh. Read-only in this phase — status changes and manual adds
-// arrive with the actions phase. Offline shows the persisted cache + a banner.
+// pull-to-refresh, long-press to pin a company to the top (device-local).
+// Offline shows the persisted cache + a banner.
 import { useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
@@ -8,22 +8,33 @@ import type { CompanyGroup, Status } from "@pipeline/contracts";
 import { useBoard } from "../../../src/api/queries";
 import { AuthError } from "../../../src/api/client";
 import { countChips, filterBoard, filterByStatus } from "../../../src/lib/board";
-import { formatDate } from "../../../src/lib/format";
-import { Avatar, EmptyState, ErrorState, Loading, Panel, Screen, StatusDot } from "../../../src/ui/components";
+import { relativeAge } from "../../../src/lib/format";
+import { usePins, sortPinnedFirst } from "../../../src/lib/pins";
+import { hapticSelect } from "../../../src/ui/feedback";
+import { Avatar, BoardSkeleton, Button, EmptyState, ErrorState, FadeIn, Panel, Screen, StatusDot } from "../../../src/ui/components";
 import { color, radius, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
 
 export default function BoardScreen() {
   const board = useBoard();
   const router = useRouter();
+  const { pinned, isLoaded: pinsLoaded, toggle } = usePins();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<Status | null>(null);
 
   const groups = useMemo(
-    () => (board.data ? filterByStatus(filterBoard(board.data.groups, query), status) : []),
-    [board.data, query, status],
+    () => (board.data ? sortPinnedFirst(filterByStatus(filterBoard(board.data.groups, query), status), pinned) : []),
+    [board.data, query, status, pinned],
   );
 
-  if (board.isPending && !board.data) return <Loading />;
+  // Hold for pins too (they hydrate in milliseconds) — otherwise pinned cards
+  // visibly leap to the top of an already-painted list on cold start.
+  if ((board.isPending && !board.data) || !pinsLoaded) {
+    return (
+      <Screen>
+        <BoardSkeleton />
+      </Screen>
+    );
+  }
   if (board.isError && !board.data) {
     const msg = board.error instanceof AuthError ? "Your session ended — sign in again." : "Couldn't load your board.";
     return (
@@ -40,29 +51,43 @@ export default function BoardScreen() {
     <Screen>
       {offline ? (
         <View style={{ backgroundColor: color.blueDeep, paddingVertical: space.xs, alignItems: "center" }}>
-          <Text style={text.faint}>Offline — showing your last sync</Text>
+          <Text style={text.faint}>Can't reach the server — showing your last update</Text>
         </View>
       ) : null}
-      <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: space.md }}>
-        <TextInput
-          style={{
-            backgroundColor: color.elev,
-            borderColor: color.border,
-            borderWidth: 1,
-            borderRadius: radius.sm,
-            paddingHorizontal: space.lg,
-            paddingVertical: space.sm + 2,
-            color: color.text,
-            fontSize: 15,
-          }}
-          placeholder="Search company or role"
-          placeholderTextColor={color.textFaint}
-          value={query}
-          onChangeText={setQuery}
-          autoCapitalize="none"
-        />
+      <FadeIn style={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: space.md }}>
+        <View>
+          <TextInput
+            style={{
+              backgroundColor: color.elev,
+              borderColor: color.border,
+              borderWidth: 1,
+              borderRadius: radius.sm,
+              paddingHorizontal: space.lg,
+              paddingRight: 40,
+              paddingVertical: space.sm + 2,
+              color: color.text,
+              fontSize: 15,
+            }}
+            placeholder="Search company or role"
+            placeholderTextColor={color.textFaint}
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+          />
+          {query ? (
+            <Pressable
+              onPress={() => setQuery("")}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+              hitSlop={10}
+              style={{ position: "absolute", right: 10, top: 0, bottom: 0, justifyContent: "center" }}
+            >
+              <Text style={[text.dim, { fontSize: 16 }]}>✕</Text>
+            </Pressable>
+          ) : null}
+        </View>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
-          {countChips(counts).map((chip) => {
+          {countChips(counts, status).map((chip) => {
             const active = status === chip.status;
             return (
               <Pressable
@@ -71,6 +96,7 @@ export default function BoardScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Filter: ${statusLabel[chip.status]}, ${chip.count}`}
                 accessibilityState={{ selected: active }}
+                hitSlop={6}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -91,25 +117,41 @@ export default function BoardScreen() {
             );
           })}
         </View>
-      </View>
+      </FadeIn>
       <FlatList
         data={groups}
-        keyExtractor={(g) => g.company + g.domain}
-        contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: space.xxl }}
+        // Platform-fallback groups ("Myworkday", …) all share the ATS name —
+        // the contract keeps them one-per-thread, so the thread is the key.
+        keyExtractor={(g) => (g.applications[0]?.platformFallback ? `ats:${g.applications[0].threadId}` : g.company + g.domain)}
+        contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: space.xxl, flexGrow: 1 }}
         refreshControl={
           <RefreshControl refreshing={board.isRefetching} onRefresh={() => void board.refetch()} tintColor={color.blue} />
         }
         ListEmptyComponent={
-          <EmptyState
-            title={query || status ? "No matches" : "No applications yet"}
-            hint={
-              query || status
-                ? "Try a different search or clear the filter."
-                : "Connect a mailbox in Settings (coming next) or add positions on the web — the board fills itself."
-            }
-          />
+          query || status ? (
+            <EmptyState title="No matches" hint="Try a different search or clear the filter." />
+          ) : (
+            <View style={{ alignItems: "center", padding: space.xxl, gap: space.md }}>
+              <Text style={[text.title, { textAlign: "center" }]}>Your board is empty</Text>
+              <Text style={[text.dim, { textAlign: "center", marginBottom: space.sm }]}>
+                Connect a mailbox and it fills itself — or start by hand.
+              </Text>
+              <Button title="Connect a mailbox" onPress={() => router.push("/(app)/(tabs)/settings")} style={{ alignSelf: "stretch" }} />
+              <Button title="Add a position" kind="ghost" onPress={() => router.push("/(app)/add-position")} style={{ alignSelf: "stretch" }} />
+            </View>
+          )
         }
-        renderItem={({ item }) => <CompanyCard group={item} onOpen={(id) => router.push(`/(app)/application/${encodeURIComponent(id)}`)} />}
+        renderItem={({ item }) => (
+          <CompanyCard
+            group={item}
+            isPinned={pinned.has(item.company)}
+            onTogglePin={(company) => {
+              hapticSelect();
+              toggle(company);
+            }}
+            onOpen={(id) => router.push(`/(app)/application/${encodeURIComponent(id)}`)}
+          />
+        )}
       />
       <Pressable
         onPress={() => router.push("/(app)/add-position")}
@@ -136,20 +178,47 @@ export default function BoardScreen() {
   );
 }
 
-function CompanyCard({ group, onOpen }: { group: CompanyGroup; onOpen: (threadId: string) => void }) {
+function CompanyCard({
+  group,
+  isPinned,
+  onTogglePin,
+  onOpen,
+}: {
+  group: CompanyGroup;
+  isPinned: boolean;
+  onTogglePin: (company: string) => void;
+  onOpen: (threadId: string) => void;
+}) {
+  // one dot per distinct status, board order — the company's story at a glance
+  const distinct = [...new Set(group.applications.map((a) => a.status))];
+  // A fallback group's "company" is a shared ATS name — pinning is keyed by
+  // company, so it would pin every record relayed through that platform.
+  const pinnable = !group.applications[0]?.platformFallback;
   return (
-    <Panel style={{ padding: 0, overflow: "hidden" }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md, padding: space.lg }}>
+    <Panel style={[{ padding: 0, overflow: "hidden" }, isPinned && { borderColor: color.border2 }]}>
+      <Pressable
+        onLongPress={pinnable ? () => onTogglePin(group.company) : undefined}
+        delayLongPress={350}
+        accessibilityRole="button"
+        accessibilityLabel={pinnable ? `${group.company}. Long press to ${isPinned ? "unpin" : "pin"}.` : group.company}
+        style={{ flexDirection: "row", alignItems: "center", gap: space.md, padding: space.lg }}
+      >
         <Avatar company={group.company} />
         <View style={{ flex: 1 }}>
           <Text style={[text.base, { fontWeight: "600" }]} numberOfLines={1}>
+            {isPinned ? "⤒ " : ""}
             {group.company}
           </Text>
           <Text style={text.faint} numberOfLines={1}>
             {group.applications.length === 1 ? "1 position" : `${group.applications.length} positions`}
           </Text>
         </View>
-      </View>
+        <View style={{ flexDirection: "row", gap: space.xs }}>
+          {distinct.map((s) => (
+            <StatusDot key={s} status={s} size={7} />
+          ))}
+        </View>
+      </Pressable>
       {group.applications.map((a) => (
         <Pressable
           key={a.threadId}
@@ -175,7 +244,7 @@ function CompanyCard({ group, onOpen }: { group: CompanyGroup; onOpen: (threadId
               {a.role}
             </Text>
             <Text style={text.faint}>
-              {statusLabel[a.status]} · {formatDate(a.lastActivity)}
+              {statusLabel[a.status]} · {relativeAge(a.lastActivity)}
             </Text>
           </View>
           <Text style={[text.faint, { fontSize: 18 }]}>›</Text>

@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { applicationSchema, boardSchema, type Application, type Board, type Status } from "@pipeline/contracts";
 import { request } from "./client";
+import { hapticError, hapticSuccess } from "../ui/feedback";
 
 const applicationEnvelope = z.object({ application: applicationSchema });
 const reviewResolveEnvelope = z.object({ ok: z.boolean(), application: applicationSchema.nullable() });
@@ -46,8 +47,10 @@ export function useOverrideStatus() {
       if (before) qc.setQueryData(["board"], patchBoard(before, threadId, (a) => ({ ...a, status })));
       return { before };
     },
+    onSuccess: () => hapticSuccess(),
     onError: (_err, _vars, ctx) => {
       if (ctx?.before) qc.setQueryData(["board"], ctx.before); // rollback — server said no
+      hapticError();
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ["board"] });
@@ -62,7 +65,11 @@ export function useAddPosition() {
   return useMutation({
     mutationFn: (input: { company: string; role: string; status?: Status; appliedOn?: string }) =>
       request("/api/applications", applicationEnvelope, { method: "POST", body: JSON.stringify(input) }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["board"] }),
+    onSuccess: () => {
+      hapticSuccess();
+      void qc.invalidateQueries({ queryKey: ["board"] });
+    },
+    onError: () => hapticError(),
   });
 }
 
@@ -76,10 +83,12 @@ export function useResolveReview() {
         body: JSON.stringify({ action, status }),
       }),
     onSuccess: () => {
+      hapticSuccess();
       void qc.invalidateQueries({ queryKey: ["review"] });
       void qc.invalidateQueries({ queryKey: ["board"] });
       void qc.invalidateQueries({ queryKey: ["events"] });
     },
+    onError: () => hapticError(),
   });
 }
 
@@ -100,13 +109,29 @@ const deviceEnvelope = z.object({
   }),
 });
 
-/** Per-device notification preferences (Settings toggles). */
+/** Per-device notification preferences (Settings toggles). Optimistic — a
+ *  native Switch that animates on, snaps back, then flips again after the
+ *  round-trip reads as broken on any slow connection. */
 export function useUpdateDevice() {
   const qc = useQueryClient();
+  type Devices = { devices: { id: string; notifyStatusChanges: boolean; notifyReminders: boolean }[] };
   return useMutation({
     mutationFn: ({ id, ...prefs }: { id: string; notifyStatusChanges?: boolean; notifyReminders?: boolean }) =>
       request(`/api/devices/${encodeURIComponent(id)}`, deviceEnvelope, { method: "PATCH", body: JSON.stringify(prefs) }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["devices"] }),
+    onMutate: async ({ id, ...prefs }) => {
+      await qc.cancelQueries({ queryKey: ["devices"] });
+      const before = qc.getQueryData<Devices>(["devices"]);
+      if (before) {
+        qc.setQueryData<Devices>(["devices"], {
+          devices: before.devices.map((d) => (d.id === id ? { ...d, ...prefs } : d)),
+        });
+      }
+      return { before };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.before) qc.setQueryData(["devices"], ctx.before);
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["devices"] }),
   });
 }
 

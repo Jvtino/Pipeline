@@ -9,7 +9,8 @@ import { Link, useRouter } from "expo-router";
 import { useSignIn } from "@clerk/clerk-expo";
 import { AUTH_MODE, DEMO } from "../../src/auth/mode";
 import { useDevSession } from "../../src/auth/dev";
-import { Button, Panel, Screen } from "../../src/ui/components";
+import { Button, FadeIn, Panel, Screen } from "../../src/ui/components";
+import { LogoMark } from "../../src/ui/logo";
 import { color, space, text } from "../../src/ui/theme";
 
 const field = {
@@ -30,9 +31,14 @@ function Shell({ children, subtitle }: { children: React.ReactNode; subtitle: st
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1, justifyContent: "center", padding: space.xl }}
       >
-        <Text style={[text.hero, { textAlign: "center" }]}>Pipeline</Text>
-        <Text style={[text.dim, { textAlign: "center", marginTop: space.sm, marginBottom: space.xxl }]}>{subtitle}</Text>
-        <Panel style={{ gap: space.md }}>{children}</Panel>
+        <FadeIn style={{ alignItems: "center", marginBottom: space.xxl }}>
+          <LogoMark size={72} />
+          <Text style={[text.hero, { textAlign: "center", marginTop: space.lg }]}>Pipeline</Text>
+          <Text style={[text.dim, { textAlign: "center", marginTop: space.xs }]}>{subtitle}</Text>
+        </FadeIn>
+        <FadeIn delay={140}>
+          <Panel style={{ gap: space.md }}>{children}</Panel>
+        </FadeIn>
       </KeyboardAvoidingView>
     </Screen>
   );

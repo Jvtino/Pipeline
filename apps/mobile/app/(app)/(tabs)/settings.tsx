@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useConnections, useDevices, useMeta } from "../../../src/api/queries";
 import { useConnectToken, useDeleteAccount, useUpdateDevice } from "../../../src/api/mutations";
 import { currentPushToken } from "../../../src/notifications";
+import { hapticWarn } from "../../../src/ui/feedback";
 import { API_URL } from "../../../src/api/client";
 import { AUTH_MODE } from "../../../src/auth/mode";
 import { useSession } from "../../../src/auth/session";
@@ -117,6 +118,11 @@ export default function SettingsScreen() {
           </Text>
         </Panel>
 
+        <Panel style={{ gap: space.sm }}>
+          <Label>Insights</Label>
+          <Button title="Your numbers" kind="ghost" onPress={() => router.push("/(app)/stats")} />
+        </Panel>
+
         <NotificationsPanel />
 
         <Panel style={{ gap: space.xs }}>
@@ -138,7 +144,11 @@ export default function SettingsScreen() {
             placeholderTextColor={color.textFaint}
             autoCapitalize="none"
             value={confirmText}
-            onChangeText={setConfirmText}
+            onChangeText={(v) => {
+              // crossing into armed territory gets a physical warning
+              if (v.trim().toLowerCase() === "delete" && confirmText.trim().toLowerCase() !== "delete") hapticWarn();
+              setConfirmText(v);
+            }}
           />
           {deleteAccount.isError ? (
             <Text style={[text.faint, { color: statusColor.rejected }]}>Couldn't delete — check your connection and try again.</Text>
@@ -212,7 +222,16 @@ function ToggleRow({
         <Text style={text.base}>{label}</Text>
         <Text style={text.faint}>{hint}</Text>
       </View>
-      <Switch value={value} disabled={busy} onValueChange={onChange} trackColor={{ true: color.blue }} thumbColor={color.white} />
+      <Switch
+        value={value}
+        disabled={busy}
+        onValueChange={onChange}
+        // the label/hint are sibling Texts — screen readers need it on the control itself
+        accessibilityLabel={label}
+        accessibilityHint={hint}
+        trackColor={{ true: color.blue }}
+        thumbColor={color.white}
+      />
     </View>
   );
 }

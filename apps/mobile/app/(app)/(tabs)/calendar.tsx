@@ -3,9 +3,9 @@
 import { SectionList, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useBoard } from "../../../src/api/queries";
-import { agenda, boardEvents, upcomingInterviews, type CalendarEvent } from "../../../src/lib/calendar";
+import { agenda, boardEvents, localToday, untilLabel, upcomingInterviews, type CalendarEvent } from "../../../src/lib/calendar";
 import { formatDate } from "../../../src/lib/format";
-import { EmptyState, ErrorState, Loading, Panel, Screen, StatusDot } from "../../../src/ui/components";
+import { EmptyState, ErrorState, ListSkeleton, Panel, Screen, StatusDot } from "../../../src/ui/components";
 import { color, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
 import { Pressable } from "react-native";
 
@@ -13,7 +13,13 @@ export default function CalendarScreen() {
   const board = useBoard();
   const router = useRouter();
 
-  if (board.isPending && !board.data) return <Loading />;
+  if (board.isPending && !board.data) {
+    return (
+      <Screen>
+        <ListSkeleton />
+      </Screen>
+    );
+  }
   if (board.isError && !board.data) {
     return (
       <Screen>
@@ -24,7 +30,7 @@ export default function CalendarScreen() {
 
   const apps = board.data!.groups.flatMap((g) => g.applications);
   const events = boardEvents(apps);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   const upcoming = upcomingInterviews(events, today);
   const days = agenda(events.filter((e) => !(e.kind === "interview" && e.date >= today)));
 
@@ -53,13 +59,16 @@ export default function CalendarScreen() {
             {section.title}
           </Text>
         )}
-        renderItem={({ item }) => <EventRow event={item} onOpen={(id) => router.push(`/(app)/application/${encodeURIComponent(id)}`)} />}
+        renderItem={({ item }) => (
+          <EventRow event={item} today={today} onOpen={(id) => router.push(`/(app)/application/${encodeURIComponent(id)}`)} />
+        )}
       />
     </Screen>
   );
 }
 
-function EventRow({ event, onOpen }: { event: CalendarEvent; onOpen: (threadId: string) => void }) {
+function EventRow({ event, today, onOpen }: { event: CalendarEvent; today: string; onOpen: (threadId: string) => void }) {
+  const upcoming = event.kind === "interview" && event.date >= today;
   return (
     <Pressable
       onPress={() => onOpen(event.threadId)}
@@ -81,7 +90,9 @@ function EventRow({ event, onOpen }: { event: CalendarEvent; onOpen: (threadId: 
             </Text>
             <Text style={text.faint}>
               {event.kind === "interview"
-                ? `Interview${event.time ? ` at ${event.time}` : ""} · ${formatDate(event.date)}`
+                ? upcoming
+                  ? `Interview ${untilLabel(event.date, today)}${event.time ? ` · ${event.time}` : ""}`
+                  : `Interview${event.time ? ` at ${event.time}` : ""} · ${formatDate(event.date)}`
                 : statusLabel[event.status]}
             </Text>
           </View>

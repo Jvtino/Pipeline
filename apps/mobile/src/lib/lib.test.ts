@@ -3,8 +3,9 @@
 import { describe, it, expect } from "vitest";
 import type { Application, CompanyGroup } from "@pipeline/contracts";
 import { filterBoard, filterByStatus, countChips } from "./board";
-import { boardEvents, agenda, upcomingInterviews } from "./calendar";
-import { formatDate, senderName, monogram, hueFor } from "./format";
+import { boardEvents, agenda, daysUntil, localToday, parseInterview, untilLabel, upcomingInterviews } from "./calendar";
+import { formatDate, relativeAge, senderName, monogram, hueFor } from "./format";
+import { sortPinnedFirst } from "./pins";
 import { versionAtLeast } from "./version";
 
 const app = (role: string, status: Application["status"] = "applied"): Application => ({
@@ -54,6 +55,14 @@ describe("filterByStatus", () => {
 });
 
 describe("countChips", () => {
+  it("keeps the active filter's chip visible even at zero count", () => {
+    // filter by Offer, then the last offer moves away: the chip must survive
+    // (it is the only control that shows — and clears — the active filter)
+    const chips = countChips({ applied: 3, interview: 1, offer: 0, rejected: 2, cancelled: 0, total: 6 }, "offer");
+    expect(chips.map((c) => c.status)).toEqual(["applied", "interview", "offer", "rejected"]);
+    expect(chips.find((c) => c.status === "offer")).toEqual({ status: "offer", count: 0 });
+  });
+
   it("orders like the board and drops zeros", () => {
     const chips = countChips({ applied: 3, interview: 1, offer: 0, rejected: 2, cancelled: 0, total: 6 });
     expect(chips).toEqual([
@@ -70,6 +79,22 @@ describe("format", () => {
     expect(formatDate("2026-11-23T10:00:00Z")).toBe("Nov 23, 2026");
     expect(formatDate("soon")).toBe("soon");
   });
+  it("relative ages: today/days/weeks/months, future falls back to the date", () => {
+    const now = new Date("2026-08-07T12:00:00Z");
+    expect(relativeAge("2026-08-07", now)).toBe("today");
+    expect(relativeAge("2026-08-04", now)).toBe("3d");
+    expect(relativeAge("2026-07-17", now)).toBe("3w");
+    expect(relativeAge("2026-05-01", now)).toBe("3mo");
+    expect(relativeAge("2026-09-01", now)).toBe("Sep 1, 2026");
+    expect(relativeAge("garbage", now)).toBe("garbage");
+  });
+
+  it("sortPinnedFirst floats pinned groups, keeps order within halves", () => {
+    const gs = [{ company: "A" }, { company: "B" }, { company: "C" }];
+    expect(sortPinnedFirst(gs, new Set(["C"])).map((g) => g.company)).toEqual(["C", "A", "B"]);
+    expect(sortPinnedFirst(gs, new Set()).map((g) => g.company)).toEqual(["A", "B", "C"]);
+  });
+
   it("extracts sender display names", () => {
     expect(senderName("Acme via Greenhouse <no-reply@greenhouse.io>")).toBe("Acme via Greenhouse");
     expect(senderName("no-reply@acme.com")).toBe("no-reply@acme.com");
@@ -102,6 +127,41 @@ describe("calendar derivation", () => {
     expect(days[0]!.date).toBe("2026-08-10");
     expect(days[0]!.events[0]!.kind).toBe("interview");
     expect(days.at(-1)!.date).toBe("2026-02-01");
+  });
+
+  it("parseInterview: machine shapes parse, prose stays raw (null)", () => {
+    // the extractor emits whatever the email wrote — all of these are real shapes
+    expect(parseInterview("2026-06-12T14:00:00Z")).toEqual({ day: "2026-06-12", time: "14:00" });
+    expect(parseInterview("2026-06-12T14:00")).toEqual({ day: "2026-06-12", time: "14:00" });
+    expect(parseInterview("2026-06-12 14:00")).toEqual({ day: "2026-06-12", time: "14:00" }); // Hermes can't Date.parse this — regex must
+    expect(parseInterview("2026-06-12")).toEqual({ day: "2026-06-12", time: undefined });
+    expect(parseInterview("Tuesday, June 12 at 2:30 PM ET")).toBeNull();
+    expect(parseInterview("")).toBeNull();
+  });
+
+  it("daysUntil: signed calendar-day distance, null on garbage", () => {
+    expect(daysUntil("2026-08-08", "2026-08-07")).toBe(1);
+    expect(daysUntil("2026-08-07", "2026-08-07")).toBe(0);
+    expect(daysUntil("2026-08-05", "2026-08-07")).toBe(-2);
+    expect(daysUntil("garbage", "2026-08-07")).toBeNull();
+  });
+
+  it("untilLabel: today/tomorrow/in N days", () => {
+    expect(untilLabel("2026-08-07", "2026-08-07")).toBe("today");
+    expect(untilLabel("2026-08-08", "2026-08-07")).toBe("tomorrow");
+    expect(untilLabel("2026-08-12", "2026-08-07")).toBe("in 5 days");
+    expect(untilLabel("garbage", "2026-08-07")).toBe("today"); // NaN-safe
+  });
+
+  it("localToday: the LOCAL calendar day, not the UTC one", () => {
+    // 11:30 pm local on Aug 7 — for anyone west of UTC, toISOString() would
+    // already say Aug 8. localToday must stay on the wall-clock day.
+    const lateEvening = new Date(2026, 7, 7, 23, 30);
+    expect(localToday(lateEvening)).toBe("2026-08-07");
+    expect(localToday(new Date(2026, 0, 1, 0, 0))).toBe("2026-01-01"); // zero-pads
+    if (lateEvening.getTimezoneOffset() > 0) {
+      expect(lateEvening.toISOString().slice(0, 10)).not.toBe(localToday(lateEvening));
+    }
   });
 
   it("upcoming interviews: on/after today, soonest first; skips dateless enrichment", () => {

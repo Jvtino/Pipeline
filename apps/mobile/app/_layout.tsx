@@ -2,11 +2,11 @@
 // AsyncStorage so the last board survives offline), the desktop-dark chrome,
 // and the /api/meta forced-upgrade gate.
 import type { ReactNode } from "react";
-import { Text } from "react-native";
+import { AppState, Platform, Text } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import Constants from "expo-constants";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, focusManager } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -14,6 +14,7 @@ import { AUTH_MODE } from "../src/auth/mode";
 import { ClerkAuth } from "../src/auth/clerk";
 import { DevAuthProvider } from "../src/auth/dev";
 import { configureNotificationHandling } from "../src/notifications";
+import { ToastHost } from "../src/ui/toast";
 import { useMeta } from "../src/api/queries";
 import { versionAtLeast } from "../src/lib/version";
 import { Centered, Screen } from "../src/ui/components";
@@ -30,6 +31,16 @@ const queryClient = new QueryClient({
 });
 
 const persister = createAsyncStoragePersister({ storage: AsyncStorage, key: "pipeline.query-cache.v1" });
+
+// Native has no window-focus events, so TanStack Query's refetch-on-focus (the
+// staleness backstop that refreshes the board when the app comes back from the
+// background) is silently dead unless AppState is bridged in. Web keeps the
+// browser's own focus events. (refetchOnReconnect would likewise need a NetInfo
+// bridge — deliberately skipped in v1 rather than adding a native dependency;
+// foreground refetch + pull-to-refresh cover reconnection in practice.)
+if (Platform.OS !== "web") {
+  AppState.addEventListener("change", (state) => focusManager.setFocused(state === "active"));
+}
 
 configureNotificationHandling(); // foreground alerts show as banners
 
@@ -69,6 +80,7 @@ export default function RootLayout() {
               contentStyle: { backgroundColor: color.bg },
             }}
           />
+          <ToastHost />
         </MetaGate>
       </AuthProvider>
     </PersistQueryClientProvider>

@@ -3,6 +3,7 @@
 import { describe, it, expect } from "vitest";
 import type { Application, CompanyGroup } from "@pipeline/contracts";
 import { filterBoard, filterByStatus, countChips } from "./board";
+import { boardEvents, agenda, upcomingInterviews } from "./calendar";
 import { formatDate, senderName, monogram, hueFor } from "./format";
 import { versionAtLeast } from "./version";
 
@@ -79,6 +80,35 @@ describe("format", () => {
     expect(hueFor("Acme")).toBe(hueFor("Acme"));
     expect(hueFor("Acme")).toBeGreaterThanOrEqual(0);
     expect(hueFor("Acme")).toBeLessThan(360);
+  });
+});
+
+describe("calendar derivation", () => {
+  const withInterview: Application = {
+    ...app("Engineer", "interview"),
+    enrichment: { interviewDateTime: "2026-08-10T14:30:00Z" },
+  };
+  const plain = app("Designer", "applied"); // lastActivity 2026-02-01
+
+  it("derives interview + status events from the board", () => {
+    const events = boardEvents([withInterview, plain]);
+    expect(events).toHaveLength(3); // interview + its status activity + plain's activity
+    const interview = events.find((e) => e.kind === "interview")!;
+    expect(interview).toMatchObject({ date: "2026-08-10", time: "14:30", company: "Acme" });
+  });
+
+  it("groups into an agenda, newest day first, interviews before status events", () => {
+    const days = agenda(boardEvents([withInterview, plain]));
+    expect(days[0]!.date).toBe("2026-08-10");
+    expect(days[0]!.events[0]!.kind).toBe("interview");
+    expect(days.at(-1)!.date).toBe("2026-02-01");
+  });
+
+  it("upcoming interviews: on/after today, soonest first; skips dateless enrichment", () => {
+    const noDate: Application = { ...app("PM"), enrichment: { interviewDateTime: null } };
+    const events = boardEvents([withInterview, noDate, plain]);
+    expect(upcomingInterviews(events, "2026-08-01").map((e) => e.date)).toEqual(["2026-08-10"]);
+    expect(upcomingInterviews(events, "2026-08-11")).toEqual([]); // already past
   });
 });
 

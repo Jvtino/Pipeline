@@ -1,14 +1,16 @@
-// Application detail (read-only this phase): status, timeline of recorded
-// events, the ≤600-char snippet, message previews with attachment metadata.
-// The record itself comes from the board cache — no extra fetch for the header.
-import { ScrollView, Text, View } from "react-native";
+// Application detail: status (with the "move stage" picker — the user's word
+// outranks the classifier), timeline of recorded events, the ≤600-char
+// snippet, message previews with attachment metadata. The record itself comes
+// from the board cache — no extra fetch for the header.
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Application, Board, Status } from "@pipeline/contracts";
+import { STATUSES, type Application, type Board, type Status } from "@pipeline/contracts";
 import { useEvents, useMessages } from "../../../src/api/queries";
+import { useOverrideStatus } from "../../../src/api/mutations";
 import { formatDate, senderName } from "../../../src/lib/format";
 import { Avatar, EmptyState, Label, Panel, Screen, StatusDot, StatusPill } from "../../../src/ui/components";
-import { color, space, statusLabel, text } from "../../../src/ui/theme";
+import { color, radius, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
 
 export default function ApplicationDetail() {
   const { threadId: raw } = useLocalSearchParams<{ threadId: string }>();
@@ -18,6 +20,7 @@ export default function ApplicationDetail() {
   const app: Application | undefined = board?.groups.flatMap((g) => g.applications).find((a) => a.threadId === threadId);
   const events = useEvents(threadId);
   const messages = useMessages(threadId);
+  const override = useOverrideStatus();
 
   if (!app) {
     return (
@@ -40,6 +43,42 @@ export default function ApplicationDetail() {
             <Text style={text.dim}>{app.company}</Text>
             <StatusPill status={app.status} />
           </View>
+        </Panel>
+
+        <Panel style={{ gap: space.sm }}>
+          <Label>Move stage</Label>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+            {STATUSES.map((s) => {
+              const active = app.status === s;
+              return (
+                <Pressable
+                  key={s}
+                  disabled={active || override.isPending}
+                  onPress={() => override.mutate({ threadId, status: s })}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: space.xs + 2,
+                    borderRadius: radius.pill,
+                    borderWidth: 1,
+                    borderColor: active ? statusColor[s] : color.border,
+                    backgroundColor: active ? `${statusColor[s]}22` : color.elev,
+                    paddingHorizontal: space.md,
+                    paddingVertical: space.xs + 1,
+                    opacity: override.isPending && !active ? 0.5 : 1,
+                  }}
+                >
+                  <StatusDot status={s} size={7} />
+                  <Text style={[text.faint, active && { color: statusColor[s] }]}>{statusLabel[s]}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {override.isError ? (
+            <Text style={[text.faint, { color: statusColor.rejected }]}>Couldn't save — check your connection and try again.</Text>
+          ) : (
+            <Text style={text.faint}>Your choice sticks — future email syncs can't change it back.</Text>
+          )}
         </Panel>
 
         <Panel style={{ gap: space.sm }}>

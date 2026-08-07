@@ -108,6 +108,26 @@ export default function BoardScreen() {
         }
         renderItem={({ item }) => <CompanyCard group={item} onOpen={(id) => router.push(`/(app)/application/${encodeURIComponent(id)}`)} />}
       />
+      <Pressable
+        onPress={() => router.push("/(app)/add-position")}
+        style={({ pressed }) => [
+          {
+            position: "absolute",
+            right: space.xl,
+            bottom: space.xl,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: color.blue,
+            alignItems: "center",
+            justifyContent: "center",
+          },
+          pressed && { opacity: 0.8 },
+        ]}
+        accessibilityLabel="Add position"
+      >
+        <Text style={{ color: color.white, fontSize: 28, lineHeight: 30, fontWeight: "600" }}>＋</Text>
+      </Pressable>
     </Screen>
   );
 }

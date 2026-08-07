@@ -25,6 +25,8 @@ export default function AppLayout() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="application/[threadId]" options={{ title: "" }} />
+      <Stack.Screen name="add-position" options={{ presentation: "modal", title: "Add position" }} />
+      <Stack.Screen name="review/[threadId]" options={{ presentation: "modal", title: "Review" }} />
     </Stack>
   );
 }

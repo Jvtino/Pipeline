@@ -2,7 +2,7 @@
 // cache vocabulary — invalidations in later phases must use these exact keys.
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
-import { boardSchema } from "@pipeline/contracts";
+import { applicationSchema, boardSchema } from "@pipeline/contracts";
 import { request } from "./client";
 
 // Response envelopes for endpoints whose shapes live server-side (additive
@@ -54,6 +54,15 @@ export const useEvents = (threadId: string) =>
   useQuery({
     queryKey: ["events", threadId],
     queryFn: () => request(`/api/applications/${encodeURIComponent(threadId)}/events`, eventsSchema),
+  });
+
+const reviewSchema = z.object({ applications: z.array(applicationSchema) });
+
+/** The review queue: records the classifier wasn't sure about, until resolved. */
+export const useReview = () =>
+  useQuery({
+    queryKey: ["review"],
+    queryFn: () => request("/api/review", reviewSchema),
   });
 
 export const useConnections = () =>

@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import type { Status } from "@pipeline/contracts";
+import { LogoMark } from "./logo";
 import { color, panel, radius, space, statusColor, statusLabel, text } from "./theme";
 import { hueFor, monogram } from "../lib/format";
 
@@ -225,6 +226,31 @@ export function Loading({ label = "Syncing your inbox…" }: { label?: string })
     <Centered>
       <ActivityIndicator color={color.blue} />
       <Text style={[text.dim, { marginTop: space.md }]}>{label}</Text>
+    </Centered>
+  );
+}
+
+/** Cold-start gate: the brand mark breathing, not a bare spinner — the splash
+ *  hands off to this seamlessly. Static under reduce-motion. */
+export function Booting() {
+  const reduce = useReduceMotion();
+  const pulse = useRef(new Animated.Value(0.7)).current;
+  useEffect(() => {
+    if (reduce) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.7, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, reduce]);
+  return (
+    <Centered>
+      <Animated.View style={{ opacity: reduce ? 1 : pulse, transform: [{ scale: reduce ? 1 : pulse.interpolate({ inputRange: [0.7, 1], outputRange: [0.97, 1] }) }] }}>
+        <LogoMark size={72} />
+      </Animated.View>
     </Centered>
   );
 }

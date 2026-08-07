@@ -6,7 +6,7 @@ import { Platform } from "react-native";
 import { Redirect, Stack, useRouter } from "expo-router";
 import { useSession } from "../../src/auth/session";
 import { onNotificationTap, registerForPush } from "../../src/notifications";
-import { Loading, Screen } from "../../src/ui/components";
+import { Booting, Screen } from "../../src/ui/components";
 import { Welcome, useWelcomed } from "../../src/ui/welcome";
 import { color } from "../../src/ui/theme";
 
@@ -30,7 +30,7 @@ export default function AppLayout() {
   if (!session.isLoaded || !welcome.isLoaded) {
     return (
       <Screen>
-        <Loading label="Starting Pipeline…" />
+        <Booting />
       </Screen>
     );
   }

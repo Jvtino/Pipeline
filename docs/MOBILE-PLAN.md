@@ -1,8 +1,14 @@
 # Pipeline: Desktop App → Public Mobile App (iOS + Android)
 
-> **Status (2026-08-07):** Phases 1–5 are built, reviewed, and merged (#30); a
-> premium refinement pass (motion, board/detail depth, welcome, stats, alerts
-> badge, two independent bug-hunt reviews) is in PR #31. What remains is
+> **Status (2026-08-07, evening):** Phases 1–5 built, reviewed, merged (#30).
+> Since then, three more merged arcs: a **premium refinement pass** (#31 —
+> motion, board/detail depth, welcome, stats, alerts badge; 22 findings from
+> three independent reviews fixed); **interview reminders on real mail + web
+> convergence** (#32 — prose interview dates normalized server-side so push
+> reminders/calendars work on real mailboxes; the web app's status moves,
+> manual adds and review confirms now write server truth; 15 review findings
+> fixed); and a **pagination-ready board endpoint + override transparency**
+> (#33 — the plan's last named scaling risk retired). What remains is
 > owner-side only — see `docs/LAUNCH-CHECKLIST.md` for the sign-ups and 💰 gates.
 
 ## Context

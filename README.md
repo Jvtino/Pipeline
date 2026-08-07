@@ -7,6 +7,13 @@ It runs on **demo data out of the box**, and can read a **real mailbox**
 (Gmail, Outlook/Live, or any IMAP provider) via a tiny local backend with
 zero third-party dependencies.
 
+> **Looking for the hosted product or the phone app?** The pnpm monorepo under
+> **[`apps/`](apps/README.md)** carries the newer generation: `apps/api`
+> (Fastify server — sync, classification, push reminders), `apps/web`
+> (hosted web app), and `apps/mobile` (Expo iOS/Android app, full journey,
+> store-ready). The desktop app below and the Python build keep working
+> untouched. Mobile plan + status: [`docs/MOBILE-PLAN.md`](docs/MOBILE-PLAN.md).
+
 ---
 
 ## Quick start (demo data)

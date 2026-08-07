@@ -64,6 +64,18 @@ export function confirmReview(threadId: string): Promise<unknown> {
   return postJson<unknown>(`/api/review/${encodeURIComponent(threadId)}`, { action: "confirm" });
 }
 
+/** Server feature flags (no secrets) — which mail providers are actually
+ *  connectable in this deployment. Gmail ships dark until Google verification. */
+export interface MetaFeatures {
+  gmailConnect: boolean;
+  microsoftConnect: boolean;
+}
+
+export async function getMetaFeatures(): Promise<MetaFeatures> {
+  const meta = await getJson<{ features?: Partial<MetaFeatures> }>("/api/meta");
+  return { gmailConnect: meta.features?.gmailConnect ?? false, microsoftConnect: meta.features?.microsoftConnect ?? false };
+}
+
 /** Per-mailbox outcome of a sync round. `error` set means that mailbox did NOT sync. */
 export interface SyncOutcome {
   email: string;

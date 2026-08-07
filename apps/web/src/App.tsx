@@ -11,7 +11,7 @@ import type { Overlay, Plan, Screen, OverlaySettings, ViewState, AppMeta } from 
 import type { UiStatus } from "./lib/status";
 import { STATUS } from "./lib/status";
 import type { Status as ApiStatus } from "@pipeline/contracts";
-import { ensureSession, getMe, getBoard, getDocuments, runSync, resync, getConnections, deleteConnection, patchApplication, createApplication, confirmReview, postJson, type Mailbox, type SyncedDoc, type SyncSummary } from "./api";
+import { ensureSession, getMe, getBoard, getDocuments, runSync, resync, getConnections, deleteConnection, patchApplication, createApplication, confirmReview, getMetaFeatures, postJson, type Mailbox, type MetaFeatures, type SyncedDoc, type SyncSummary } from "./api";
 import { loadOverlay, saveOverlay, defaultOverlay } from "./lib/overlay";
 import { flattenBoard, buildNotifications } from "./lib/derive";
 import { shortDate, syncedLabel, localIsoDate, localIsoDateTime } from "./lib/format";
@@ -73,6 +73,10 @@ export function App() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<number | null>(null);
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
+  // Which providers this deployment can actually connect. Defaults show the
+  // buttons (locally they lead to the "add your OAuth client IDs" guidance);
+  // the hosted launch turns Gmail into "coming soon" via the server flag.
+  const [features, setFeatures] = useState<MetaFeatures>({ gmailConnect: true, microsoftConnect: true });
   const [syncedDocs, setSyncedDocs] = useState<SyncedDoc[]>([]); // attachment metadata from synced mail
   // Toast carries a nonce so flashing the *same* message twice still produces a
   // fresh state identity — otherwise React bails on the equal update and the
@@ -98,6 +102,11 @@ export function App() {
     await ensureSession();
     setMe(await getMe());
     setBoard(await getBoard());
+    try {
+      setFeatures(await getMetaFeatures());
+    } catch {
+      /* non-fatal — onboarding keeps its defaults (buttons + setup guidance) */
+    }
     try {
       setSyncedDocs((await getDocuments()).documents);
     } catch {
@@ -552,7 +561,16 @@ export function App() {
   if (overlay.disconnected) {
     return (
       <div className="app">
-        <Onboarding onDemo={() => setOverlay((o) => ({ ...o, disconnected: false }))} />
+        <Onboarding
+          features={features}
+          onDemo={() => setOverlay((o) => ({ ...o, disconnected: false }))}
+          onManual={() => {
+            // straight into tracking by hand — the no-mailbox path is a real
+            // first-class way to use Pipeline, not a consolation prize
+            setOverlay((o) => ({ ...o, disconnected: false }));
+            setModalOpen(true);
+          }}
+        />
         {toast && <Toast msg={toast.msg} />}
       </div>
     );

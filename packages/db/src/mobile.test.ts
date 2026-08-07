@@ -115,6 +115,22 @@ describe("status overrides", () => {
     expect(await listReviewQueue(h.db, "u1")).toEqual([]);
   });
 
+  it("a sync-driven status change reopens review; the user's override stays final", async () => {
+    // confirmed low-confidence record: out of the queue…
+    await upsertApplications(h.db, "u1", [appFixture("t-re", "Acme", "applied", { classification: flaggedAudit, confidence: 0.3 })]);
+    await markReviewed(h.db, "u1", "t-re");
+    expect(await listReviewQueue(h.db, "u1")).toEqual([]);
+    // …until the classifier changes its mind on a later sync — new state, new question
+    await upsertApplications(h.db, "u1", [appFixture("t-re", "Acme", "interview", { classification: flaggedAudit, confidence: 0.3 })]);
+    expect((await listReviewQueue(h.db, "u1")).map((a) => a.threadId)).toEqual(["t-re"]);
+
+    // an OVERRIDDEN record never re-enters — the user's word outranks the classifier
+    await upsertApplications(h.db, "u1", [appFixture("t-ov", "Globex", "applied", { classification: flaggedAudit, confidence: 0.3 })]);
+    await setStatusOverride(h.db, "u1", "t-ov", "rejected");
+    await upsertApplications(h.db, "u1", [appFixture("t-ov", "Globex", "interview", { classification: flaggedAudit, confidence: 0.3 })]);
+    expect((await listReviewQueue(h.db, "u1")).map((a) => a.threadId)).toEqual(["t-re"]);
+  });
+
   it("rebuild (resync recovery) preserves overridden and reviewed rows", async () => {
     await upsertApplications(h.db, "u1", [
       appFixture("t-corrected", "Acme", "rejected"),

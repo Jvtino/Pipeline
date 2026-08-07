@@ -210,16 +210,27 @@ export type Board = z.infer<typeof boardSchema>;
 const groupActivity = (g: CompanyGroup): string =>
   g.applications.reduce((latest, a) => (a.lastActivity > latest ? a.lastActivity : latest), "");
 
+// Order-independent unique key per group: platform-fallback groups all share
+// the ATS display name, so company+activity is NOT a total order — two tied
+// groups could swap positions between page requests, skipping one and
+// duplicating the other. The minimum threadId is unique (an application
+// belongs to exactly one group) and identical however the input was ordered.
+const groupKey = (g: CompanyGroup): string =>
+  g.applications.reduce((min, a) => (min === "" || a.threadId < min ? a.threadId : min), "");
+
 /**
  * Deterministic board paging: groups ordered newest-activity-first (company
- * name as the tiebreak — pagination is meaningless over an unstable order),
- * sliced only when `groupLimit` is given. Counts are never touched; they
- * always describe the full board. No limit → the full sorted board with no
- * pagination stamp, so existing clients see the same payload shape as ever.
+ * name, then unique group key as tiebreaks — pagination requires a TOTAL
+ * order), sliced only when `groupLimit` is given. Counts are never touched;
+ * they always describe the full board. No limit → the full sorted board with
+ * no pagination stamp, so existing clients see the same payload shape as ever.
  */
 export function pageBoard(board: Board, groupLimit?: number, groupOffset?: number): Board {
   const groups = [...board.groups].sort(
-    (a, b) => groupActivity(b).localeCompare(groupActivity(a)) || a.company.localeCompare(b.company),
+    (a, b) =>
+      groupActivity(b).localeCompare(groupActivity(a)) ||
+      a.company.localeCompare(b.company) ||
+      groupKey(a).localeCompare(groupKey(b)),
   );
   if (groupLimit === undefined) return { ...board, groups };
   const offset = groupOffset ?? 0;

@@ -119,7 +119,10 @@ export function registerMobileRoutes(app: FastifyInstance, d: MobileRouteDeps): 
   });
 
   // ── Application writes ─────────────────────────────────────────────────────
-  app.patch("/api/applications/:threadId", async (req, reply) => {
+  // Rate-limited like every other write surface: each status change inserts an
+  // events row and each create is a new record — self-scoped, but unbounded
+  // write amplification deserves a ceiling.
+  app.patch("/api/applications/:threadId", rateLimited(60), async (req, reply) => {
     const user = requireUser(req, reply);
     if (!user) return reply;
     const threadId = (req.params as { threadId?: string }).threadId ?? "";
@@ -130,7 +133,7 @@ export function registerMobileRoutes(app: FastifyInstance, d: MobileRouteDeps): 
     return { application };
   });
 
-  app.post("/api/applications", async (req, reply) => {
+  app.post("/api/applications", rateLimited(30), async (req, reply) => {
     const user = requireUser(req, reply);
     if (!user) return reply;
     const body = (req.body ?? {}) as { company?: unknown; role?: unknown; status?: unknown; appliedOn?: unknown };
@@ -140,7 +143,12 @@ export function registerMobileRoutes(app: FastifyInstance, d: MobileRouteDeps): 
     const status = body.status === undefined ? "applied" : parseStatus(body.status);
     if (!status) return reply.code(400).send({ error: "a valid status is required" });
     const appliedOnRaw = asTrimmed(body.appliedOn, 40);
-    const appliedOn = appliedOnRaw && !Number.isNaN(Date.parse(appliedOnRaw)) ? appliedOnRaw : new Date().toISOString().slice(0, 10);
+    // Strict YYYY-MM-DD, validated as a real calendar date — every other record
+    // upholds that shape, and storing "June 2026" or a full timestamp verbatim
+    // would corrupt board activity sorting.
+    const appliedOnDay = appliedOnRaw ? /^(\d{4}-\d{2}-\d{2})/.exec(appliedOnRaw)?.[1] : undefined;
+    const appliedOn =
+      appliedOnDay && !Number.isNaN(Date.parse(`${appliedOnDay}T00:00:00Z`)) ? appliedOnDay : new Date().toISOString().slice(0, 10);
 
     const threadId = `manual:${randomUUID()}`;
     const application: Application = {
@@ -166,7 +174,7 @@ export function registerMobileRoutes(app: FastifyInstance, d: MobileRouteDeps): 
     return { applications: await listReviewQueue(d.db, user.id) };
   });
 
-  app.post("/api/review/:threadId", async (req, reply) => {
+  app.post("/api/review/:threadId", rateLimited(60), async (req, reply) => {
     const user = requireUser(req, reply);
     if (!user) return reply;
     const threadId = (req.params as { threadId?: string }).threadId ?? "";

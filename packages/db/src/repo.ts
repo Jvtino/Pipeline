@@ -203,6 +203,17 @@ export async function upsertApplications(
         occurredAt: (was === undefined ? a.firstSeen : a.lastActivity) || a.lastActivity || a.firstSeen,
         source: opts.eventSource ?? "sync",
       });
+      // A SYNC-driven status change reopens review for a non-overridden row:
+      // the user's earlier confirm applied to what they saw then — if the
+      // classifier has since changed its mind (and the new reading is hesitant),
+      // the record must be allowed back into the queue rather than being
+      // permanently exempt. The user's own override always stays final.
+      if (was !== undefined && (opts.eventSource ?? "sync") !== "user" && !overridden.has(a.threadId)) {
+        await db
+          .update(applications)
+          .set({ reviewedAt: null })
+          .where(and(eq(applications.userId, userId), eq(applications.threadId, a.threadId)));
+      }
       transitions.push({
         threadId: a.threadId,
         company: a.company,
@@ -260,7 +271,9 @@ function rowToApplication(r: typeof applications.$inferSelect): Application {
 }
 
 export async function getApplicationsForUser(db: Database, userId: string): Promise<Application[]> {
-  const rows = await db.select().from(applications).where(eq(applications.userId, userId));
+  // Deterministic row order: without it, two paged board reads can see groups
+  // in different tie-break positions and skip/duplicate one across pages.
+  const rows = await db.select().from(applications).where(eq(applications.userId, userId)).orderBy(applications.threadId);
   return rows.map(rowToApplication);
 }
 

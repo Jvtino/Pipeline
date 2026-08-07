@@ -10,7 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { STATUSES, type Application, type Board, type Status } from "@pipeline/contracts";
 import { useEvents, useMessages } from "../../../src/api/queries";
 import { useOverrideStatus } from "../../../src/api/mutations";
-import { untilLabel } from "../../../src/lib/calendar";
+import { localToday, untilLabel } from "../../../src/lib/calendar";
 import { formatDate, senderName } from "../../../src/lib/format";
 import { Avatar, EmptyState, FadeIn, Label, Panel, Screen, StatusDot, StatusPill } from "../../../src/ui/components";
 import { color, radius, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
@@ -172,7 +172,7 @@ function InterviewSoonBanner({ app }: { app: Application }) {
   const now = Date.now();
   if (Number.isNaN(at) || at <= now || at - now > 48 * 60 * 60 * 1000) return null;
   const time = /T(\d{2}:\d{2})/.exec(iso)?.[1];
-  const day = untilLabel(iso.slice(0, 10), new Date().toISOString().slice(0, 10));
+  const day = untilLabel(iso.slice(0, 10), localToday());
   return (
     <Panel style={{ borderColor: `${statusColor.interview}88`, gap: space.sm }}>
       <Text style={[text.base, { fontWeight: "700", color: statusColor.interview }]}>

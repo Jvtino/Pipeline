@@ -3,7 +3,7 @@
 import { SectionList, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useBoard } from "../../../src/api/queries";
-import { agenda, boardEvents, untilLabel, upcomingInterviews, type CalendarEvent } from "../../../src/lib/calendar";
+import { agenda, boardEvents, localToday, untilLabel, upcomingInterviews, type CalendarEvent } from "../../../src/lib/calendar";
 import { formatDate } from "../../../src/lib/format";
 import { EmptyState, ErrorState, ListSkeleton, Panel, Screen, StatusDot } from "../../../src/ui/components";
 import { color, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
@@ -30,7 +30,7 @@ export default function CalendarScreen() {
 
   const apps = board.data!.groups.flatMap((g) => g.applications);
   const events = boardEvents(apps);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   const upcoming = upcomingInterviews(events, today);
   const days = agenda(events.filter((e) => !(e.kind === "interview" && e.date >= today)));
 

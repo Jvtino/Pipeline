@@ -76,6 +76,15 @@ export function upcomingInterviews(events: CalendarEvent[], today: string): Cale
     .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""));
 }
 
+/** The user's LOCAL calendar day as YYYY-MM-DD. Never use toISOString() for
+ *  this — that's the UTC day, which flips a "today/tomorrow" label to the
+ *  wrong word every evening (west of UTC) or morning (east of it). */
+export function localToday(now: Date = new Date()): string {
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${m}-${d}`;
+}
+
 /** "today" / "tomorrow" / "in 5 days" — calendar-day distance, timezone-free
  *  (both sides are YYYY-MM-DD strings). */
 export function untilLabel(date: string, today: string): string {

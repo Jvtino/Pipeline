@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import type { Application, CompanyGroup } from "@pipeline/contracts";
 import { filterBoard, filterByStatus, countChips } from "./board";
-import { boardEvents, agenda, untilLabel, upcomingInterviews } from "./calendar";
+import { boardEvents, agenda, localToday, untilLabel, upcomingInterviews } from "./calendar";
 import { formatDate, relativeAge, senderName, monogram, hueFor } from "./format";
 import { sortPinnedFirst } from "./pins";
 import { versionAtLeast } from "./version";
@@ -126,6 +126,17 @@ describe("calendar derivation", () => {
     expect(untilLabel("2026-08-08", "2026-08-07")).toBe("tomorrow");
     expect(untilLabel("2026-08-12", "2026-08-07")).toBe("in 5 days");
     expect(untilLabel("garbage", "2026-08-07")).toBe("today"); // NaN-safe
+  });
+
+  it("localToday: the LOCAL calendar day, not the UTC one", () => {
+    // 11:30 pm local on Aug 7 — for anyone west of UTC, toISOString() would
+    // already say Aug 8. localToday must stay on the wall-clock day.
+    const lateEvening = new Date(2026, 7, 7, 23, 30);
+    expect(localToday(lateEvening)).toBe("2026-08-07");
+    expect(localToday(new Date(2026, 0, 1, 0, 0))).toBe("2026-01-01"); // zero-pads
+    if (lateEvening.getTimezoneOffset() > 0) {
+      expect(lateEvening.toISOString().slice(0, 10)).not.toBe(localToday(lateEvening));
+    }
   });
 
   it("upcoming interviews: on/after today, soonest first; skips dateless enrichment", () => {

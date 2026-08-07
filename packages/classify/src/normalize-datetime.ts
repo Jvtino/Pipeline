@@ -167,7 +167,12 @@ export function normalizeInterviewDateTime(text: string | null | undefined, refe
     date = { ...date, year: candidate < ref.getTime() - FORTY_FIVE_DAYS ? refYear + 1 : refYear };
   }
 
-  if (!date) {
+  if (date) {
+    // Reject impossible calendar dates ("June 31", "Feb 30") — emitting them
+    // would hand consumers an ISO string that Date.parse reads as NaN.
+    const check = new Date(Date.UTC(date.year!, date.month1 - 1, date.day));
+    if (check.getUTCMonth() !== date.month1 - 1 || check.getUTCDate() !== date.day) return null;
+  } else {
     // Weekday-only ("Thursday at 3pm ET") — needs a time to mean a meeting,
     // and lands on that weekday ON or AFTER the email date.
     const wd = WEEKDAY_RE.exec(t);

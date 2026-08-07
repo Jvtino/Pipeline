@@ -2,7 +2,7 @@
 // proxies /api and /auth to the Fastify API on :3001). It reads the board,
 // triggers sync/rebuild, lists and disconnects mailboxes, and starts OAuth
 // connect; everything else the UI needs is derived client-side.
-import type { Board } from "@pipeline/contracts";
+import type { Application, Board, Status } from "@pipeline/contracts";
 import type { Plan } from "./types";
 
 export async function getJson<T>(url: string): Promise<T> {
@@ -40,6 +40,22 @@ export async function getMe(): Promise<Plan> {
 
 export function getBoard(): Promise<Board> {
   return getJson<Board>("/api/applications");
+}
+
+/** Server-side status override: the user's word outranks the classifier, the
+ *  change survives resync, and every device (including the phone) sees it. */
+export async function patchApplication(threadId: string, status: Status): Promise<void> {
+  const r = await fetch(`/api/applications/${encodeURIComponent(threadId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!r.ok) throw new Error(`/api/applications/${threadId} → ${r.status}`);
+}
+
+/** Create a manual application server-side — a real record, not an overlay row. */
+export function createApplication(input: { company: string; role: string; status: Status; appliedOn?: string }): Promise<{ application: Application }> {
+  return postJson<{ application: Application }>("/api/applications", input);
 }
 
 /** Per-mailbox outcome of a sync round. `error` set means that mailbox did NOT sync. */

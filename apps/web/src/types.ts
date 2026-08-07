@@ -29,6 +29,9 @@ export interface AppMeta {
   location?: string | null;
   salary?: number | null; // annual, user's currency
   resumeVersion?: string | null;
+  /** The source channel the user picked when adding by hand ("LinkedIn", …) —
+   *  server manual records have no sender domain to derive it from. */
+  sourceLabel?: string | null;
 }
 
 export interface Plan {

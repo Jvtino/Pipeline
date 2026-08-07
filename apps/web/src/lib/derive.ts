@@ -91,7 +91,9 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
         appliedIso: a.firstSeen,
         lastActivityIso: a.lastActivity,
         dateLabel: shortDate(a.firstSeen),
-        source: sourceFromDomain(a.companyDomain),
+        // server manual records carry no sender domain — the user's own channel
+        // choice (kept in overlay meta at add time) beats the derived guess
+        source: overlay.meta[a.threadId]?.sourceLabel || sourceFromDomain(a.companyDomain),
         nextStep,
         snippet: a.snippet,
         manual: a.manual ?? false,
@@ -547,8 +549,12 @@ export function calendarEntryMap(apps: UiApplication[]): Map<string, CalendarCel
   for (const a of apps) {
     add(dayOf(a.appliedIso), "applied", a);
     if (a.status === "interview" || a.status === "screening") {
-      const parsed = parseInterviewDate(a.enrichment?.interviewDateTime, a.lastActivityIso);
-      add(parsed ?? dayOf(a.lastActivityIso), "interview", a, parseInterviewTime(a.enrichment?.interviewDateTime));
+      // The server's normalized ISO twin is authoritative when present; the
+      // client-side prose parser stays as the fallback for older records.
+      const serverIso = a.enrichment?.interviewDateTimeIso ?? null;
+      const parsed = serverIso?.slice(0, 10) ?? parseInterviewDate(a.enrichment?.interviewDateTime, a.lastActivityIso);
+      const time = (serverIso ? /T(\d{2}:\d{2})/.exec(serverIso)?.[1] ?? null : null) ?? parseInterviewTime(a.enrichment?.interviewDateTime);
+      add(parsed ?? dayOf(a.lastActivityIso), "interview", a, time);
     }
     if (a.status === "rejected") add(dayOf(a.lastActivityIso), "rejected", a);
   }

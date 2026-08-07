@@ -73,6 +73,9 @@ describe("normalizeInterviewDateTime", () => {
     expect(normalizeInterviewDateTime("", "2026-06-01")).toBeNull();
     expect(normalizeInterviewDateTime(null, "2026-06-01")).toBeNull();
     expect(normalizeInterviewDateTime("sometime next week", "2026-06-01")).toBeNull();
+    // impossible calendar dates must not become NaN-parsing ISO strings
+    expect(normalizeInterviewDateTime("June 31 at 2pm", "2026-06-01")).toBeNull();
+    expect(normalizeInterviewDateTime("30 February at 10:00", "2026-02-01")).toBeNull();
     // an unreadable reference date can't resolve prose
     expect(normalizeInterviewDateTime("June 12 at 2pm", "not-a-date")).toBeNull();
   });

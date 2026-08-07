@@ -69,7 +69,9 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
     getEvents(app.threadId).then((r) => setEvents(r.events)).catch(() => setEvents([]));
   }, [app.id, app.threadId]);
   const history = useMemo(() => {
-    const fromSync = (events ?? []).map((e) => ({ status: e.status as UiStatus, when: e.occurredAt, via: "from email" }));
+    // Server events carry their source: sync transitions read "from email",
+    // the user's own server-side moves (web or phone) read "moved by you".
+    const fromSync = (events ?? []).map((e) => ({ status: e.status as UiStatus, when: e.occurredAt, via: e.source === "user" ? "moved by you" : "from email" }));
     const fromMoves = (ctx.overlay.moves[app.id] ?? []).map((m) => ({ status: m.status, when: m.when, via: "moved by you" }));
     return [...fromSync, ...fromMoves].sort((a, b) => a.when.localeCompare(b.when));
   }, [events, ctx.overlay.moves, app.id]);

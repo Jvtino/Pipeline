@@ -29,9 +29,14 @@ describe("Pro routes", () => {
     const app = await buildServer();
     try {
       const cookie = await login(app, "free@x.com");
-      for (const url of ["/api/reminders", "/api/export.csv", "/api/applications/demo:stripe/notes", "/api/applications/demo:stripe/contacts"]) {
+      for (const url of ["/api/reminders", "/api/applications/demo:stripe/notes", "/api/applications/demo:stripe/contacts"]) {
         expect((await app.inject({ method: "GET", url, headers: { cookie } })).statusCode, url).toBe(402);
       }
+      // CSV export is deliberately NOT Pro-gated: pricing is "free for now,
+      // billing dormant" — a user's own data can't sit behind an unpayable wall
+      const csv = await app.inject({ method: "GET", url: "/api/export.csv", headers: { cookie } });
+      expect(csv.statusCode).toBe(200);
+      expect(csv.headers["content-type"]).toContain("text/csv");
     } finally {
       await app.close();
     }

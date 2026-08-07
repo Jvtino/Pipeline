@@ -25,6 +25,7 @@ export interface Ctx {
 
   // mutations (persisted to the localStorage overlay)
   setStatus: (id: string, s: UiStatus) => void;
+  confirmClassification: (id: string) => void; // "looks right" on a low-confidence record → server reviewedAt
   setMeta: (id: string, patch: Partial<AppMeta>) => void;
   renameCompany: (id: string, name: string) => void; // fix a misattributed company by hand
   hideApp: (id: string) => void; // remove a card from the board (mailbox untouched)

@@ -88,7 +88,16 @@ export function safeParseThread(value: unknown): z.SafeParseReturnType<unknown, 
  * until persisted. The UI shows these read-only ("extracted from email").
  */
 export const enrichmentSchema = z.object({
+  /** The interview date/time AS WRITTEN in the email — display truth, never converted. */
   interviewDateTime: z.string().nullable().optional(),
+  /**
+   * Best-effort machine reading of `interviewDateTime`, normalized against the
+   * email's date ("YYYY-MM-DD" or full ISO, with a UTC offset when the email
+   * named a recognizable zone). Powers date MATH only — reminders, calendar
+   * placement, "interview soon" — while the raw text stays what users see.
+   * Absent when the text couldn't be read confidently.
+   */
+  interviewDateTimeIso: z.string().nullable().optional(),
   interviewLink: z.string().nullable().optional(),
   compensation: z.string().nullable().optional(),
   location: z.string().nullable().optional(),
@@ -141,6 +150,20 @@ export const applicationSchema = z.object({
   classificationEvents: z.array(classificationEventSchema).optional(),
   /** Value-or-null facts extracted from the thread (interview/comp/location/recruiter). */
   enrichment: enrichmentSchema.optional(),
+  /**
+   * When the user has confirmed or corrected this record (review flow or a
+   * manual stage move), the moment they did. Additive: lets clients stop
+   * showing "needs review" affordances for low-confidence records the user
+   * already looked at.
+   */
+  reviewedAt: z.string().nullable().optional(),
+  /**
+   * True when `status` IS a user override (the served status already
+   * coalesces it). Additive: clients must not layer their own derived
+   * presentation states (e.g. the web's stale-"applied" → "no response") on
+   * top of a status the user set by hand — the user's word is final.
+   */
+  overridden: z.boolean().optional(),
   /**
    * True when the employer could not be recovered and `company` is only the
    * shared ATS platform's name ("Myworkday", "Linkedin", …). Optional/additive

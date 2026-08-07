@@ -49,7 +49,9 @@ export function parseInterview(value: string): { day: string; time?: string } | 
 export function boardEvents(apps: Application[]): CalendarEvent[] {
   const out: CalendarEvent[] = [];
   for (const a of apps) {
-    const interview = a.enrichment?.interviewDateTime;
+    // Prefer the server-normalized ISO twin — the raw field is the email's own
+    // words, which only sometimes happen to be machine-shaped.
+    const interview = a.enrichment?.interviewDateTimeIso ?? a.enrichment?.interviewDateTime;
     if (interview) {
       const date = dayOf(interview);
       if (date) {

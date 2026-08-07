@@ -25,11 +25,12 @@ import {
   companyInsights,
   timingStats,
   responseByWeek,
+  upcomingInterviews,
   type PerfRow,
   type CompanyCardData,
   type DerivedTask,
 } from "./lib/derive";
-import { MONTHS, shortDate, parseIso } from "./lib/format";
+import { MONTHS, localIsoDate, shortDate, parseIso } from "./lib/format";
 import { getBackgroundSync, setBackgroundSync as apiSetBackgroundSync, type BackgroundSync } from "./api";
 import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip, NeedsReviewBadge, ExpandMorph } from "./components";
 import { IconBolt, IconChevronRight, IconSearch, IconMail, IconDownload, IconPlus, IconShield, IconCheck, IconX } from "./lib/icons";
@@ -59,6 +60,7 @@ function StatCard({ label, value, color, sub, delta }: { label: string; value: n
 export function Dashboard(ctx: Ctx) {
   const { apps, nowMs, openDetail, goto } = ctx;
   const counts = statusCounts(apps);
+  const soon = upcomingInterviews(apps, nowMs);
   const nudges = buildNudges(apps, nowMs);
   const sources = topSources(apps);
   const trend = trendSeries(apps, nowMs);
@@ -98,6 +100,31 @@ export function Dashboard(ctx: Ctx) {
             ))}
           </div>
         </>
+      )}
+
+      {/* interview-soon strip — the phone banner's desktop twin; capped so a
+          heavy interview week can't push the dashboard below the fold */}
+      {soon.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "13px 15px", marginBottom: 14, background: "rgba(192,138,42,.09)", border: "1px solid rgba(192,138,42,.28)", borderRadius: 13 }}>
+          {soon.slice(0, 4).map((s) => (
+            <div key={s.id} onClick={() => openDetail(s.id)} className="pl-lift" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS.interview.dot, flex: "0 0 auto" }} />
+              <span style={{ font: "700 13px var(--sans)", color: "#9a6a16" }}>
+                Interview {s.label}
+                {s.time ? ` at ${s.time}` : ""}
+              </span>
+              <span style={{ font: "500 12.5px var(--sans)", color: "#5f5a51", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {s.company} — {s.role}
+              </span>
+              <IconChevronRight size={13} stroke={2.2} color="#9a6a16" />
+            </div>
+          ))}
+          {soon.length > 4 && (
+            <div onClick={() => goto("calendar")} className="pl-lift" style={{ cursor: "pointer", font: "600 12px var(--sans)", color: "#9a6a16", paddingLeft: 18 }}>
+              +{soon.length - 4} more on the calendar
+            </div>
+          )}
+        </div>
       )}
 
       <div className="rgrid rgrid-6">
@@ -322,10 +349,13 @@ export function Applications(ctx: Ctx) {
 
       {open && (
         <CompanyExpand
-          card={open.card}
+          // live card, not the click-time snapshot — an inline confirm refetches
+          // the board and the open panel's badge must clear with it
+          card={cards.find((c) => c.company === open.card.company) ?? open.card}
           from={open.rect}
           onClose={() => setOpen(null)}
           onOpenApp={(id, rect) => openDetail(id, rect)}
+          onConfirm={ctx.confirmClassification}
         />
       )}
     </>
@@ -336,7 +366,7 @@ export function Applications(ctx: Ctx) {
  *  centered panel listing its positions (via the shared ExpandMorph). Each
  *  position opens the existing detail drawer — this is what ties
  *  Companies ↔ Applications together. */
-function CompanyExpand({ card, from, onClose, onOpenApp }: { card: CompanyCardData; from: DOMRect; onClose: () => void; onOpenApp: (id: string, rect: DOMRect) => void }) {
+function CompanyExpand({ card, from, onClose, onOpenApp, onConfirm }: { card: CompanyCardData; from: DOMRect; onClose: () => void; onOpenApp: (id: string, rect: DOMRect) => void; onConfirm: (id: string) => void }) {
   return (
     <ExpandMorph from={from} height={560} vhMargin={80} zIndex={45} onClosed={onClose}>
       {(beginClose, enter) => (
@@ -366,6 +396,17 @@ function CompanyExpand({ card, from, onClose, onOpenApp }: { card: CompanyCardDa
                   </div>
                   <div style={{ font: "500 11.5px var(--mono)", color: "var(--muted-2)", marginTop: 3 }}>{a.dateLabel} · {a.source}</div>
                 </div>
+                {a.needsReview && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // the row itself opens the detail drawer
+                      onConfirm(a.id);
+                    }}
+                    style={{ padding: "6px 11px", background: "#fff", border: "1px solid rgba(192,138,42,.4)", borderRadius: 8, font: "600 11px var(--sans)", color: "#9a6a16", cursor: "pointer", flex: "0 0 auto", whiteSpace: "nowrap" }}
+                  >
+                    Looks right
+                  </button>
+                )}
                 <StatusPill status={a.status} sm />
                 <span style={{ color: "var(--faint-2)", flex: "0 0 auto" }}>›</span>
               </div>
@@ -471,20 +512,23 @@ const CAL_DAY_MS = 86_400_000;
 
 export function Calendar(ctx: Ctx) {
   const now = new Date(ctx.nowMs);
-  const todayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString().slice(0, 10);
+  // The user's LOCAL day — toISOString()'s UTC day highlights tomorrow as
+  // "today" every evening west of UTC (and disagreed with the dashboard
+  // strip, which was already local).
+  const todayIso = localIsoDate(ctx.nowMs);
   const startOfWeek = (ms: number) => {
     const d = new Date(ms);
     const day = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
     return day - new Date(day).getUTCDay() * CAL_DAY_MS; // back to Sunday
   };
   const [view, setView] = useState<CalView>("month");
-  const [ym, setYm] = useState({ y: now.getUTCFullYear(), m: now.getUTCMonth() });
+  const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() }); // open on the LOCAL month, matching todayIso
   const [weekMs, setWeekMs] = useState(() => startOfWeek(ctx.nowMs));
   const [openDay, setOpenDay] = useState<{ cell: number; bucket: string } | null>(null);
   const cells = useMemo(() => calendarFor(ctx.apps, ym.y, ym.m), [ctx.apps, ym]);
   const byDate = useMemo(() => calendarEntryMap(ctx.apps), [ctx.apps]);
 
-  const goToday = () => { setYm({ y: now.getUTCFullYear(), m: now.getUTCMonth() }); setWeekMs(startOfWeek(ctx.nowMs)); setOpenDay(null); };
+  const goToday = () => { setYm({ y: now.getFullYear(), m: now.getMonth() }); setWeekMs(startOfWeek(ctx.nowMs)); setOpenDay(null); };
   const shift = (d: number) => {
     if (view === "week") setWeekMs((w) => w + d * 7 * CAL_DAY_MS);
     else {

@@ -67,9 +67,14 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
     setEvents(null);
     if (!app.threadId) return;
     getEvents(app.threadId).then((r) => setEvents(r.events)).catch(() => setEvents([]));
-  }, [app.id, app.threadId]);
+    // app.status in the deps: a successful server-backed move refreshes the
+    // board (new status) and must also refresh this timeline — without it the
+    // open drawer only shows the new event after close + reopen.
+  }, [app.id, app.threadId, app.status]);
   const history = useMemo(() => {
-    const fromSync = (events ?? []).map((e) => ({ status: e.status as UiStatus, when: e.occurredAt, via: "from email" }));
+    // Server events carry their source: sync transitions read "from email",
+    // the user's own server-side moves (web or phone) read "moved by you".
+    const fromSync = (events ?? []).map((e) => ({ status: e.status as UiStatus, when: e.occurredAt, via: e.source === "user" ? "moved by you" : "from email" }));
     const fromMoves = (ctx.overlay.moves[app.id] ?? []).map((m) => ({ status: m.status, when: m.when, via: "moved by you" }));
     return [...fromSync, ...fromMoves].sort((a, b) => a.when.localeCompare(b.when));
   }, [events, ctx.overlay.moves, app.id]);
@@ -187,7 +192,13 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
               {app.needsReview && (
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 13px", marginBottom: 14, background: "rgba(192,138,42,.09)", border: "1px solid rgba(192,138,42,.22)", borderRadius: 12 }}>
                   <NeedsReviewBadge />
-                  <span style={{ font: "500 12px/1.45 var(--sans)", color: "#7a5a1a" }}>The classifier wasn't fully sure here. Confirm the stage below if it's right, or fix it.</span>
+                  <span style={{ flex: 1, font: "500 12px/1.45 var(--sans)", color: "#7a5a1a" }}>Pipeline wasn't fully sure here. Confirm if it's right, or move the stage below to fix it.</span>
+                  <button
+                    onClick={() => ctx.confirmClassification(app.id)}
+                    style={{ padding: "8px 13px", background: "#fff", border: "1px solid rgba(192,138,42,.4)", borderRadius: 9, font: "600 11.5px var(--sans)", color: "#9a6a16", cursor: "pointer", flex: "0 0 auto", whiteSpace: "nowrap" }}
+                  >
+                    Looks right
+                  </button>
                 </div>
               )}
               {/* next step */}

@@ -253,6 +253,8 @@ function rowToApplication(r: typeof applications.$inferSelect): Application {
     enrichment: r.enrichment ? (JSON.parse(r.enrichment) as Enrichment) : undefined,
     classification: r.classification ? (JSON.parse(r.classification) as ClassificationAudit) : undefined,
     classificationEvents: r.classificationEvents ? (JSON.parse(r.classificationEvents) as ClassificationEvent[]) : undefined,
+    reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : undefined,
+    overridden: r.overrideStatus != null ? true : undefined,
     platformFallback: r.platformFallback ?? undefined,
   };
 }
@@ -703,6 +705,9 @@ export interface EnrichedApplicationRow {
   threadId: string;
   company: string;
   role: string;
+  /** Coalesced current status (user override wins) — lets the reminder scan
+   *  skip records the user closed out (rejected/cancelled). */
+  status: string;
   enrichment: Enrichment;
 }
 
@@ -716,6 +721,8 @@ export async function listApplicationsWithEnrichment(db: Database): Promise<Enri
       threadId: applications.threadId,
       company: applications.company,
       role: applications.role,
+      status: applications.status,
+      overrideStatus: applications.overrideStatus,
       enrichment: applications.enrichment,
     })
     .from(applications)
@@ -725,6 +732,7 @@ export async function listApplicationsWithEnrichment(db: Database): Promise<Enri
     threadId: r.threadId,
     company: r.company,
     role: r.role,
+    status: r.overrideStatus ?? r.status,
     enrichment: JSON.parse(r.enrichment!) as Enrichment,
   }));
 }

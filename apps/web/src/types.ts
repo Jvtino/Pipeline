@@ -29,6 +29,9 @@ export interface AppMeta {
   location?: string | null;
   salary?: number | null; // annual, user's currency
   resumeVersion?: string | null;
+  /** The source channel the user picked when adding by hand ("LinkedIn", …) —
+   *  server manual records have no sender domain to derive it from. */
+  sourceLabel?: string | null;
 }
 
 export interface Plan {
@@ -115,6 +118,9 @@ export interface Overlay {
   contacts: ContactEntry[];
   docs: DocEntry[];
   dismissedNotifs: Record<string, boolean>; // bell items hidden until their id changes
+  /** Review confirms made while the server was unreachable — device-local
+   *  fallback so the badge still clears; the server copy stays authoritative. */
+  reviewedLocal: Record<string, boolean>;
   companyNames: Record<string, string>; // user-corrected company name per app id
   hidden: Record<string, boolean>; // apps removed from the board (mailbox untouched)
   doneTasks: Record<string, boolean>;

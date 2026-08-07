@@ -14,14 +14,15 @@ interface EventRow {
 }
 
 interface DemoState {
-  apps: Map<string, Application & { overrideStatus?: Status; reviewedAt?: string }>;
+  // reviewedAt rides on Application itself since the contract gained it
+  apps: Map<string, Application & { overrideStatus?: Status }>;
   events: Map<string, EventRow[]>;
 }
 
 let state: DemoState | null = null;
 
 function seed(): DemoState {
-  const apps = new Map<string, Application & { overrideStatus?: Status; reviewedAt?: string }>();
+  const apps = new Map<string, Application & { overrideStatus?: Status }>();
   const events = new Map<string, EventRow[]>();
   for (const a of threadsToApplications(DEMO_THREADS)) {
     apps.set(a.threadId, { ...a });
@@ -35,9 +36,11 @@ function seed(): DemoState {
     const soon = new Date(Date.now() + 26 * 60 * 60 * 1000); // ~tomorrow: inside the "interview soon" window
     acme.enrichment = {
       ...acme.enrichment,
-      // no zone suffix — extracted interview times are wall-clock text shown
-      // as written, exactly like the real classifier produces
+      // Both fields set together — overriding only the raw text would leave a
+      // stale classifier-produced ISO twin pointing at a different date. No
+      // zone suffix: wall-clock text shown as written, like real records.
       interviewDateTime: `${soon.toISOString().slice(0, 10)}T14:30:00`,
+      interviewDateTimeIso: `${soon.toISOString().slice(0, 10)}T14:30:00`,
       location: "Berlin · hybrid",
       recruiterName: "Maya Lindqvist",
       recruiterTitle: "Talent Partner",
@@ -72,6 +75,7 @@ export function resetDemo(): void {
 const coalesced = (a: Application & { overrideStatus?: Status }): Application => ({
   ...a,
   status: a.overrideStatus ?? a.status,
+  ...(a.overrideStatus ? { overridden: true } : {}), // same contract semantics as the real server
 });
 
 const today = (): string => new Date().toISOString();

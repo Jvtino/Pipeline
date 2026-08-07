@@ -6,7 +6,7 @@ import type { Board } from "@pipeline/contracts";
 import type { ContactEntry, Overlay, UiApplication } from "../types";
 import type { UiStatus } from "./status";
 import { STATUS, STATUS_ORDER } from "./status";
-import { daysBetween, parseIso, shortDate, MONTHS } from "./format";
+import { daysBetween, localIsoDate, parseIso, shortDate, MONTHS } from "./format";
 
 const STALE_DAYS = 21; // an "applied" record silent this long reads as no-response
 // Below this classifier confidence a card is "unconfirmed" and invites a one-tap fix.
@@ -63,8 +63,11 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
       let status: UiStatus = a.status; // applied | interview | offer | rejected
       const lastMs = parseIso(a.lastActivity);
       const daysSince = Number.isNaN(lastMs) ? null : daysBetween(nowMs, lastMs);
-      // Derive "no response" from a stale, un-progressed application.
-      if (status === "applied" && daysSince != null && daysSince >= STALE_DAYS) status = "no_response";
+      // Derive "no response" from a stale, un-progressed application — unless
+      // the served status IS the user's own override: re-deriving on top of an
+      // explicit "this is Applied" would snap the card straight back to No
+      // Response the moment the optimistic client override clears.
+      if (!a.overridden && status === "applied" && daysSince != null && daysSince >= STALE_DAYS) status = "no_response";
       // A user "Move stage" override always wins.
       const ov = overlay.overrides[a.threadId];
       if (ov) status = ov;
@@ -91,11 +94,16 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
         appliedIso: a.firstSeen,
         lastActivityIso: a.lastActivity,
         dateLabel: shortDate(a.firstSeen),
-        source: sourceFromDomain(a.companyDomain),
+        // server manual records carry no sender domain — the user's own channel
+        // choice (kept in overlay meta at add time) beats the derived guess
+        source: overlay.meta[a.threadId]?.sourceLabel || sourceFromDomain(a.companyDomain),
         nextStep,
         snippet: a.snippet,
         manual: a.manual ?? false,
-        needsReview: a.confidence != null && a.confidence < REVIEW_CONFIDENCE,
+        // Low confidence asks for a look — until the user HAS looked: a server
+        // reviewedAt (confirm or stage move, from any device) or the local
+        // fallback mark (confirm made while the server was unreachable).
+        needsReview: a.confidence != null && a.confidence < REVIEW_CONFIDENCE && !a.reviewedAt && !overlay.reviewedLocal[a.threadId],
         platformFallback: renamed ? false : a.platformFallback ?? false,
         enrichment: a.enrichment ?? null,
         ...metaFor(a.threadId),
@@ -525,6 +533,36 @@ export function parseInterviewDate(text: string | null | undefined, refIso: stri
   return null;
 }
 
+export interface UpcomingInterview {
+  id: string;
+  company: string;
+  role: string;
+  dayIso: string;
+  time: string | null;
+  label: "today" | "tomorrow";
+}
+
+/**
+ * Interviews landing today or tomorrow (LOCAL days), soonest first — the
+ * dashboard's "don't miss this" strip, mirroring the phone's banner. Prefers
+ * the server-normalized ISO twin; the client prose parser is the fallback for
+ * records enriched before it existed.
+ */
+export function upcomingInterviews(apps: UiApplication[], nowMs: number): UpcomingInterview[] {
+  const today = localIsoDate(nowMs);
+  const tomorrow = localIsoDate(nowMs + 86_400_000);
+  const out: UpcomingInterview[] = [];
+  for (const a of apps) {
+    if (a.status !== "interview" && a.status !== "screening") continue;
+    const serverIso = a.enrichment?.interviewDateTimeIso ?? null;
+    const day = serverIso?.slice(0, 10) ?? parseInterviewDate(a.enrichment?.interviewDateTime, a.lastActivityIso);
+    if (day !== today && day !== tomorrow) continue;
+    const time = (serverIso ? /T(\d{2}:\d{2})/.exec(serverIso)?.[1] ?? null : null) ?? parseInterviewTime(a.enrichment?.interviewDateTime);
+    out.push({ id: a.id, company: a.company, role: a.role, dayIso: day!, time, label: day === today ? "today" : "tomorrow" });
+  }
+  return out.sort((x, y) => x.dayIso.localeCompare(y.dayIso) || (x.time ?? "99").localeCompare(y.time ?? "99"));
+}
+
 /**
  * Per-day status entries across ALL dates (keyed YYYY-MM-DD): Applied on the day
  * you applied (every app), Interview on the interview's own date (free-text dates
@@ -547,8 +585,12 @@ export function calendarEntryMap(apps: UiApplication[]): Map<string, CalendarCel
   for (const a of apps) {
     add(dayOf(a.appliedIso), "applied", a);
     if (a.status === "interview" || a.status === "screening") {
-      const parsed = parseInterviewDate(a.enrichment?.interviewDateTime, a.lastActivityIso);
-      add(parsed ?? dayOf(a.lastActivityIso), "interview", a, parseInterviewTime(a.enrichment?.interviewDateTime));
+      // The server's normalized ISO twin is authoritative when present; the
+      // client-side prose parser stays as the fallback for older records.
+      const serverIso = a.enrichment?.interviewDateTimeIso ?? null;
+      const parsed = serverIso?.slice(0, 10) ?? parseInterviewDate(a.enrichment?.interviewDateTime, a.lastActivityIso);
+      const time = (serverIso ? /T(\d{2}:\d{2})/.exec(serverIso)?.[1] ?? null : null) ?? parseInterviewTime(a.enrichment?.interviewDateTime);
+      add(parsed ?? dayOf(a.lastActivityIso), "interview", a, time);
     }
     if (a.status === "rejected") add(dayOf(a.lastActivityIso), "rejected", a);
   }

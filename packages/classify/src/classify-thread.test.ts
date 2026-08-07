@@ -102,4 +102,28 @@ describe("@pipeline/classify — classifyThread", () => {
     expect(c.recruiterContact?.name).toBe("Jordan Lee");
     expect(c.recruiterContact?.email).toBe("jordan.lee@acme.com");
   });
+
+  it("persists BOTH the interview text as written and its normalized ISO twin", () => {
+    // the raw prose stays the display truth; the ISO twin (resolved against
+    // the email's date, PT → PDT in June) is what reminders compute with
+    const app = threadToApplication(CASES.enriched!);
+    expect(app.enrichment?.interviewDateTime).toBe("Tuesday, June 12 at 3:00pm PT");
+    expect(app.enrichment?.interviewDateTimeIso).toBe("2026-06-12T15:00:00-07:00");
+  });
+
+  it("anchors the ISO twin to the message that NAMED the interview, not later replies", () => {
+    // 2026-06-01 is a Monday → "Thursday" means June 4. A contentless reply
+    // eleven days later must NOT re-derive it to the following week's Thursday
+    // (that phantom future date would fire reminders for a past interview).
+    const thread: Thread = {
+      threadId: "t-anchor",
+      domain: "acme.com",
+      subject: "Interview — Platform Engineer at Acme",
+      messages: [
+        { date: "2026-06-01", from: "recruiting@acme.com", body: "Your interview is confirmed for Thursday at 3:00pm ET." },
+        { date: "2026-06-12", from: "recruiting@acme.com", body: "Looking forward to speaking soon!" },
+      ],
+    };
+    expect(threadToApplication(thread).enrichment?.interviewDateTimeIso).toBe("2026-06-04T15:00:00-04:00");
+  });
 });

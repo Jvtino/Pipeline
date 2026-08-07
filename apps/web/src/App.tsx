@@ -10,7 +10,8 @@ import type { Board } from "@pipeline/contracts";
 import type { Overlay, Plan, Screen, OverlaySettings, ViewState, AppMeta } from "./types";
 import type { UiStatus } from "./lib/status";
 import { STATUS } from "./lib/status";
-import { ensureSession, getMe, getBoard, getDocuments, runSync, resync, getConnections, deleteConnection, postJson, type Mailbox, type SyncedDoc, type SyncSummary } from "./api";
+import type { Status as ApiStatus } from "@pipeline/contracts";
+import { ensureSession, getMe, getBoard, getDocuments, runSync, resync, getConnections, deleteConnection, patchApplication, createApplication, confirmReview, postJson, type Mailbox, type SyncedDoc, type SyncSummary } from "./api";
 import { loadOverlay, saveOverlay, defaultOverlay } from "./lib/overlay";
 import { flattenBoard, buildNotifications } from "./lib/derive";
 import { shortDate, syncedLabel, localIsoDate, localIsoDateTime } from "./lib/format";
@@ -37,6 +38,12 @@ function humanSize(bytes: number): string {
 // Monotonic id so two overlay items created in the same millisecond never collide.
 let _idSeq = 0;
 const uid = (prefix: string): string => `${prefix}-${Date.now()}-${(_idSeq += 1)}`;
+
+// The statuses the server actually stores. The other three UI statuses
+// (wishlist / screening / no_response) are presentation-layer concepts and
+// stay overlay-only by design.
+const SERVER_STATUSES = new Set<UiStatus>(["applied", "interview", "offer", "rejected", "cancelled"]);
+const isServerStatus = (s: UiStatus): s is ApiStatus => SERVER_STATUSES.has(s);
 
 const SCREENS: Record<Screen, (ctx: Ctx) => JSX.Element> = {
   dashboard: Dashboard,
@@ -271,14 +278,69 @@ export function App() {
   }, [overlay.settings.autoSync]);
 
   const setStatus = useCallback((id: string, s: UiStatus) => {
-    // Record the move too — it becomes a dated entry on the drawer's timeline.
+    const threadId = apps.find((a) => a.id === id)?.threadId ?? null;
+
+    if (threadId && isServerStatus(s)) {
+      // Server-backed record + a status the server stores → the override goes
+      // to the SERVER: it survives resync and shows on every device (the
+      // phone included). Optimistic overlay first for instant UI; on success
+      // the refreshed board carries the truth and the temporary override is
+      // dropped (leaving it would freeze the card against all future server
+      // changes). On failure the override stays — the honest local fallback —
+      // along with a timeline entry, exactly the pre-server behavior.
+      setOverlay((o) => ({ ...o, overrides: { ...o.overrides, [id]: s } }));
+      flash(`Moved to ${STATUS[s].label}`);
+      void (async () => {
+        try {
+          await patchApplication(threadId, s);
+          const fresh = await getBoard();
+          setBoard(fresh);
+          setOverlay((o) => {
+            // Drop the optimistic override ONLY if it's still ours — a second
+            // move fired before this round-trip finished now owns the key, and
+            // dropping it would erase that in-flight move from the screen.
+            if (o.overrides[id] !== s) return o;
+            const { [id]: _dropped, ...rest } = o.overrides;
+            return { ...o, overrides: rest };
+          });
+        } catch {
+          setOverlay((o) => ({
+            ...o,
+            moves: { ...o.moves, [id]: [...(o.moves[id] ?? []), { status: s, when: localIsoDate(Date.now()) }] },
+            // a stage move counts as having reviewed the record (the server
+            // sets reviewedAt on moves) — mirror that in the offline fallback
+            reviewedLocal: { ...o.reviewedLocal, [threadId]: true },
+          }));
+          flash(`Moved to ${STATUS[s].label} — saved on this device only (server unreachable)`);
+        }
+      })();
+      return;
+    }
+
+    // Presentation-only statuses (wishlist/screening/no_response) and
+    // overlay-only manual apps: the overlay is their home, as before.
     setOverlay((o) => ({
       ...o,
       overrides: { ...o.overrides, [id]: s },
       moves: { ...o.moves, [id]: [...(o.moves[id] ?? []), { status: s, when: localIsoDate(Date.now()) }] },
     }));
     flash(`Moved to ${STATUS[s].label}`);
-  }, [setOverlay, flash]);
+  }, [apps, setOverlay, flash]);
+
+  const confirmClassification = useCallback((id: string) => {
+    const threadId = apps.find((a) => a.id === id)?.threadId ?? null;
+    if (!threadId) return; // overlay-only rows are user-entered — nothing to confirm
+    void (async () => {
+      try {
+        await confirmReview(threadId);
+        setBoard(await getBoard()); // reviewedAt now rides the board — badge clears everywhere
+        flash("Marked as reviewed");
+      } catch {
+        setOverlay((o) => ({ ...o, reviewedLocal: { ...o.reviewedLocal, [threadId]: true } }));
+        flash("Marked as reviewed on this device (server unreachable)");
+      }
+    })();
+  }, [apps, setOverlay, flash]);
 
   const setMeta = useCallback((id: string, patch: Partial<AppMeta>) => {
     setOverlay((o) => ({ ...o, meta: { ...o.meta, [id]: { ...o.meta[id], ...patch } } }));
@@ -396,20 +458,61 @@ export function App() {
   }, [flash]);
 
   const saveNewApp = useCallback((f: NewAppForm) => {
-    const id = uid("m");
+    const metaOf = (): AppMeta => ({
+      workType: f.workType ?? null,
+      location: f.location?.trim() || null,
+      salary: f.salary ?? null,
+      resumeVersion: f.resumeVersion?.trim() || null,
+      sourceLabel: f.source || null,
+    });
     // The date the user picked drives BOTH the label and the metrics (calendar,
     // trend, streaks) — falling back to the current LOCAL date, not the UTC date
     // of a nowMs frozen at mount. When no date is picked, keep the time too so
     // "just now" sorts ahead of everything else from today.
     const createdIso = f.dateIso || localIsoDateTime(Date.now());
-    setOverlay((o) => ({
-      ...o,
-      manual: [...o.manual, { id, company: f.company, role: f.role, status: f.status, dateLabel: "", source: f.source, createdIso }],
-      meta: { ...o.meta, [id]: { workType: f.workType ?? null, location: f.location?.trim() || null, salary: f.salary ?? null, resumeVersion: f.resumeVersion?.trim() || null } },
-    }));
+    // Falls back to the pre-server behavior: an overlay-only row on this device.
+    const saveLocally = (note?: string) => {
+      const id = uid("m");
+      setOverlay((o) => ({
+        ...o,
+        manual: [...o.manual, { id, company: f.company, role: f.role, status: f.status, dateLabel: "", source: f.source, createdIso }],
+        meta: { ...o.meta, [id]: metaOf() },
+      }));
+      flash(note ?? `Added ${f.company}`);
+    };
+
+    const status = f.status; // capture so the narrowing survives into the closure
+    if (isServerStatus(status)) {
+      // A status the server stores → create a REAL record: it survives
+      // browsers, appears on the phone, and resync can't wash it away.
+      // Annotations (work type, salary, source channel) stay in the overlay,
+      // keyed by the server's threadId.
+      flash(`Adding ${f.company}…`); // the modal closes now; say something while the save is in flight
+      void (async () => {
+        let application;
+        try {
+          ({ application } = await createApplication({ company: f.company, role: f.role, status, appliedOn: f.dateIso || undefined }));
+        } catch {
+          // only a FAILED create falls back — a refetch hiccup after a 201
+          // must not mint a duplicate overlay row for a record that exists
+          saveLocally(`Added ${f.company} — saved on this device only (server unreachable)`);
+          return;
+        }
+        setOverlay((o) => ({ ...o, meta: { ...o.meta, [application.threadId]: metaOf() } }));
+        flash(`Added ${f.company}`);
+        try {
+          setBoard(await getBoard());
+        } catch {
+          /* the record exists server-side; the next refresh will show it */
+        }
+      })();
+    } else {
+      // wishlist/screening are presentation-layer statuses the server doesn't
+      // model — those rows live in the overlay, as before.
+      saveLocally();
+    }
     setModalOpen(false);
     setNav("applications");
-    flash(`Added ${f.company}`);
   }, [setOverlay, flash]);
 
   const ctx: Ctx = {
@@ -427,6 +530,7 @@ export function App() {
     onSync,
     onRebuild,
     setStatus,
+    confirmClassification,
     setMeta,
     renameCompany,
     hideApp,

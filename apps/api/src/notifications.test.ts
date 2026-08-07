@@ -152,6 +152,46 @@ describe("notifyInterviewReminders", () => {
     await notifyInterviewReminders(deps("2026-08-10T00:00:00Z"));
     expect(sent).toHaveLength(2);
   });
+
+  it("prose interview text fires via its normalized ISO twin, showing the email's wall-clock time", async () => {
+    // What real records look like since the normalizer: the raw field keeps the
+    // email's words (Date.parse → NaN), the ISO twin carries the resolved
+    // moment (2:30 PM ET in June = 18:30 UTC).
+    const prose: Application = {
+      ...appWithInterview("t-prose", ""),
+      enrichment: {
+        interviewDateTime: "Tuesday, June 12 at 2:30 PM ET",
+        interviewDateTimeIso: "2026-06-12T14:30:00-04:00",
+      },
+    };
+    await upsertApplications(h.db, "u1", [prose]);
+    await notifyInterviewReminders(deps("2026-06-12T17:00:00Z")); // 1.5h before 18:30Z → 24h window
+    expect(sent).toHaveLength(2);
+    // the push shows 14:30 — the clock the email named — not the UTC rendering
+    expect(sent[0]!.body).toBe("Acme — Engineer at 14:30");
+
+    // pre-normalizer records (prose only, no twin) stay silent rather than crash
+    sent = [];
+    const legacy: Application = {
+      ...appWithInterview("t-legacy", ""),
+      enrichment: { interviewDateTime: "Thursday at 3pm" },
+    };
+    await upsertApplications(h.db, "u1", [legacy]);
+    await notifyInterviewReminders(deps("2026-06-12T17:00:00Z"));
+    expect(sent).toHaveLength(0);
+  });
+
+  it("closed-out records don't ping — a rejected thread's extracted interview is history", async () => {
+    await upsertApplications(h.db, "u1", [{ ...appWithInterview("t-gone", "2026-08-10T14:30:00Z"), status: "rejected" }]);
+    await notifyInterviewReminders(deps("2026-08-10T00:00:00Z"));
+    expect(sent).toHaveLength(0);
+
+    // ...and the user's own override to rejected silences it just the same
+    await upsertApplications(h.db, "u1", [appWithInterview("t-closed", "2026-08-10T14:30:00Z")]);
+    await setStatusOverride(h.db, "u1", "t-closed", "rejected");
+    await notifyInterviewReminders(deps("2026-08-10T00:00:00Z"));
+    expect(sent).toHaveLength(0);
+  });
 });
 
 describe("sweepReceipts", () => {

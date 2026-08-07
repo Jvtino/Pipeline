@@ -172,7 +172,8 @@ export default function ApplicationDetail() {
  *  zone, so calendar-day distance is the only honest comparison — and regex
  *  parsing sidesteps Date.parse differences between Hermes and V8. */
 function InterviewSoonBanner({ app }: { app: Application }) {
-  const raw = app.enrichment?.interviewDateTime;
+  // ISO twin for the math; the raw text stays the display truth elsewhere
+  const raw = app.enrichment?.interviewDateTimeIso ?? app.enrichment?.interviewDateTime;
   const parsed = raw ? parseInterview(raw) : null;
   if (!parsed) return null; // prose dates ("June 12 at 2:30 PM ET") still show in the facts panel
   const days = daysUntil(parsed.day, localToday());

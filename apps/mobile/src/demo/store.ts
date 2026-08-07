@@ -35,9 +35,11 @@ function seed(): DemoState {
     const soon = new Date(Date.now() + 26 * 60 * 60 * 1000); // ~tomorrow: inside the "interview soon" window
     acme.enrichment = {
       ...acme.enrichment,
-      // no zone suffix — extracted interview times are wall-clock text shown
-      // as written, exactly like the real classifier produces
+      // Both fields set together — overriding only the raw text would leave a
+      // stale classifier-produced ISO twin pointing at a different date. No
+      // zone suffix: wall-clock text shown as written, like real records.
       interviewDateTime: `${soon.toISOString().slice(0, 10)}T14:30:00`,
+      interviewDateTimeIso: `${soon.toISOString().slice(0, 10)}T14:30:00`,
       location: "Berlin · hybrid",
       recruiterName: "Maya Lindqvist",
       recruiterTitle: "Talent Partner",

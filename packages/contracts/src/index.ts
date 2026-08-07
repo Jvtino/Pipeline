@@ -88,7 +88,16 @@ export function safeParseThread(value: unknown): z.SafeParseReturnType<unknown, 
  * until persisted. The UI shows these read-only ("extracted from email").
  */
 export const enrichmentSchema = z.object({
+  /** The interview date/time AS WRITTEN in the email — display truth, never converted. */
   interviewDateTime: z.string().nullable().optional(),
+  /**
+   * Best-effort machine reading of `interviewDateTime`, normalized against the
+   * email's date ("YYYY-MM-DD" or full ISO, with a UTC offset when the email
+   * named a recognizable zone). Powers date MATH only — reminders, calendar
+   * placement, "interview soon" — while the raw text stays what users see.
+   * Absent when the text couldn't be read confidently.
+   */
+  interviewDateTimeIso: z.string().nullable().optional(),
   interviewLink: z.string().nullable().optional(),
   compensation: z.string().nullable().optional(),
   location: z.string().nullable().optional(),

@@ -22,6 +22,8 @@ export { statusForThread, eventHistoryForThread, threadToApplication, threadsToA
 export type { Classification, ClassifiedThreadEvent, CompanyField, RoleField } from "./aggregate";
 export { extractInterview, extractCompensation, extractLocation, extractRecruiterContact } from "./extract";
 export type { InterviewInfo, CompensationInfo, LocationInfo, LocationKind, RecruiterContact } from "./extract";
+export { normalizeInterviewDateTime } from "./normalize-datetime";
+export type { NormalizedDateTime } from "./normalize-datetime";
 export { classifyEmailEvent, applyEventTransition, resolveApplicationStatus, stripQuotedText, EMAIL_EVENT_TYPES } from "./events";
 export type { EmailEventType, EmailEventInput, EmailEventClassification, EventTransition, StatusResolution } from "./events";
 

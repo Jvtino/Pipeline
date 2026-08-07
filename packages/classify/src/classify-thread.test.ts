@@ -102,4 +102,12 @@ describe("@pipeline/classify — classifyThread", () => {
     expect(c.recruiterContact?.name).toBe("Jordan Lee");
     expect(c.recruiterContact?.email).toBe("jordan.lee@acme.com");
   });
+
+  it("persists BOTH the interview text as written and its normalized ISO twin", () => {
+    // the raw prose stays the display truth; the ISO twin (resolved against
+    // the email's date, PT → PDT in June) is what reminders compute with
+    const app = threadToApplication(CASES.enriched!);
+    expect(app.enrichment?.interviewDateTime).toBe("Tuesday, June 12 at 3:00pm PT");
+    expect(app.enrichment?.interviewDateTimeIso).toBe("2026-06-12T15:00:00-07:00");
+  });
 });

@@ -5,6 +5,7 @@
 // sync engine so the live-mail and incremental paths derive identically.
 import { resolveCompany, extractRole, isAtsDomain, isNonEmployerDomain, companyFromDomain, guessCompanyDomain, acceptCompany, tidy } from "./index";
 import { classifyEmailEvent, resolveApplicationStatus, type EmailEventClassification, type EventTransition, type EmailEventType } from "./events";
+import { normalizeInterviewDateTime } from "./normalize-datetime";
 import {
   extractInterview,
   extractCompensation,
@@ -244,9 +245,15 @@ export function statusForThread(thread: Thread): Status {
 /** Flatten the rich classification's value-or-null fields into the persisted
  *  Enrichment shape. Returns undefined when nothing was extracted (so we never
  *  store an empty object). */
-function enrichmentFrom(c: Classification): Enrichment | undefined {
+function enrichmentFrom(c: Classification, referenceDate?: string): Enrichment | undefined {
   const e: Enrichment = {};
-  if (c.interview?.dateTimeText) e.interviewDateTime = c.interview.dateTimeText;
+  if (c.interview?.dateTimeText) {
+    e.interviewDateTime = c.interview.dateTimeText;
+    // The raw text is the display truth; the ISO twin (normalized against the
+    // email's date) is what reminders and calendars can actually compute with.
+    const normalized = referenceDate ? normalizeInterviewDateTime(c.interview.dateTimeText, referenceDate) : null;
+    if (normalized) e.interviewDateTimeIso = normalized.iso;
+  }
   if (c.interview?.bookingLink) e.interviewLink = c.interview.bookingLink;
   if (c.compensation?.text) e.compensation = c.compensation.text;
   if (c.location?.value) e.location = c.location.value;
@@ -295,7 +302,7 @@ export function threadToApplication(thread: Thread): Application {
       suggestedStatus: event.classification.suggestedStatus,
       transitionApplied: event.transition.applied,
     })),
-    enrichment: enrichmentFrom(c),
+    enrichment: enrichmentFrom(c, last?.date),
     // Only set when true (additive, like `manual`): a shared-platform identity
     // must never become a grouping key downstream.
     ...(c.company.isPlatformFallback ? { platformFallback: true } : {}),

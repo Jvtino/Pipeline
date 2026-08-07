@@ -70,7 +70,11 @@ export async function notifyInterviewReminders(deps: NotifyDeps): Promise<void> 
   const now = (deps.now ?? (() => new Date()))().getTime();
   const HOUR = 60 * 60 * 1000;
   for (const row of await listApplicationsWithEnrichment(deps.db)) {
-    const iso = row.enrichment.interviewDateTime;
+    // The normalized twin is the computable one — the raw interviewDateTime is
+    // the email's own words ("Tuesday, June 12 at 2:30 PM ET"), which
+    // Date.parse reads as NaN and would silently skip. The raw fallback keeps
+    // reminders working for records enriched before the ISO field existed.
+    const iso = row.enrichment.interviewDateTimeIso ?? row.enrichment.interviewDateTime;
     if (!iso) continue;
     const at = Date.parse(iso);
     if (Number.isNaN(at) || at <= now) continue;

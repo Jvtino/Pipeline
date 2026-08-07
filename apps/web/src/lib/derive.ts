@@ -63,8 +63,11 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
       let status: UiStatus = a.status; // applied | interview | offer | rejected
       const lastMs = parseIso(a.lastActivity);
       const daysSince = Number.isNaN(lastMs) ? null : daysBetween(nowMs, lastMs);
-      // Derive "no response" from a stale, un-progressed application.
-      if (status === "applied" && daysSince != null && daysSince >= STALE_DAYS) status = "no_response";
+      // Derive "no response" from a stale, un-progressed application — unless
+      // the served status IS the user's own override: re-deriving on top of an
+      // explicit "this is Applied" would snap the card straight back to No
+      // Response the moment the optimistic client override clears.
+      if (!a.overridden && status === "applied" && daysSince != null && daysSince >= STALE_DAYS) status = "no_response";
       // A user "Move stage" override always wins.
       const ov = overlay.overrides[a.threadId];
       if (ov) status = ov;

@@ -158,6 +158,13 @@ export const applicationSchema = z.object({
    */
   reviewedAt: z.string().nullable().optional(),
   /**
+   * True when `status` IS a user override (the served status already
+   * coalesces it). Additive: clients must not layer their own derived
+   * presentation states (e.g. the web's stale-"applied" → "no response") on
+   * top of a status the user set by hand — the user's word is final.
+   */
+  overridden: z.boolean().optional(),
+  /**
    * True when the employer could not be recovered and `company` is only the
    * shared ATS platform's name ("Myworkday", "Linkedin", …). Optional/additive
    * like `confidence`. A shared platform identity must NEVER merge records:

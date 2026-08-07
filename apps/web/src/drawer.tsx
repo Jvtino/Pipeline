@@ -67,7 +67,10 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
     setEvents(null);
     if (!app.threadId) return;
     getEvents(app.threadId).then((r) => setEvents(r.events)).catch(() => setEvents([]));
-  }, [app.id, app.threadId]);
+    // app.status in the deps: a successful server-backed move refreshes the
+    // board (new status) and must also refresh this timeline — without it the
+    // open drawer only shows the new event after close + reopen.
+  }, [app.id, app.threadId, app.status]);
   const history = useMemo(() => {
     // Server events carry their source: sync transitions read "from email",
     // the user's own server-side moves (web or phone) read "moved by you".

@@ -75,6 +75,7 @@ export function resetDemo(): void {
 const coalesced = (a: Application & { overrideStatus?: Status }): Application => ({
   ...a,
   status: a.overrideStatus ?? a.status,
+  ...(a.overrideStatus ? { overridden: true } : {}), // same contract semantics as the real server
 });
 
 const today = (): string => new Date().toISOString();

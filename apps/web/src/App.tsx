@@ -296,6 +296,10 @@ export function App() {
           const fresh = await getBoard();
           setBoard(fresh);
           setOverlay((o) => {
+            // Drop the optimistic override ONLY if it's still ours — a second
+            // move fired before this round-trip finished now owns the key, and
+            // dropping it would erase that in-flight move from the screen.
+            if (o.overrides[id] !== s) return o;
             const { [id]: _dropped, ...rest } = o.overrides;
             return { ...o, overrides: rest };
           });
@@ -303,6 +307,9 @@ export function App() {
           setOverlay((o) => ({
             ...o,
             moves: { ...o.moves, [id]: [...(o.moves[id] ?? []), { status: s, when: localIsoDate(Date.now()) }] },
+            // a stage move counts as having reviewed the record (the server
+            // sets reviewedAt on moves) — mirror that in the offline fallback
+            reviewedLocal: { ...o.reviewedLocal, [threadId]: true },
           }));
           flash(`Moved to ${STATUS[s].label} — saved on this device only (server unreachable)`);
         }
@@ -480,14 +487,23 @@ export function App() {
       // browsers, appears on the phone, and resync can't wash it away.
       // Annotations (work type, salary, source channel) stay in the overlay,
       // keyed by the server's threadId.
+      flash(`Adding ${f.company}…`); // the modal closes now; say something while the save is in flight
       void (async () => {
+        let application;
         try {
-          const { application } = await createApplication({ company: f.company, role: f.role, status, appliedOn: f.dateIso || undefined });
-          setBoard(await getBoard());
-          setOverlay((o) => ({ ...o, meta: { ...o.meta, [application.threadId]: metaOf() } }));
-          flash(`Added ${f.company}`);
+          ({ application } = await createApplication({ company: f.company, role: f.role, status, appliedOn: f.dateIso || undefined }));
         } catch {
+          // only a FAILED create falls back — a refetch hiccup after a 201
+          // must not mint a duplicate overlay row for a record that exists
           saveLocally(`Added ${f.company} — saved on this device only (server unreachable)`);
+          return;
+        }
+        setOverlay((o) => ({ ...o, meta: { ...o.meta, [application.threadId]: metaOf() } }));
+        flash(`Added ${f.company}`);
+        try {
+          setBoard(await getBoard());
+        } catch {
+          /* the record exists server-side; the next refresh will show it */
         }
       })();
     } else {

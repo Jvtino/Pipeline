@@ -34,6 +34,20 @@ describe("flattenBoard — needsReview seam", () => {
     expect(review["none"]).toBe(false);
   });
 
+  it("a user-overridden 'applied' never re-derives to no_response — the user's word is final", () => {
+    const stale = "2026-03-01"; // 70 days before `now` — far past the stale threshold
+    const board = boardFromApplications(
+      [
+        app({ threadId: "pinned", lastActivity: stale, overridden: true }), // user explicitly set Applied
+        app({ threadId: "quiet", lastActivity: stale }), // classifier's applied, gone quiet → nudge
+      ],
+      "test",
+    );
+    const status = Object.fromEntries(flattenBoard(board, defaultOverlay(), now).map((r) => [r.id, r.status]));
+    expect(status["pinned"]).toBe("applied");
+    expect(status["quiet"]).toBe("no_response");
+  });
+
   it("a reviewed record stops asking — server reviewedAt or the local fallback mark", () => {
     const board = boardFromApplications(
       [

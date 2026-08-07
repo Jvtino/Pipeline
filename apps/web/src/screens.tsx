@@ -30,7 +30,7 @@ import {
   type CompanyCardData,
   type DerivedTask,
 } from "./lib/derive";
-import { MONTHS, shortDate, parseIso } from "./lib/format";
+import { MONTHS, localIsoDate, shortDate, parseIso } from "./lib/format";
 import { getBackgroundSync, setBackgroundSync as apiSetBackgroundSync, type BackgroundSync } from "./api";
 import { CompanyAvatar, CompanyLogo, PersonAvatar, StatusPill, Donut, TrendChart, CountChip, NeedsReviewBadge, ExpandMorph } from "./components";
 import { IconBolt, IconChevronRight, IconSearch, IconMail, IconDownload, IconPlus, IconShield, IconCheck, IconX } from "./lib/icons";
@@ -102,10 +102,11 @@ export function Dashboard(ctx: Ctx) {
         </>
       )}
 
-      {/* interview-soon strip — the phone banner's desktop twin */}
+      {/* interview-soon strip — the phone banner's desktop twin; capped so a
+          heavy interview week can't push the dashboard below the fold */}
       {soon.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "13px 15px", marginBottom: 14, background: "rgba(192,138,42,.09)", border: "1px solid rgba(192,138,42,.28)", borderRadius: 13 }}>
-          {soon.map((s) => (
+          {soon.slice(0, 4).map((s) => (
             <div key={s.id} onClick={() => openDetail(s.id)} className="pl-lift" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS.interview.dot, flex: "0 0 auto" }} />
               <span style={{ font: "700 13px var(--sans)", color: "#9a6a16" }}>
@@ -118,6 +119,11 @@ export function Dashboard(ctx: Ctx) {
               <IconChevronRight size={13} stroke={2.2} color="#9a6a16" />
             </div>
           ))}
+          {soon.length > 4 && (
+            <div onClick={() => goto("calendar")} className="pl-lift" style={{ cursor: "pointer", font: "600 12px var(--sans)", color: "#9a6a16", paddingLeft: 18 }}>
+              +{soon.length - 4} more on the calendar
+            </div>
+          )}
         </div>
       )}
 
@@ -492,20 +498,23 @@ const CAL_DAY_MS = 86_400_000;
 
 export function Calendar(ctx: Ctx) {
   const now = new Date(ctx.nowMs);
-  const todayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString().slice(0, 10);
+  // The user's LOCAL day — toISOString()'s UTC day highlights tomorrow as
+  // "today" every evening west of UTC (and disagreed with the dashboard
+  // strip, which was already local).
+  const todayIso = localIsoDate(ctx.nowMs);
   const startOfWeek = (ms: number) => {
     const d = new Date(ms);
     const day = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
     return day - new Date(day).getUTCDay() * CAL_DAY_MS; // back to Sunday
   };
   const [view, setView] = useState<CalView>("month");
-  const [ym, setYm] = useState({ y: now.getUTCFullYear(), m: now.getUTCMonth() });
+  const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() }); // open on the LOCAL month, matching todayIso
   const [weekMs, setWeekMs] = useState(() => startOfWeek(ctx.nowMs));
   const [openDay, setOpenDay] = useState<{ cell: number; bucket: string } | null>(null);
   const cells = useMemo(() => calendarFor(ctx.apps, ym.y, ym.m), [ctx.apps, ym]);
   const byDate = useMemo(() => calendarEntryMap(ctx.apps), [ctx.apps]);
 
-  const goToday = () => { setYm({ y: now.getUTCFullYear(), m: now.getUTCMonth() }); setWeekMs(startOfWeek(ctx.nowMs)); setOpenDay(null); };
+  const goToday = () => { setYm({ y: now.getFullYear(), m: now.getMonth() }); setWeekMs(startOfWeek(ctx.nowMs)); setOpenDay(null); };
   const shift = (d: number) => {
     if (view === "week") setWeekMs((w) => w + d * 7 * CAL_DAY_MS);
     else {

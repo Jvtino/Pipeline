@@ -11,6 +11,8 @@
 import { initStore, resolveMasterKey } from "./store";
 import { loadProviderConfigs } from "./config";
 import { startSyncScheduler } from "./scheduler";
+import { expoPushGateway } from "./push";
+import { notifyTransitions, notifyInterviewReminders, sweepReceipts, type NotifyDeps } from "./notifications";
 
 const log = (msg: string) => console.log(`[pipeline-worker] ${new Date().toISOString()} ${msg}`);
 
@@ -21,14 +23,40 @@ async function main(): Promise<void> {
   const masterKey = resolveMasterKey(false);
   const configs = loadProviderConfigs(process.env);
 
-  const stop = startSyncScheduler({ db: store.db, masterKey, configs }, intervalMs, log);
-  log(`sync scheduler running every ${Math.round(intervalMs / 1000)}s`);
+  const notify: NotifyDeps = { db: store.db, gateway: expoPushGateway(), log };
+  const stop = startSyncScheduler(
+    {
+      db: store.db,
+      masterKey,
+      configs,
+      onTransitions: (userId, transitions) => notifyTransitions(notify, userId, transitions),
+    },
+    intervalMs,
+    log,
+  );
+  log(`sync scheduler running every ${Math.round(intervalMs / 1000)}s (push notifications on)`);
+
+  // Reminder scan + receipt sweep ride their own interval so a slow mailbox
+  // sync can never delay an interview ping. Every send is dedupe-guarded, so
+  // overlap with the web process's scheduler is harmless.
+  const notifyTick = async () => {
+    try {
+      await notifyInterviewReminders(notify);
+      await sweepReceipts(notify);
+    } catch (e) {
+      log(`notify tick error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+  void notifyTick();
+  const notifyHandle = setInterval(() => void notifyTick(), Math.min(intervalMs, 5 * 60 * 1000));
+  if (typeof notifyHandle.unref === "function") notifyHandle.unref();
 
   // Interval handles are unref'd — keep the process alive until told to stop.
   const alive = setInterval(() => {}, 1 << 30);
   const shutdown = async (signal: string) => {
     log(`${signal} — shutting down`);
     clearInterval(alive);
+    clearInterval(notifyHandle);
     stop();
     await store.close();
     process.exit(0);

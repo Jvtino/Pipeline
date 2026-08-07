@@ -92,6 +92,24 @@ export function useConnectToken() {
   });
 }
 
+const deviceEnvelope = z.object({
+  device: z.object({
+    id: z.string(),
+    notifyStatusChanges: z.boolean(),
+    notifyReminders: z.boolean(),
+  }),
+});
+
+/** Per-device notification preferences (Settings toggles). */
+export function useUpdateDevice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...prefs }: { id: string; notifyStatusChanges?: boolean; notifyReminders?: boolean }) =>
+      request(`/api/devices/${encodeURIComponent(id)}`, deviceEnvelope, { method: "PATCH", body: JSON.stringify(prefs) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["devices"] }),
+  });
+}
+
 export function useDeleteAccount() {
   const qc = useQueryClient();
   return useMutation({

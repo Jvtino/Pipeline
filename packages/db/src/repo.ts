@@ -698,6 +698,37 @@ export async function disableDeviceByToken(db: Database, expoPushToken: string):
   await db.update(devices).set({ disabled: true }).where(eq(devices.expoPushToken, expoPushToken));
 }
 
+export interface EnrichedApplicationRow {
+  userId: string;
+  threadId: string;
+  company: string;
+  role: string;
+  enrichment: Enrichment;
+}
+
+/** Every application (all users) carrying extracted enrichment — the interview-
+ *  reminder scan's input. Filtered in code; enrichment is a JSON text column
+ *  and boards are small at v1 scale. */
+export async function listApplicationsWithEnrichment(db: Database): Promise<EnrichedApplicationRow[]> {
+  const rows = await db
+    .select({
+      userId: applications.userId,
+      threadId: applications.threadId,
+      company: applications.company,
+      role: applications.role,
+      enrichment: applications.enrichment,
+    })
+    .from(applications)
+    .where(isNotNull(applications.enrichment));
+  return rows.map((r) => ({
+    userId: r.userId,
+    threadId: r.threadId,
+    company: r.company,
+    role: r.role,
+    enrichment: JSON.parse(r.enrichment!) as Enrichment,
+  }));
+}
+
 // ── Push send-once ledger ────────────────────────────────────────────────────
 
 /**

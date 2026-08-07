@@ -29,6 +29,8 @@ import { registerAuthRoutes, resolveDevLoginEnabled } from "./auth-routes";
 import { registerProRoutes } from "./pro-routes";
 import { clerkConfigFromEnv, createBearerVerifier, clerkIdentityDeleter, type BearerVerifier } from "./clerk";
 import { registerMobileRoutes } from "./mobile-routes";
+import { expoPushGateway } from "./push";
+import { notifyTransitions, notifyInterviewReminders, type NotifyDeps } from "./notifications";
 import { memoryPendingStore, redisPendingStore } from "./pending-store";
 import { backgroundSyncStatus, setBackgroundSync } from "./background-sync";
 import { startSyncScheduler } from "./scheduler";
@@ -319,11 +321,30 @@ export async function buildServer(opts: ServerOptions = {}) {
     deleteIdentity: clerkIdentityDeleter() ?? undefined,
   });
 
-  // Background sync scheduler — opt-in via SYNC_INTERVAL_MS (off in tests/dev by default).
+  // Background sync scheduler — opt-in via SYNC_INTERVAL_MS (off in tests/dev
+  // by default; the dedicated worker process is the preferred home). Push
+  // notifications ride the transition stream here too — the DB dedupe ledger
+  // makes overlap with the worker send-once safe.
   const intervalMs = Number(process.env.SYNC_INTERVAL_MS ?? 0);
   if (intervalMs > 0) {
-    const stop = startSyncScheduler({ db: store.db, masterKey, configs, transport: opts.transport }, intervalMs, (m) => app.log.info(m));
-    app.addHook("onClose", async () => stop());
+    const notify: NotifyDeps = { db: store.db, gateway: expoPushGateway(), log: (m) => app.log.info(m) };
+    const stop = startSyncScheduler(
+      {
+        db: store.db,
+        masterKey,
+        configs,
+        transport: opts.transport,
+        onTransitions: (userId, transitions) => notifyTransitions(notify, userId, transitions),
+      },
+      intervalMs,
+      (m) => app.log.info(m),
+    );
+    const reminderHandle = setInterval(() => void notifyInterviewReminders(notify).catch((e) => app.log.warn(e)), Math.min(intervalMs, 5 * 60 * 1000));
+    if (typeof reminderHandle.unref === "function") reminderHandle.unref();
+    app.addHook("onClose", async () => {
+      clearInterval(reminderHandle);
+      stop();
+    });
   }
 
   return app;

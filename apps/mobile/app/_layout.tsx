@@ -13,6 +13,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AUTH_MODE } from "../src/auth/mode";
 import { ClerkAuth } from "../src/auth/clerk";
 import { DevAuthProvider } from "../src/auth/dev";
+import { configureNotificationHandling } from "../src/notifications";
 import { useMeta } from "../src/api/queries";
 import { versionAtLeast } from "../src/lib/version";
 import { Centered, Screen } from "../src/ui/components";
@@ -29,6 +30,8 @@ const queryClient = new QueryClient({
 });
 
 const persister = createAsyncStoragePersister({ storage: AsyncStorage, key: "pipeline.query-cache.v1" });
+
+configureNotificationHandling(); // foreground alerts show as banners
 
 function AuthProvider({ children }: { children: ReactNode }) {
   return AUTH_MODE === "clerk" ? <ClerkAuth>{children}</ClerkAuth> : <DevAuthProvider>{children}</DevAuthProvider>;

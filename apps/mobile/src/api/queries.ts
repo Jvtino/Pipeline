@@ -28,6 +28,25 @@ const connectionsSchema = z.object({
   mailboxes: z.array(z.object({ id: z.string(), provider: z.string(), email: z.string() })),
 });
 
+export const deviceSchema = z.object({
+  id: z.string(),
+  platform: z.string(),
+  expoPushToken: z.string(),
+  deviceName: z.string().nullish(),
+  notifyStatusChanges: z.boolean(),
+  notifyReminders: z.boolean(),
+  disabled: z.boolean(),
+});
+const devicesSchema = z.object({ devices: z.array(deviceSchema) });
+
+/** This account's push-registered devices (Settings → notification toggles). */
+export const useDevices = (enabled = true) =>
+  useQuery({
+    queryKey: ["devices"],
+    queryFn: () => request("/api/devices", devicesSchema),
+    enabled,
+  });
+
 const metaSchema = z.object({
   ok: z.boolean(),
   minMobileVersion: z.string(),

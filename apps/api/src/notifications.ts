@@ -6,6 +6,7 @@
 import {
   listActiveDevices,
   recordPushOnce,
+  releasePushClaim,
   disableDeviceByToken,
   listApplicationsWithEnrichment,
   type Database,
@@ -28,17 +29,58 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+/**
+ * Deliver one logical notification to every opted-in device.
+ *
+ * THROWS ONLY WHEN NOTHING WAS SENT (device lookup or the gateway call itself
+ * failed) — that's the contract callers rely on to decide whether releasing
+ * the dedupe claim is safe. Post-send bookkeeping (disabling tokens the
+ * gateway reported dead) is best-effort: the push already went out, so a
+ * failure there must never look like a failed delivery and must never cost
+ * the user a re-send.
+ */
 async function deliver(deps: NotifyDeps, userId: string, kind: "transition" | "interview", make: (token: string) => PushMessage): Promise<void> {
   const devices = await listActiveDevices(deps.db, userId);
   const wanted = devices.filter((d) => (kind === "interview" ? d.notifyReminders : d.notifyStatusChanges));
   if (!wanted.length) return;
   const outcomes = await deps.gateway.send(wanted.map((d) => make(d.expoPushToken)));
   for (const o of outcomes) {
-    if (o.deviceNotRegistered) {
+    if (!o.deviceNotRegistered) continue;
+    try {
       await disableDeviceByToken(deps.db, o.token);
       deps.log?.(`push: disabled dead token ${o.token.slice(0, 12)}…`);
+    } catch (e) {
+      deps.log?.(`push: couldn't disable dead token (will retry next send): ${errText(e)}`);
     }
   }
+}
+
+const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/**
+ * Claim → send → (on a failed send) give the claim back. The ledger is
+ * claim-first so send-once holds under concurrent ticks; this pairs it with a
+ * release so a transient gateway outage costs a retry, not the notification.
+ * Returns false when the claim was already taken (someone else sent it).
+ */
+async function claimAndSend(
+  deps: NotifyDeps,
+  claim: { userId: string; kind: "transition" | "interview"; dedupeKey: string },
+  make: (token: string) => PushMessage,
+): Promise<boolean> {
+  const claimed = await recordPushOnce(deps.db, claim);
+  if (!claimed) return false;
+  try {
+    await deliver(deps, claim.userId, claim.kind, make);
+  } catch (e) {
+    // deliver() only throws before anything left the building, so the claim is
+    // safe to hand back — a later tick will try this notification again.
+    deps.log?.(`push: send failed, releasing claim ${claim.dedupeKey}: ${errText(e)}`);
+    await releasePushClaim(deps.db, claim.dedupeKey).catch((releaseError) => {
+      deps.log?.(`push: claim release failed for ${claim.dedupeKey}: ${errText(releaseError)}`);
+    });
+  }
+  return true;
 }
 
 /**
@@ -50,16 +92,20 @@ async function deliver(deps: NotifyDeps, userId: string, kind: "transition" | "i
 export async function notifyTransitions(deps: NotifyDeps, userId: string, transitions: StatusTransition[]): Promise<void> {
   for (const t of transitions) {
     if (t.overridden) continue;
-    const claimed = await recordPushOnce(deps.db, { userId, kind: "transition", dedupeKey: `${userId}:${t.threadId}:${t.to}` });
-    if (!claimed) continue;
     const label = STATUS_LABEL[t.to] ?? t.to;
-    await deliver(deps, userId, "transition", (to) => ({
-      to,
-      title: t.company,
-      body: t.isNew ? `New application on your board — ${t.role} (${label})` : `${t.role} moved to ${label}`,
-      data: { type: "transition", threadId: t.threadId },
-      channelId: "status-changes",
-    }));
+    // Isolated per transition: one unlucky record must not cost this user the
+    // rest of their batch.
+    try {
+      await claimAndSend(deps, { userId, kind: "transition", dedupeKey: `${userId}:${t.threadId}:${t.to}` }, (to) => ({
+        to,
+        title: t.company,
+        body: t.isNew ? `New application on your board — ${t.role} (${label})` : `${t.role} moved to ${label}`,
+        data: { type: "transition", threadId: t.threadId },
+        channelId: "status-changes",
+      }));
+    } catch (e) {
+      deps.log?.(`push: transition notify failed for ${t.threadId}: ${errText(e)}`);
+    }
   }
 }
 
@@ -69,6 +115,9 @@ export async function notifyTransitions(deps: NotifyDeps, userId: string, transi
 export async function notifyInterviewReminders(deps: NotifyDeps): Promise<void> {
   const now = (deps.now ?? (() => new Date()))().getTime();
   const HOUR = 60 * 60 * 1000;
+  // This scan spans EVERY user. Each record is isolated below — one bad row
+  // (or one user's flaky device state) must never cost every later user their
+  // interview reminder, on this tick or any tick after it.
   for (const row of await listApplicationsWithEnrichment(deps.db)) {
     // A record the user closed out must not ping about its (possibly stale)
     // extracted interview — the timeline moved on even if the mail mentioned one.
@@ -90,30 +139,37 @@ export async function notifyInterviewReminders(deps: NotifyDeps): Promise<void> 
     const until = at - now;
     const window = until <= HOUR ? "1h" : until <= 24 * HOUR ? "24h" : null;
     if (!window) continue;
-    // Keyed by the parsed MOMENT, not the string: re-derivation can rewrite
-    // "2026-08-10T14:30" to its canonical "…:00" twin without re-pinging, while
-    // a genuinely rescheduled interview (different moment) correctly re-fires.
-    const claimed = await recordPushOnce(deps.db, {
-      userId: row.userId,
-      kind: "interview",
-      dedupeKey: `${row.userId}:${row.threadId}:interview:${at}:${window}`,
-    });
-    if (!claimed) continue;
     const time = /T(\d{2}:\d{2})/.exec(iso)?.[1];
-    await deliver(deps, row.userId, "interview", (to) => ({
-      to,
-      title: `Interview ${window === "1h" ? "in about an hour" : "tomorrow"}`,
-      body: `${row.company} — ${row.role}${time ? ` at ${time}` : ""}`,
-      data: { type: "interview", threadId: row.threadId },
-      channelId: "reminders",
-    }));
+    try {
+      // Keyed by the parsed MOMENT, not the string: re-derivation can rewrite
+      // "2026-08-10T14:30" to its canonical "…:00" twin without re-pinging, while
+      // a genuinely rescheduled interview (different moment) correctly re-fires.
+      await claimAndSend(
+        deps,
+        { userId: row.userId, kind: "interview", dedupeKey: `${row.userId}:${row.threadId}:interview:${at}:${window}` },
+        (to) => ({
+          to,
+          title: `Interview ${window === "1h" ? "in about an hour" : "tomorrow"}`,
+          body: `${row.company} — ${row.role}${time ? ` at ${time}` : ""}`,
+          data: { type: "interview", threadId: row.threadId },
+          channelId: "reminders",
+        }),
+      );
+    } catch (e) {
+      deps.log?.(`push: interview reminder failed for ${row.threadId}: ${errText(e)}`);
+    }
   }
 }
 
-/** Receipt sweep: tokens Expo reported dead after the fact get disabled. */
+/** Receipt sweep: tokens Expo reported dead after the fact get disabled.
+ *  Per-token isolation — one stubborn row can't strand the rest of the sweep. */
 export async function sweepReceipts(deps: NotifyDeps): Promise<void> {
   for (const token of await deps.gateway.pollReceipts()) {
-    await disableDeviceByToken(deps.db, token);
-    deps.log?.(`push: disabled dead token (receipt) ${token.slice(0, 12)}…`);
+    try {
+      await disableDeviceByToken(deps.db, token);
+      deps.log?.(`push: disabled dead token (receipt) ${token.slice(0, 12)}…`);
+    } catch (e) {
+      deps.log?.(`push: couldn't disable ${token.slice(0, 12)}… from receipt: ${errText(e)}`);
+    }
   }
 }

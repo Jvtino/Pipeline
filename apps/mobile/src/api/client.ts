@@ -42,6 +42,21 @@ export function setAuthHeaderProvider(fn: GetAuthHeaders): void {
   getAuthHeaders = fn;
 }
 
+/** Authenticated GET for endpoints that answer with TEXT, not a JSON envelope
+ *  (the CSV export). Same auth seam and error semantics as request(). */
+export async function requestText(path: string): Promise<string> {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: {
+      "X-Pipeline-Client": `mobile/${APP_VERSION} (${Platform.OS})`,
+      ...(await getAuthHeaders()),
+    },
+  });
+  if (res.status === 401) throw new AuthError();
+  const text = await res.text();
+  if (!res.ok) throw new ApiError(res.status, `request failed (${res.status})`);
+  return text;
+}
+
 export async function request<S extends z.ZodTypeAny>(path: string, schema: S, init?: RequestInit): Promise<z.infer<S>> {
   if (DEMO) {
     // Demo build: the "server" is the local demo store — same paths, same

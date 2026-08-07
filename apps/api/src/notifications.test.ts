@@ -39,6 +39,23 @@ const gateway: PushGateway = {
 
 const deps = (now?: string): NotifyDeps => ({ db: h.db, gateway, now: now ? () => new Date(now) : undefined });
 
+/** A gateway whose send() fails the first `failures` times — the transient
+ *  outage every unattended worker eventually meets. */
+const flakyGateway = (failures: number): PushGateway => {
+  let left = failures;
+  return {
+    async send(messages) {
+      if (left > 0) {
+        left -= 1;
+        throw new Error("expo unreachable");
+      }
+      sent.push(...messages);
+      return messages.map<SendOutcome>((m) => ({ token: m.to, ok: true, deviceNotRegistered: false }));
+    },
+    pollReceipts: gateway.pollReceipts,
+  };
+};
+
 const transition = (over: Partial<StatusTransition> = {}): StatusTransition => ({
   threadId: "t1",
   company: "Acme",
@@ -191,6 +208,59 @@ describe("notifyInterviewReminders", () => {
     await setStatusOverride(h.db, "u1", "t-closed", "rejected");
     await notifyInterviewReminders(deps("2026-08-10T00:00:00Z"));
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("resilience — the unattended worker's bad days", () => {
+  it("a failed send releases its claim, so the next tick still delivers", async () => {
+    await upsertApplications(h.db, "u1", [appWithInterview("t-int", "2026-08-10T14:30:00Z")]);
+    // gateway down: nothing sent, and the claim must NOT be left behind
+    await notifyInterviewReminders({ ...deps("2026-08-09T20:00:00Z"), gateway: flakyGateway(1) });
+    expect(sent).toHaveLength(0);
+    // …the very next tick, with the gateway back, delivers the reminder
+    await notifyInterviewReminders(deps("2026-08-09T20:05:00Z"));
+    expect(sent).toHaveLength(2);
+    // and it still sends exactly once thereafter
+    await notifyInterviewReminders(deps("2026-08-09T20:10:00Z"));
+    expect(sent).toHaveLength(2);
+  });
+
+  it("the same holds for status transitions", async () => {
+    await notifyTransitions({ ...deps(), gateway: flakyGateway(1) }, "u1", [transition()]);
+    expect(sent).toHaveLength(0);
+    await notifyTransitions(deps(), "u1", [transition()]);
+    expect(sent).toHaveLength(2);
+    await notifyTransitions(deps(), "u1", [transition()]);
+    expect(sent).toHaveLength(2); // still exactly once
+  });
+
+  it("one user's failure doesn't strand every later user's reminder", async () => {
+    await upsertUser(h.db, { id: "u2", email: "u2@x.com" });
+    await upsertDevice(h.db, { userId: "u2", platform: "ios", expoPushToken: "tok-u2" });
+    await upsertApplications(h.db, "u1", [appWithInterview("t-a", "2026-08-10T14:30:00Z")]);
+    await upsertApplications(h.db, "u2", [appWithInterview("t-b", "2026-08-10T15:30:00Z")]);
+
+    // the first send throws; the scan must carry on to the remaining records
+    await notifyInterviewReminders({ ...deps("2026-08-09T20:00:00Z"), gateway: flakyGateway(1) });
+    expect(sent.length).toBeGreaterThan(0);
+    const reached = new Set(sent.map((m) => m.to));
+    expect(reached.size).toBeGreaterThan(0);
+
+    // whoever missed out is retried next tick — nobody is permanently skipped
+    await notifyInterviewReminders(deps("2026-08-09T20:05:00Z"));
+    expect(new Set(sent.map((m) => m.to))).toEqual(new Set(["tok-ios", "tok-android", "tok-u2"]));
+  });
+
+  it("a dead token reported mid-batch doesn't cost the batch its claim", async () => {
+    // The push DID go out (to the live device); post-send bookkeeping ran too.
+    // The claim must stand either way — a re-send would be a duplicate.
+    deadTokens = ["tok-ios"];
+    await notifyTransitions(deps(), "u1", [transition({ threadId: "t-book" })]);
+    expect(sent).toHaveLength(2);
+    sent = [];
+    deadTokens = [];
+    await notifyTransitions(deps(), "u1", [transition({ threadId: "t-book" })]);
+    expect(sent).toHaveLength(0); // claimed and sent — never sent twice
   });
 });
 

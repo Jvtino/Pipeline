@@ -44,6 +44,14 @@ export function relativeAge(iso: string, now: Date = new Date()): string {
   return `${Math.floor(days / 30)}mo`;
 }
 
+/** Export filename the user sees in the share sheet — dated from the LOCAL day
+ *  so repeated exports don't overwrite each other wherever they land. */
+export function exportFilename(now: Date = new Date()): string {
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `pipeline-${now.getFullYear()}-${m}-${d}.csv`;
+}
+
 /** Deterministic avatar hue from the company name (desktop's hueFor). */
 export function hueFor(company: string): number {
   let h = 0;

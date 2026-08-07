@@ -88,6 +88,8 @@ export default function ApplicationDetail() {
           </View>
           {override.isError ? (
             <Text style={[text.faint, { color: statusColor.rejected }]}>Couldn't save — check your connection and try again.</Text>
+          ) : app.overridden ? (
+            <Text style={text.faint}>This stage is your call — email syncs can't change it back.</Text>
           ) : (
             <Text style={text.faint}>Your choice sticks — future email syncs can't change it back.</Text>
           )}
@@ -120,6 +122,9 @@ export default function ApplicationDetail() {
             <Text style={text.faint}>First seen {formatDate(app.firstSeen)}</Text>
             <Text style={text.faint}>Last activity {formatDate(app.lastActivity)}</Text>
           </View>
+          {app.reviewedAt ? (
+            <Text style={[text.faint, { marginTop: space.xs }]}>✓ Reviewed by you · {formatDate(app.reviewedAt)}</Text>
+          ) : null}
         </Panel>
 
         <FactsPanel app={app} />

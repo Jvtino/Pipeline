@@ -6,7 +6,7 @@ import { Stack } from "expo-router";
 import Svg, { Circle } from "react-native-svg";
 import { STATUSES, type Board, type Status } from "@pipeline/contracts";
 import { useBoard } from "../../src/api/queries";
-import { FadeIn, Label, ListSkeleton, Panel, Screen, StatusDot } from "../../src/ui/components";
+import { ErrorState, FadeIn, Label, ListSkeleton, Panel, Screen, StatusDot } from "../../src/ui/components";
 import { color, space, statusColor, statusLabel, text } from "../../src/ui/theme";
 
 const R = 64;
@@ -62,7 +62,14 @@ export default function StatsScreen() {
     );
   }
   const data = board.data;
-  if (!data) return null;
+  if (!data) {
+    return (
+      <Screen>
+        <Stack.Screen options={{ title: "Your numbers" }} />
+        <ErrorState message="Couldn't load your numbers." onRetry={() => void board.refetch()} />
+      </Screen>
+    );
+  }
 
   const counts = data.counts;
   const companies = data.groups.length;

@@ -16,14 +16,17 @@ export default function AppLayout() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!session.isSignedIn) return;
+    // Register only once the user is PAST the welcome screen — the OS
+    // permission dialog must never interrupt the three promises they're
+    // reading on a fresh install (and iOS only asks once, ever).
+    if (!session.isSignedIn || !welcome.welcomed) return;
     const t = setTimeout(() => void registerForPush(), 1500); // let the board render first
     const off = onNotificationTap(({ threadId }) => router.push(`/(app)/application/${encodeURIComponent(threadId)}`));
     return () => {
       clearTimeout(t);
       off();
     };
-  }, [session.isSignedIn, router]);
+  }, [session.isSignedIn, welcome.welcomed, router]);
   if (!session.isLoaded || !welcome.isLoaded) {
     return (
       <Screen>

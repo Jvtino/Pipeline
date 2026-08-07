@@ -17,7 +17,7 @@ import { color, radius, space, statusColor, statusLabel, text } from "../../../s
 export default function BoardScreen() {
   const board = useBoard();
   const router = useRouter();
-  const { pinned, toggle } = usePins();
+  const { pinned, isLoaded: pinsLoaded, toggle } = usePins();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<Status | null>(null);
 
@@ -26,7 +26,9 @@ export default function BoardScreen() {
     [board.data, query, status, pinned],
   );
 
-  if (board.isPending && !board.data) {
+  // Hold for pins too (they hydrate in milliseconds) — otherwise pinned cards
+  // visibly leap to the top of an already-painted list on cold start.
+  if ((board.isPending && !board.data) || !pinsLoaded) {
     return (
       <Screen>
         <BoardSkeleton />

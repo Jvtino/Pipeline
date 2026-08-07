@@ -6,7 +6,14 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
-import { boardSchema } from "@pipeline/contracts";
+import { boardSchema, pageBoard } from "@pipeline/contracts";
+
+/** A non-negative integer query param, capped; anything else means "absent". */
+function pageParam(raw: string | undefined, cap: number): number | undefined {
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? Math.min(n, cap) : undefined;
+}
 import {
   getBoardForUser,
   getUser,
@@ -162,8 +169,14 @@ export async function buildServer(opts: ServerOptions = {}) {
   app.get("/api/applications", async (req, reply) => {
     const user = requireUser(req, reply);
     if (!user) return reply;
+    const q = req.query as { groupLimit?: string; groupOffset?: string };
+    // Optional paging over company GROUPS (the board's render unit): additive —
+    // no params serves the full board exactly as before. Counts always cover
+    // the whole board. Limit capped so a typo can't request the world twice.
+    const groupLimit = pageParam(q.groupLimit, 500);
+    const groupOffset = pageParam(q.groupOffset, Number.MAX_SAFE_INTEGER);
     const board = await getBoardForUser(store.db, user.id, "demo");
-    return boardSchema.parse(board); // validate against the shared contract before returning
+    return boardSchema.parse(pageBoard(board, groupLimit, groupOffset)); // validate against the shared contract before returning
   });
 
   // Trigger an incremental sync of the signed-in user's connected mailboxes.

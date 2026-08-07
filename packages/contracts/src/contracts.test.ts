@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseThread, safeParseThread, statusSchema, STATUS_RANK, STATUSES, applicationSchema } from "./index";
+import { parseThread, safeParseThread, statusSchema, STATUS_RANK, STATUSES, applicationSchema, boardFromApplications, boardSchema, pageBoard } from "./index";
+import type { Application } from "./index";
 
 describe("@pipeline/contracts", () => {
   const good = {
@@ -48,5 +49,41 @@ describe("@pipeline/contracts", () => {
     };
     expect(applicationSchema.safeParse({ ...base, enrichment: { compensation: "$120k", recruiterEmail: null } }).success).toBe(true);
     expect(applicationSchema.safeParse({ ...base, enrichment: { compensation: 123 } }).success).toBe(false);
+  });
+});
+
+describe("pageBoard", () => {
+  const mk = (threadId: string, company: string, lastActivity: string): Application => ({
+    id: threadId, threadId, company, companyDomain: `${company.toLowerCase()}.com`, role: "Engineer",
+    status: "applied", firstSeen: "2026-01-01", lastActivity, snippet: "",
+  });
+  const board = () =>
+    boardFromApplications(
+      [mk("a", "Alpha", "2026-01-05"), mk("b", "Beta", "2026-03-01"), mk("c", "Gamma", "2026-02-10"), mk("d", "Delta", "2026-03-01")],
+      "test",
+    );
+
+  it("orders groups newest-activity-first with a name tiebreak; no limit → full board, no stamp", () => {
+    const paged = pageBoard(board());
+    expect(paged.groups.map((g) => g.company)).toEqual(["Beta", "Delta", "Gamma", "Alpha"]); // Beta/Delta tie on date → name order
+    expect(paged.pagination).toBeUndefined();
+    expect(paged.counts.total).toBe(4);
+  });
+
+  it("slices groups but counts still cover the whole board", () => {
+    const paged = pageBoard(board(), 2, 1);
+    expect(paged.groups.map((g) => g.company)).toEqual(["Delta", "Gamma"]);
+    expect(paged.pagination).toEqual({ groupTotal: 4, groupOffset: 1, groupLimit: 2 });
+    expect(paged.counts.total).toBe(4); // paging never lies about totals
+  });
+
+  it("offset past the end yields an empty page, never an error", () => {
+    const paged = pageBoard(board(), 10, 99);
+    expect(paged.groups).toEqual([]);
+    expect(paged.pagination?.groupTotal).toBe(4);
+  });
+
+  it("the paged payload still validates against boardSchema", () => {
+    expect(boardSchema.safeParse(pageBoard(board(), 2, 0)).success).toBe(true);
   });
 });

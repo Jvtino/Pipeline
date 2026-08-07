@@ -195,8 +195,40 @@ export const boardSchema = z.object({
     total: z.number(),
   }),
   source: z.string(), // e.g. "demo" | a connected mailbox label
+  /** Present only on paged reads (?groupLimit=). `counts` ALWAYS covers the
+   *  whole board — a paged client still shows true totals. */
+  pagination: z
+    .object({
+      groupTotal: z.number(),
+      groupOffset: z.number(),
+      groupLimit: z.number(),
+    })
+    .optional(),
 });
 export type Board = z.infer<typeof boardSchema>;
+
+const groupActivity = (g: CompanyGroup): string =>
+  g.applications.reduce((latest, a) => (a.lastActivity > latest ? a.lastActivity : latest), "");
+
+/**
+ * Deterministic board paging: groups ordered newest-activity-first (company
+ * name as the tiebreak — pagination is meaningless over an unstable order),
+ * sliced only when `groupLimit` is given. Counts are never touched; they
+ * always describe the full board. No limit → the full sorted board with no
+ * pagination stamp, so existing clients see the same payload shape as ever.
+ */
+export function pageBoard(board: Board, groupLimit?: number, groupOffset?: number): Board {
+  const groups = [...board.groups].sort(
+    (a, b) => groupActivity(b).localeCompare(groupActivity(a)) || a.company.localeCompare(b.company),
+  );
+  if (groupLimit === undefined) return { ...board, groups };
+  const offset = groupOffset ?? 0;
+  return {
+    ...board,
+    groups: groups.slice(offset, offset + groupLimit),
+    pagination: { groupTotal: groups.length, groupOffset: offset, groupLimit },
+  };
+}
 
 /**
  * Group derived Application records into the board payload (by employer, with

@@ -46,6 +46,27 @@ describe("api server (authenticated)", () => {
     }
   });
 
+  it("?groupLimit pages company groups; counts still cover the whole board", async () => {
+    const app = await buildServer();
+    try {
+      const cookie = await login(app);
+      const full = (await app.inject({ method: "GET", url: "/api/applications", headers: { cookie } })).json();
+      const paged = (await app.inject({ method: "GET", url: "/api/applications?groupLimit=2&groupOffset=1", headers: { cookie } })).json();
+      expect(() => boardSchema.parse(paged)).not.toThrow();
+      expect(paged.groups.length).toBe(2);
+      expect(paged.pagination).toEqual({ groupTotal: full.groups.length, groupOffset: 1, groupLimit: 2 });
+      expect(paged.counts.total).toBe(full.counts.total); // paging never lies about totals
+      // page 2 starts where page 1 ended (deterministic order)
+      expect(paged.groups[0].company).toBe(full.groups[1].company);
+      // garbage params read as absent, not as an error
+      const garbage = (await app.inject({ method: "GET", url: "/api/applications?groupLimit=banana", headers: { cookie } })).json();
+      expect(garbage.pagination).toBeUndefined();
+      expect(garbage.groups.length).toBe(full.groups.length);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("POST /api/sync is a clean no-op for a user with no mailbox", async () => {
     const app = await buildServer();
     try {

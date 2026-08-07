@@ -36,15 +36,24 @@ const WEEKDAYS: Record<string, number> = {
   sun: 0, mon: 1, tue: 2, tues: 2, wed: 3, weds: 3, thu: 4, thur: 4, thurs: 4, fri: 5, sat: 6,
 };
 
-/** Fixed-offset zones, minutes east of UTC. */
+/** Fixed-offset zones, minutes east of UTC. GMT is read literally (UTC) —
+ *  summer UK time has its own name (BST). Ambiguous abbreviations (IST could
+ *  be India, Ireland or Israel) are deliberately NOT here: unrecognized means
+ *  a zone-less ISO, not a confidently wrong offset. */
 const FIXED_ZONES: Record<string, number> = {
-  utc: 0, gmt: 0, bst: 60, cet: 60, cest: 120, ist: 330,
+  utc: 0, gmt: 0, bst: 60, cest: 120,
   est: -300, edt: -240, cst: -360, cdt: -300, mst: -420, mdt: -360, pst: -480, pdt: -420,
 };
 
 /** US zones written without S/D — resolved by whether the DATE is in US DST. */
 const US_FLOATING: Record<string, [standard: number, daylight: number]> = {
   et: [-300, -240], ct: [-360, -300], mt: [-420, -360], pt: [-480, -420],
+};
+
+/** Zones written year-round by colloquial habit ("CET" in July) — resolved by
+ *  whether the DATE is in EU DST, exactly like the US floating zones. */
+const EU_FLOATING: Record<string, [standard: number, daylight: number]> = {
+  cet: [60, 120],
 };
 
 const pad = (n: number): string => String(n).padStart(2, "0");
@@ -64,11 +73,28 @@ function inUsDst(year: number, month1: number, day: number): boolean {
   return day < nthWeekday(year, 11, 0, 1);
 }
 
+/** Last weekday-of-month in UTC (weekday 0=Sunday). */
+function lastWeekday(year: number, month1: number, weekday: number): number {
+  const lastDay = new Date(Date.UTC(year, month1, 0)).getUTCDate();
+  const w = new Date(Date.UTC(year, month1 - 1, lastDay)).getUTCDay();
+  return lastDay - ((w - weekday + 7) % 7);
+}
+
+/** EU DST: last Sunday of March → last Sunday of October. Date-granular. */
+function inEuDst(year: number, month1: number, day: number): boolean {
+  if (month1 < 3 || month1 > 10) return false;
+  if (month1 > 3 && month1 < 10) return true;
+  if (month1 === 3) return day >= lastWeekday(year, 3, 0);
+  return day < lastWeekday(year, 10, 0);
+}
+
 function zoneOffsetMinutes(zone: string, year: number, month1: number, day: number): number | null {
   const z = zone.toLowerCase();
   if (z in FIXED_ZONES) return FIXED_ZONES[z]!;
-  const floating = US_FLOATING[z];
-  if (floating) return inUsDst(year, month1, day) ? floating[1] : floating[0];
+  const us = US_FLOATING[z];
+  if (us) return inUsDst(year, month1, day) ? us[1] : us[0];
+  const eu = EU_FLOATING[z];
+  if (eu) return inEuDst(year, month1, day) ? eu[1] : eu[0];
   return null;
 }
 
@@ -85,8 +111,9 @@ interface TimeParts {
 }
 
 // The zone token is only trusted immediately after the time — matching known
-// abbreviations elsewhere in free text invites false hits.
-const ZONE_RE = "(?:\\s*(utc|gmt|bst|cet|cest|ist|est|edt|cst|cdt|mst|mdt|pst|pdt|et|ct|mt|pt)\\b)?";
+// abbreviations elsewhere in free text invites false hits. (Longer tokens
+// before their prefixes: "cest" before "cet", "est" before "et".)
+const ZONE_RE = "(?:\\s*(utc|gmt|bst|cest|cet|est|edt|cst|cdt|mst|mdt|pst|pdt|et|ct|mt|pt)\\b)?";
 const TIME_12H = new RegExp(`\\b(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)${ZONE_RE}`, "i");
 const TIME_24H = new RegExp(`\\b([01]?\\d|2[0-3]):([0-5]\\d)${ZONE_RE}`, "i");
 
@@ -122,7 +149,11 @@ function parseDate(text: string): DateParts | null {
   return null;
 }
 
-const WEEKDAY_RE = /\b(mon|tues|tue|weds|wed|thurs|thur|thu|fri|sat|sun)[a-z]*/i;
+// Complete weekday words only. The extractor's own weekday regex stem-matches
+// ([a-z]* after "mon"/"sat"/…), so its raw text can be "monitor at 3pm the" or
+// "satisfaction at 2pm drop" — the normalizer is the second chance to refuse
+// those, not endorse them into real reminder dates.
+const WEEKDAY_RE = /\b(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:s|nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b/i;
 
 /** UTC-noon anchor for the reference date — date arithmetic only, no clock. */
 function referenceUtc(reference: string | Date): Date | null {
@@ -144,11 +175,15 @@ export function normalizeInterviewDateTime(text: string | null | undefined, refe
   if (!t) return null;
 
   // Already machine-shaped ("2026-06-12", "2026-06-12 14:00", "…T14:00") —
-  // trust it, just canonicalize the separator.
+  // canonicalize the separator, but VALIDATE: the extractor's digit-run regex
+  // can hand us reference-number shapes like "2026-99-99".
   const isoShaped = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(t);
   if (isoShaped) {
     const [, y, mo, d, h, mi] = isoShaped;
+    const check = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+    if (check.getUTCMonth() !== Number(mo) - 1 || check.getUTCDate() !== Number(d)) return null;
     if (!h) return { iso: `${y}-${mo}-${d}`, hasTime: false, zone: null };
+    if (Number(h) > 23 || Number(mi) > 59) return null;
     return { iso: `${y}-${mo}-${d}T${h}:${mi}:00`, hasTime: true, zone: null };
   }
 
@@ -177,7 +212,7 @@ export function normalizeInterviewDateTime(text: string | null | undefined, refe
     // and lands on that weekday ON or AFTER the email date.
     const wd = WEEKDAY_RE.exec(t);
     if (!wd || !time) return null;
-    const target = WEEKDAYS[wd[1]!.toLowerCase()]!;
+    const target = WEEKDAYS[wd[1]!.toLowerCase().slice(0, 3)]!;
     const advance = (target - ref.getUTCDay() + 7) % 7;
     const resolved = new Date(ref.getTime() + advance * 24 * 60 * 60 * 1000);
     date = { year: resolved.getUTCFullYear(), month1: resolved.getUTCMonth() + 1, day: resolved.getUTCDate() };

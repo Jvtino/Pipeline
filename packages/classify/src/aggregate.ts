@@ -249,9 +249,12 @@ function enrichmentFrom(c: Classification, referenceDate?: string): Enrichment |
   const e: Enrichment = {};
   if (c.interview?.dateTimeText) {
     e.interviewDateTime = c.interview.dateTimeText;
-    // The raw text is the display truth; the ISO twin (normalized against the
-    // email's date) is what reminders and calendars can actually compute with.
-    const normalized = referenceDate ? normalizeInterviewDateTime(c.interview.dateTimeText, referenceDate) : null;
+    // The raw text is the display truth; the ISO twin is what reminders and
+    // calendars compute with. Anchored to the date of the message that NAMED
+    // the interview — resolving against later activity would re-derive
+    // "Thursday" or a yearless date to a phantom future date on every reply.
+    const ref = c.interviewSourceDate ?? referenceDate;
+    const normalized = ref ? normalizeInterviewDateTime(c.interview.dateTimeText, ref) : null;
     if (normalized) e.interviewDateTimeIso = normalized.iso;
   }
   if (c.interview?.bookingLink) e.interviewLink = c.interview.bookingLink;
@@ -358,6 +361,9 @@ export interface Classification {
   company: CompanyField;
   role: RoleField;
   interview: InterviewInfo | null;
+  /** Date of the message the interview text was extracted from — the reference
+   *  the normalizer must resolve weekdays/missing years against. */
+  interviewSourceDate: string | null;
   compensation: CompensationInfo | null;
   location: LocationInfo | null;
   recruiterContact: RecruiterContact | null;
@@ -371,6 +377,18 @@ function firstField<T>(texts: string[], fn: (t: string) => T | null): T | null {
   for (const t of texts) {
     const r = fn(t);
     if (r) return r;
+  }
+  return null;
+}
+
+/** firstField, but also reporting WHICH text won (by its message date) — the
+ *  interview normalizer must anchor to the message that named the date, not the
+ *  thread's latest activity, or every later reply re-derives "Thursday" / a
+ *  yearless date against a newer reference and silently moves the interview. */
+function firstFieldDated<T>(texts: string[], dates: (string | null)[], fn: (t: string) => T | null): { value: T; date: string | null } | null {
+  for (let i = 0; i < texts.length; i++) {
+    const r = fn(texts[i]!);
+    if (r) return { value: r, date: dates[i] ?? null };
   }
   return null;
 }
@@ -429,7 +447,10 @@ export function classifyThread(thread: Thread): Classification {
 
   // Enrichment — newest message first, then subject; first clear hit wins.
   const texts = [...bodies].reverse();
+  const textDates: (string | null)[] = sorted.map((m) => m.date ?? null).reverse();
   texts.push(subject);
+  textDates.push(sorted[sorted.length - 1]?.date ?? null); // the subject rides with the newest message
+  const interviewHit = firstFieldDated(texts, textDates, extractInterview);
   return {
     status,
     confidence: round2(confidence),
@@ -442,7 +463,8 @@ export function classifyThread(thread: Thread): Classification {
     events: eventHistory.events,
     company: { value: resolved.company, domain: resolved.domain, confidence: companyConf, isPlatformFallback },
     role: { value: roleValue, confidence: roleConf, isGenericFallback: roleGeneric },
-    interview: firstField(texts, extractInterview),
+    interview: interviewHit?.value ?? null,
+    interviewSourceDate: interviewHit?.date ?? null,
     compensation: firstField(texts, extractCompensation),
     location: firstField(texts, extractLocation),
     recruiterContact: firstField(texts, extractRecruiterContact),

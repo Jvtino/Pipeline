@@ -180,6 +180,18 @@ describe("notifyInterviewReminders", () => {
     await notifyInterviewReminders(deps("2026-06-12T17:00:00Z"));
     expect(sent).toHaveLength(0);
   });
+
+  it("closed-out records don't ping — a rejected thread's extracted interview is history", async () => {
+    await upsertApplications(h.db, "u1", [{ ...appWithInterview("t-gone", "2026-08-10T14:30:00Z"), status: "rejected" }]);
+    await notifyInterviewReminders(deps("2026-08-10T00:00:00Z"));
+    expect(sent).toHaveLength(0);
+
+    // ...and the user's own override to rejected silences it just the same
+    await upsertApplications(h.db, "u1", [appWithInterview("t-closed", "2026-08-10T14:30:00Z")]);
+    await setStatusOverride(h.db, "u1", "t-closed", "rejected");
+    await notifyInterviewReminders(deps("2026-08-10T00:00:00Z"));
+    expect(sent).toHaveLength(0);
+  });
 });
 
 describe("sweepReceipts", () => {

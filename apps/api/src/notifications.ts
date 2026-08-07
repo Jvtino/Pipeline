@@ -70,21 +70,30 @@ export async function notifyInterviewReminders(deps: NotifyDeps): Promise<void> 
   const now = (deps.now ?? (() => new Date()))().getTime();
   const HOUR = 60 * 60 * 1000;
   for (const row of await listApplicationsWithEnrichment(deps.db)) {
+    // A record the user closed out must not ping about its (possibly stale)
+    // extracted interview — the timeline moved on even if the mail mentioned one.
+    if (row.status === "rejected" || row.status === "cancelled") continue;
     // The normalized twin is the computable one — the raw interviewDateTime is
     // the email's own words ("Tuesday, June 12 at 2:30 PM ET"), which
     // Date.parse reads as NaN and would silently skip. The raw fallback keeps
     // reminders working for records enriched before the ISO field existed.
     const iso = row.enrichment.interviewDateTimeIso ?? row.enrichment.interviewDateTime;
     if (!iso) continue;
-    const at = Date.parse(iso);
+    // Zone-less timestamps are parsed as UTC explicitly — Date.parse would use
+    // the server's local zone, making the reminder windows deploy-dependent.
+    const zoneless = /T\d{2}:\d{2}/.test(iso) && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso);
+    const at = Date.parse(zoneless ? `${iso}Z` : iso);
     if (Number.isNaN(at) || at <= now) continue;
     const until = at - now;
     const window = until <= HOUR ? "1h" : until <= 24 * HOUR ? "24h" : null;
     if (!window) continue;
+    // Keyed by the parsed MOMENT, not the string: re-derivation can rewrite
+    // "2026-08-10T14:30" to its canonical "…:00" twin without re-pinging, while
+    // a genuinely rescheduled interview (different moment) correctly re-fires.
     const claimed = await recordPushOnce(deps.db, {
       userId: row.userId,
       kind: "interview",
-      dedupeKey: `${row.userId}:${row.threadId}:interview:${iso}:${window}`,
+      dedupeKey: `${row.userId}:${row.threadId}:interview:${at}:${window}`,
     });
     if (!claimed) continue;
     const time = /T(\d{2}:\d{2})/.exec(iso)?.[1];

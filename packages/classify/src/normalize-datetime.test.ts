@@ -25,12 +25,15 @@ describe("normalizeInterviewDateTime", () => {
     expect(normalizeInterviewDateTime("November 2 at 9am PT", "2026-10-01")?.iso).toBe("2026-11-02T09:00:00-08:00");
   });
 
-  it("reads European day-month order and 24h time", () => {
+  it("reads European day-month order and 24h time; CET floats with EU DST", () => {
+    // writers say "CET" year-round — June 12 is inside EU summer time (CEST, +02:00)
     expect(normalizeInterviewDateTime("12 June at 14:00 CET", "2026-06-01")).toEqual({
-      iso: "2026-06-12T14:00:00+01:00",
+      iso: "2026-06-12T14:00:00+02:00",
       hasTime: true,
       zone: "CET",
     });
+    // January is genuinely CET (+01:00)
+    expect(normalizeInterviewDateTime("12 January at 14:00 CET", "2026-12-20")?.iso).toBe("2027-01-12T14:00:00+01:00");
     expect(normalizeInterviewDateTime("3rd March 2026 at 09:15", "2026-02-20")?.iso).toBe("2026-03-03T09:15:00");
   });
 
@@ -55,7 +58,7 @@ describe("normalizeInterviewDateTime", () => {
     expect(normalizeInterviewDateTime("Thursday at 3pm ET", "2026-06-08")?.iso).toBe("2026-06-11T15:00:00-04:00");
     // same weekday as the email → the email's own day, not next week
     expect(normalizeInterviewDateTime("Monday at 10am", "2026-06-08")?.iso).toBe("2026-06-08T10:00:00");
-    expect(normalizeInterviewDateTime("Fri at 09:45 CET", "2026-06-08")?.iso).toBe("2026-06-12T09:45:00+01:00");
+    expect(normalizeInterviewDateTime("Fri at 09:45 CET", "2026-06-08")?.iso).toBe("2026-06-12T09:45:00+02:00"); // June CET = CEST
   });
 
   it("handles ordinals, noon and midnight", () => {
@@ -80,9 +83,31 @@ describe("normalizeInterviewDateTime", () => {
     expect(normalizeInterviewDateTime("June 12 at 2pm", "not-a-date")).toBeNull();
   });
 
-  it("keeps an unrecognized zone abbreviation out of the offset but visible", () => {
+  it("keeps unrecognized and ambiguous zone abbreviations out of the offset", () => {
     const r = normalizeInterviewDateTime("June 12 at 2:30 PM AEST", "2026-06-01");
     expect(r?.iso).toBe("2026-06-12T14:30:00"); // no invented offset
     expect(r?.zone).toBeNull(); // AEST is not in the recognized set
+    // IST could be India (+05:30), Ireland (+01:00) or Israel (+02:00) — a
+    // confident wrong offset is worse than a zone-less wall clock
+    expect(normalizeInterviewDateTime("June 12 at 2:30 PM IST", "2026-06-01")?.iso).toBe("2026-06-12T14:30:00");
+  });
+
+  it("refuses the extractor's weekday false stems — only complete weekday words resolve", () => {
+    // extract.ts stem-matches (mon|sat|...)[a-z]*, so its raw text can be
+    // these; endorsing them would fire reminders on invented days
+    expect(normalizeInterviewDateTime("monitor at 3pm the", "2026-06-01")).toBeNull();
+    expect(normalizeInterviewDateTime("wedding at 4pm won", "2026-06-01")).toBeNull();
+    expect(normalizeInterviewDateTime("satisfaction at 2pm drop", "2026-06-01")).toBeNull();
+    expect(normalizeInterviewDateTime("Sunset at 7pm", "2026-06-01")).toBeNull();
+    // ...while every real weekday word, short or long, still lands
+    expect(normalizeInterviewDateTime("Wednesday at 2pm", "2026-06-01")?.iso).toBe("2026-06-03T14:00:00");
+    expect(normalizeInterviewDateTime("Weds at 14:00", "2026-06-01")?.iso).toBe("2026-06-03T14:00:00");
+    expect(normalizeInterviewDateTime("Tues at 9am", "2026-06-01")?.iso).toBe("2026-06-02T09:00:00");
+  });
+
+  it("validates the machine-shaped fast path too — digit runs are not dates", () => {
+    expect(normalizeInterviewDateTime("2026-99-99", "2026-06-01")).toBeNull();
+    expect(normalizeInterviewDateTime("1234-56-78", "2026-06-01")).toBeNull();
+    expect(normalizeInterviewDateTime("2026-06-12 99:99", "2026-06-01")).toBeNull();
   });
 });

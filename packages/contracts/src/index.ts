@@ -151,6 +151,13 @@ export const applicationSchema = z.object({
   /** Value-or-null facts extracted from the thread (interview/comp/location/recruiter). */
   enrichment: enrichmentSchema.optional(),
   /**
+   * When the user has confirmed or corrected this record (review flow or a
+   * manual stage move), the moment they did. Additive: lets clients stop
+   * showing "needs review" affordances for low-confidence records the user
+   * already looked at.
+   */
+  reviewedAt: z.string().nullable().optional(),
+  /**
    * True when the employer could not be recovered and `company` is only the
    * shared ATS platform's name ("Myworkday", "Linkedin", …). Optional/additive
    * like `confidence`. A shared platform identity must NEVER merge records:

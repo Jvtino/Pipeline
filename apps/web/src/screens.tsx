@@ -25,6 +25,7 @@ import {
   companyInsights,
   timingStats,
   responseByWeek,
+  upcomingInterviews,
   type PerfRow,
   type CompanyCardData,
   type DerivedTask,
@@ -59,6 +60,7 @@ function StatCard({ label, value, color, sub, delta }: { label: string; value: n
 export function Dashboard(ctx: Ctx) {
   const { apps, nowMs, openDetail, goto } = ctx;
   const counts = statusCounts(apps);
+  const soon = upcomingInterviews(apps, nowMs);
   const nudges = buildNudges(apps, nowMs);
   const sources = topSources(apps);
   const trend = trendSeries(apps, nowMs);
@@ -98,6 +100,25 @@ export function Dashboard(ctx: Ctx) {
             ))}
           </div>
         </>
+      )}
+
+      {/* interview-soon strip — the phone banner's desktop twin */}
+      {soon.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "13px 15px", marginBottom: 14, background: "rgba(192,138,42,.09)", border: "1px solid rgba(192,138,42,.28)", borderRadius: 13 }}>
+          {soon.map((s) => (
+            <div key={s.id} onClick={() => openDetail(s.id)} className="pl-lift" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS.interview.dot, flex: "0 0 auto" }} />
+              <span style={{ font: "700 13px var(--sans)", color: "#9a6a16" }}>
+                Interview {s.label}
+                {s.time ? ` at ${s.time}` : ""}
+              </span>
+              <span style={{ font: "500 12.5px var(--sans)", color: "#5f5a51", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {s.company} — {s.role}
+              </span>
+              <IconChevronRight size={13} stroke={2.2} color="#9a6a16" />
+            </div>
+          ))}
+        </div>
       )}
 
       <div className="rgrid rgrid-6">

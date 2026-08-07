@@ -11,7 +11,7 @@ import type { Overlay, Plan, Screen, OverlaySettings, ViewState, AppMeta } from 
 import type { UiStatus } from "./lib/status";
 import { STATUS } from "./lib/status";
 import type { Status as ApiStatus } from "@pipeline/contracts";
-import { ensureSession, getMe, getBoard, getDocuments, runSync, resync, getConnections, deleteConnection, patchApplication, createApplication, postJson, type Mailbox, type SyncedDoc, type SyncSummary } from "./api";
+import { ensureSession, getMe, getBoard, getDocuments, runSync, resync, getConnections, deleteConnection, patchApplication, createApplication, confirmReview, postJson, type Mailbox, type SyncedDoc, type SyncSummary } from "./api";
 import { loadOverlay, saveOverlay, defaultOverlay } from "./lib/overlay";
 import { flattenBoard, buildNotifications } from "./lib/derive";
 import { shortDate, syncedLabel, localIsoDate, localIsoDateTime } from "./lib/format";
@@ -320,6 +320,21 @@ export function App() {
     flash(`Moved to ${STATUS[s].label}`);
   }, [apps, setOverlay, flash]);
 
+  const confirmClassification = useCallback((id: string) => {
+    const threadId = apps.find((a) => a.id === id)?.threadId ?? null;
+    if (!threadId) return; // overlay-only rows are user-entered — nothing to confirm
+    void (async () => {
+      try {
+        await confirmReview(threadId);
+        setBoard(await getBoard()); // reviewedAt now rides the board — badge clears everywhere
+        flash("Marked as reviewed");
+      } catch {
+        setOverlay((o) => ({ ...o, reviewedLocal: { ...o.reviewedLocal, [threadId]: true } }));
+        flash("Marked as reviewed on this device (server unreachable)");
+      }
+    })();
+  }, [apps, setOverlay, flash]);
+
   const setMeta = useCallback((id: string, patch: Partial<AppMeta>) => {
     setOverlay((o) => ({ ...o, meta: { ...o.meta, [id]: { ...o.meta[id], ...patch } } }));
   }, [setOverlay]);
@@ -499,6 +514,7 @@ export function App() {
     onSync,
     onRebuild,
     setStatus,
+    confirmClassification,
     setMeta,
     renameCompany,
     hideApp,

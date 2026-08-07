@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { boardFromApplications } from "@pipeline/contracts";
 import type { Application } from "@pipeline/contracts";
-import { flattenBoard, companyCards, deriveContacts, mergeContacts, buildNotifications, calendarFor, parseInterviewDate, parseInterviewTime } from "./derive";
+import { flattenBoard, companyCards, deriveContacts, mergeContacts, buildNotifications, calendarFor, parseInterviewDate, parseInterviewTime, upcomingInterviews } from "./derive";
 import { defaultOverlay } from "./overlay";
 
 const app = (over: Partial<Application> & { threadId: string }): Application => ({
@@ -32,6 +32,22 @@ describe("flattenBoard — needsReview seam", () => {
     expect(review["low"]).toBe(true);
     expect(review["high"]).toBe(false);
     expect(review["none"]).toBe(false);
+  });
+
+  it("a reviewed record stops asking — server reviewedAt or the local fallback mark", () => {
+    const board = boardFromApplications(
+      [
+        app({ threadId: "seen", confidence: 0.3, reviewedAt: "2026-05-09T10:00:00Z" }), // confirmed on any device
+        app({ threadId: "local", confidence: 0.3 }), // confirmed offline on this one
+        app({ threadId: "unseen", confidence: 0.3 }),
+      ],
+      "test",
+    );
+    const overlay = { ...defaultOverlay(), reviewedLocal: { local: true } };
+    const review = Object.fromEntries(flattenBoard(board, overlay, now).map((r) => [r.id, r.needsReview]));
+    expect(review["seen"]).toBe(false);
+    expect(review["local"]).toBe(false);
+    expect(review["unseen"]).toBe(true);
   });
 
   it("never flags a manual application (nothing to confirm)", () => {
@@ -217,5 +233,41 @@ describe("flattenBoard — needsReview seam", () => {
     const globex = cards.find((c) => c.company === "Globex")!;
     expect(globex.apps).toHaveLength(1);
     expect(globex.sub).toBe("Analyst"); // single role → the role itself (client hint on staffing cards)
+  });
+});
+
+describe("upcomingInterviews — the dashboard strip", () => {
+  // nowMs at local noon so "today"/"tomorrow" are unambiguous in any TZ
+  const nowMs = new Date(2026, 5, 12, 12, 0).getTime(); // 2026-06-12 local
+
+  const local = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const todayIso = local(new Date(2026, 5, 12));
+  const tomorrowIso = local(new Date(2026, 5, 13));
+
+  it("surfaces today/tomorrow interviews from the server ISO twin, soonest first", () => {
+    const board = boardFromApplications(
+      [
+        app({ threadId: "tmrw", status: "interview", enrichment: { interviewDateTimeIso: `${tomorrowIso}T09:00:00` } }),
+        app({ threadId: "today", status: "interview", enrichment: { interviewDateTimeIso: `${todayIso}T15:30:00` } }),
+        app({ threadId: "far", status: "interview", enrichment: { interviewDateTimeIso: "2026-07-01T10:00:00" } }),
+        app({ threadId: "done", status: "rejected", enrichment: { interviewDateTimeIso: `${todayIso}T16:00:00` } }),
+      ],
+      "test",
+    );
+    const soon = upcomingInterviews(flattenBoard(board, defaultOverlay(), nowMs), nowMs);
+    expect(soon.map((s) => s.id)).toEqual(["today", "tmrw"]);
+    expect(soon[0]).toMatchObject({ label: "today", time: "15:30" });
+    expect(soon[1]).toMatchObject({ label: "tomorrow", time: "09:00" });
+  });
+
+  it("falls back to the client prose parser for pre-normalizer records", () => {
+    const board = boardFromApplications(
+      [app({ threadId: "prose", status: "interview", lastActivity: todayIso, enrichment: { interviewDateTime: `${tomorrowIso} 11:00` } })],
+      "test",
+    );
+    const soon = upcomingInterviews(flattenBoard(board, defaultOverlay(), nowMs), nowMs);
+    expect(soon).toHaveLength(1);
+    expect(soon[0]).toMatchObject({ id: "prose", label: "tomorrow", time: "11:00" });
   });
 });

@@ -14,14 +14,15 @@ interface EventRow {
 }
 
 interface DemoState {
-  apps: Map<string, Application & { overrideStatus?: Status; reviewedAt?: string }>;
+  // reviewedAt rides on Application itself since the contract gained it
+  apps: Map<string, Application & { overrideStatus?: Status }>;
   events: Map<string, EventRow[]>;
 }
 
 let state: DemoState | null = null;
 
 function seed(): DemoState {
-  const apps = new Map<string, Application & { overrideStatus?: Status; reviewedAt?: string }>();
+  const apps = new Map<string, Application & { overrideStatus?: Status }>();
   const events = new Map<string, EventRow[]>();
   for (const a of threadsToApplications(DEMO_THREADS)) {
     apps.set(a.threadId, { ...a });

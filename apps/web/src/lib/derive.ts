@@ -6,7 +6,7 @@ import type { Board } from "@pipeline/contracts";
 import type { ContactEntry, Overlay, UiApplication } from "../types";
 import type { UiStatus } from "./status";
 import { STATUS, STATUS_ORDER } from "./status";
-import { daysBetween, parseIso, shortDate, MONTHS } from "./format";
+import { daysBetween, localIsoDate, parseIso, shortDate, MONTHS } from "./format";
 
 const STALE_DAYS = 21; // an "applied" record silent this long reads as no-response
 // Below this classifier confidence a card is "unconfirmed" and invites a one-tap fix.
@@ -97,7 +97,10 @@ export function flattenBoard(board: Board | null, overlay: Overlay, nowMs: numbe
         nextStep,
         snippet: a.snippet,
         manual: a.manual ?? false,
-        needsReview: a.confidence != null && a.confidence < REVIEW_CONFIDENCE,
+        // Low confidence asks for a look — until the user HAS looked: a server
+        // reviewedAt (confirm or stage move, from any device) or the local
+        // fallback mark (confirm made while the server was unreachable).
+        needsReview: a.confidence != null && a.confidence < REVIEW_CONFIDENCE && !a.reviewedAt && !overlay.reviewedLocal[a.threadId],
         platformFallback: renamed ? false : a.platformFallback ?? false,
         enrichment: a.enrichment ?? null,
         ...metaFor(a.threadId),
@@ -525,6 +528,36 @@ export function parseInterviewDate(text: string | null | undefined, refIso: stri
     return new Date(refMs + delta * 86_400_000).toISOString().slice(0, 10);
   }
   return null;
+}
+
+export interface UpcomingInterview {
+  id: string;
+  company: string;
+  role: string;
+  dayIso: string;
+  time: string | null;
+  label: "today" | "tomorrow";
+}
+
+/**
+ * Interviews landing today or tomorrow (LOCAL days), soonest first — the
+ * dashboard's "don't miss this" strip, mirroring the phone's banner. Prefers
+ * the server-normalized ISO twin; the client prose parser is the fallback for
+ * records enriched before it existed.
+ */
+export function upcomingInterviews(apps: UiApplication[], nowMs: number): UpcomingInterview[] {
+  const today = localIsoDate(nowMs);
+  const tomorrow = localIsoDate(nowMs + 86_400_000);
+  const out: UpcomingInterview[] = [];
+  for (const a of apps) {
+    if (a.status !== "interview" && a.status !== "screening") continue;
+    const serverIso = a.enrichment?.interviewDateTimeIso ?? null;
+    const day = serverIso?.slice(0, 10) ?? parseInterviewDate(a.enrichment?.interviewDateTime, a.lastActivityIso);
+    if (day !== today && day !== tomorrow) continue;
+    const time = (serverIso ? /T(\d{2}:\d{2})/.exec(serverIso)?.[1] ?? null : null) ?? parseInterviewTime(a.enrichment?.interviewDateTime);
+    out.push({ id: a.id, company: a.company, role: a.role, dayIso: day!, time, label: day === today ? "today" : "tomorrow" });
+  }
+  return out.sort((x, y) => x.dayIso.localeCompare(y.dayIso) || (x.time ?? "99").localeCompare(y.time ?? "99"));
 }
 
 /**

@@ -189,7 +189,13 @@ export function DetailDrawer({ app, ctx, onClose, from }: { app: UiApplication; 
               {app.needsReview && (
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 13px", marginBottom: 14, background: "rgba(192,138,42,.09)", border: "1px solid rgba(192,138,42,.22)", borderRadius: 12 }}>
                   <NeedsReviewBadge />
-                  <span style={{ font: "500 12px/1.45 var(--sans)", color: "#7a5a1a" }}>The classifier wasn't fully sure here. Confirm the stage below if it's right, or fix it.</span>
+                  <span style={{ flex: 1, font: "500 12px/1.45 var(--sans)", color: "#7a5a1a" }}>Pipeline wasn't fully sure here. Confirm if it's right, or move the stage below to fix it.</span>
+                  <button
+                    onClick={() => ctx.confirmClassification(app.id)}
+                    style={{ padding: "8px 13px", background: "#fff", border: "1px solid rgba(192,138,42,.4)", borderRadius: 9, font: "600 11.5px var(--sans)", color: "#9a6a16", cursor: "pointer", flex: "0 0 auto", whiteSpace: "nowrap" }}
+                  >
+                    Looks right
+                  </button>
                 </div>
               )}
               {/* next step */}

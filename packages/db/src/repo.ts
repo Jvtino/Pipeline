@@ -253,6 +253,7 @@ function rowToApplication(r: typeof applications.$inferSelect): Application {
     enrichment: r.enrichment ? (JSON.parse(r.enrichment) as Enrichment) : undefined,
     classification: r.classification ? (JSON.parse(r.classification) as ClassificationAudit) : undefined,
     classificationEvents: r.classificationEvents ? (JSON.parse(r.classificationEvents) as ClassificationEvent[]) : undefined,
+    reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : undefined,
     platformFallback: r.platformFallback ?? undefined,
   };
 }

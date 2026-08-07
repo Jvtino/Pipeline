@@ -17,6 +17,7 @@ export function defaultOverlay(): Overlay {
     contacts: [],
     docs: [],
     dismissedNotifs: {},
+    reviewedLocal: {},
     companyNames: {},
     hidden: {},
     doneTasks: {},

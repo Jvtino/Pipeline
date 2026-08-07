@@ -58,6 +58,12 @@ export function createApplication(input: { company: string; role: string; status
   return postJson<{ application: Application }>("/api/applications", input);
 }
 
+/** Confirm a low-confidence classification server-side: sets reviewedAt, so the
+ *  record leaves the review queue on every device (the phone's Alerts tab too). */
+export function confirmReview(threadId: string): Promise<unknown> {
+  return postJson<unknown>(`/api/review/${encodeURIComponent(threadId)}`, { action: "confirm" });
+}
+
 /** Per-mailbox outcome of a sync round. `error` set means that mailbox did NOT sync. */
 export interface SyncOutcome {
   email: string;

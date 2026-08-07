@@ -3,7 +3,7 @@
 import { SectionList, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useBoard } from "../../../src/api/queries";
-import { agenda, boardEvents, upcomingInterviews, type CalendarEvent } from "../../../src/lib/calendar";
+import { agenda, boardEvents, untilLabel, upcomingInterviews, type CalendarEvent } from "../../../src/lib/calendar";
 import { formatDate } from "../../../src/lib/format";
 import { EmptyState, ErrorState, ListSkeleton, Panel, Screen, StatusDot } from "../../../src/ui/components";
 import { color, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
@@ -59,13 +59,16 @@ export default function CalendarScreen() {
             {section.title}
           </Text>
         )}
-        renderItem={({ item }) => <EventRow event={item} onOpen={(id) => router.push(`/(app)/application/${encodeURIComponent(id)}`)} />}
+        renderItem={({ item }) => (
+          <EventRow event={item} today={today} onOpen={(id) => router.push(`/(app)/application/${encodeURIComponent(id)}`)} />
+        )}
       />
     </Screen>
   );
 }
 
-function EventRow({ event, onOpen }: { event: CalendarEvent; onOpen: (threadId: string) => void }) {
+function EventRow({ event, today, onOpen }: { event: CalendarEvent; today: string; onOpen: (threadId: string) => void }) {
+  const upcoming = event.kind === "interview" && event.date >= today;
   return (
     <Pressable
       onPress={() => onOpen(event.threadId)}
@@ -87,7 +90,9 @@ function EventRow({ event, onOpen }: { event: CalendarEvent; onOpen: (threadId: 
             </Text>
             <Text style={text.faint}>
               {event.kind === "interview"
-                ? `Interview${event.time ? ` at ${event.time}` : ""} · ${formatDate(event.date)}`
+                ? upcoming
+                  ? `Interview ${untilLabel(event.date, today)}${event.time ? ` · ${event.time}` : ""}`
+                  : `Interview${event.time ? ` at ${event.time}` : ""} · ${formatDate(event.date)}`
                 : statusLabel[event.status]}
             </Text>
           </View>

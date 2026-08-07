@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import type { Application, CompanyGroup } from "@pipeline/contracts";
 import { filterBoard, filterByStatus, countChips } from "./board";
-import { boardEvents, agenda, upcomingInterviews } from "./calendar";
+import { boardEvents, agenda, untilLabel, upcomingInterviews } from "./calendar";
 import { formatDate, relativeAge, senderName, monogram, hueFor } from "./format";
 import { sortPinnedFirst } from "./pins";
 import { versionAtLeast } from "./version";
@@ -119,6 +119,13 @@ describe("calendar derivation", () => {
     expect(days[0]!.date).toBe("2026-08-10");
     expect(days[0]!.events[0]!.kind).toBe("interview");
     expect(days.at(-1)!.date).toBe("2026-02-01");
+  });
+
+  it("untilLabel: today/tomorrow/in N days", () => {
+    expect(untilLabel("2026-08-07", "2026-08-07")).toBe("today");
+    expect(untilLabel("2026-08-08", "2026-08-07")).toBe("tomorrow");
+    expect(untilLabel("2026-08-12", "2026-08-07")).toBe("in 5 days");
+    expect(untilLabel("garbage", "2026-08-07")).toBe("today"); // NaN-safe
   });
 
   it("upcoming interviews: on/after today, soonest first; skips dateless enrichment", () => {

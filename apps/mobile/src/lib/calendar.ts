@@ -75,3 +75,12 @@ export function upcomingInterviews(events: CalendarEvent[], today: string): Cale
     .filter((e) => e.kind === "interview" && e.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""));
 }
+
+/** "today" / "tomorrow" / "in 5 days" — calendar-day distance, timezone-free
+ *  (both sides are YYYY-MM-DD strings). */
+export function untilLabel(date: string, today: string): string {
+  const days = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+  if (!Number.isFinite(days) || days <= 0) return "today";
+  if (days === 1) return "tomorrow";
+  return `in ${days} days`;
+}

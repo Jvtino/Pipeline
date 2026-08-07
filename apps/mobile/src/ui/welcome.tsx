@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Button, FadeIn, Panel, Screen } from "./components";
+import { LogoMark } from "./logo";
 import { space, statusColor, text } from "./theme";
 
 const KEY = "pipeline.welcomed.v1";
@@ -52,8 +53,9 @@ export function Welcome({ onDone }: { onDone: () => void }) {
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: space.xl, gap: space.md }}>
-        <FadeIn>
-          <Text style={[text.hero, { textAlign: "center", marginBottom: space.xs }]}>Welcome to Pipeline</Text>
+        <FadeIn style={{ alignItems: "center" }}>
+          <LogoMark size={64} />
+          <Text style={[text.hero, { textAlign: "center", marginTop: space.lg, marginBottom: space.xs }]}>Welcome to Pipeline</Text>
           <Text style={[text.dim, { textAlign: "center", marginBottom: space.lg }]}>Three things worth knowing.</Text>
         </FadeIn>
         {PROMISES.map((p, i) => (

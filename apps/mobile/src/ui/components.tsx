@@ -78,6 +78,9 @@ export function Button({
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: disabled === true }}
       style={({ pressed }) => [
         styles.button,
         kind === "primary" ? styles.buttonPrimary : styles.buttonGhost,

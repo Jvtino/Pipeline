@@ -55,6 +55,9 @@ export default function ApplicationDetail() {
                   key={s}
                   disabled={active || override.isPending}
                   onPress={() => override.mutate({ threadId, status: s })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Set status to ${statusLabel[s]}`}
+                  accessibilityState={{ selected: active, disabled: active || override.isPending }}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",

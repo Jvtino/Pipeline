@@ -61,7 +61,11 @@ export default function CalendarScreen() {
 
 function EventRow({ event, onOpen }: { event: CalendarEvent; onOpen: (threadId: string) => void }) {
   return (
-    <Pressable onPress={() => onOpen(event.threadId)}>
+    <Pressable
+      onPress={() => onOpen(event.threadId)}
+      accessibilityRole="button"
+      accessibilityLabel={`${event.company}, ${event.role}${event.kind === "interview" ? ", interview" : ""}`}
+    >
       {({ pressed }) => (
         <Panel
           style={[

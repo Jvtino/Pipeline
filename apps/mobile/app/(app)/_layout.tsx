@@ -2,6 +2,7 @@
 // happens here — after sign-in, once the shell is up (never at cold start) —
 // and notification taps deep-link to the application they're about.
 import { useEffect } from "react";
+import { Platform } from "react-native";
 import { Redirect, Stack, useRouter } from "expo-router";
 import { useSession } from "../../src/auth/session";
 import { onNotificationTap, registerForPush } from "../../src/notifications";
@@ -36,6 +37,9 @@ export default function AppLayout() {
         headerTintColor: color.text,
         headerShadowVisible: false,
         contentStyle: { backgroundColor: color.bg },
+        // Web renders instant page changes (browser convention); native keeps
+        // the platform slide transition.
+        animation: Platform.OS === "web" ? "none" : undefined,
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

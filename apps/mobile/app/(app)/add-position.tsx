@@ -56,6 +56,9 @@ export default function AddPositionScreen() {
                     <Pressable
                       key={s}
                       onPress={() => setStatus(s)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Status ${statusLabel[s]}`}
+                      accessibilityState={{ selected: active }}
                       style={{
                         flexDirection: "row",
                         alignItems: "center",

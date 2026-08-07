@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Delete your account — Pipeline</title>
+<meta name="description" content="How to delete your Pipeline account and every record it holds." />
+<style>
+  :root{--bg:#07090e;--panel:#0c111b;--border:rgba(255,255,255,.08);--text:#e8edf5;--dim:#9aa6b8;--faint:#61708a;--blue2:#5ea0ff}
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+  body{background:radial-gradient(1100px 560px at 50% -10%, rgba(47,129,247,.16), transparent 62%), var(--bg);color:var(--text);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+  a{color:var(--blue2);text-decoration:none}a:hover{text-decoration:underline}
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 64px}
+  header{display:flex;align-items:center;gap:12px;padding:26px 0}
+  .brand{font-weight:700;font-size:18px}
+  nav{margin-left:auto;display:flex;gap:20px;font-size:14px;color:var(--dim)}
+  h1{font-size:34px;letter-spacing:-.5px;margin:26px 0 6px}
+  h2{font-size:20px;margin:34px 0 10px}
+  p,li{color:var(--dim)}
+  strong{color:var(--text)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin:18px 0}
+  footer{border-top:1px solid var(--border);margin-top:48px;padding-top:18px;font-size:14px;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <span class="brand">Pipeline</span>
+  <nav><a href="index.html">Home</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></nav>
+</header>
+
+<h1>Delete your account</h1>
+<p>Deleting your Pipeline account permanently removes <strong>everything</strong> the service holds about you:
+applications and their timelines, notes and contacts, connected mailboxes and their encrypted tokens, device
+registrations, and your sign-in identity. This cannot be undone.</p>
+
+<div class="card">
+  <h2 style="margin-top:0">In the mobile app</h2>
+  <p>Settings → <strong>Danger zone</strong> → type <strong>delete</strong> → tap <strong>Delete my account</strong>.
+  Deletion is immediate.</p>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Can't access the app?</h2>
+  <p>Contact the developer (project repository issue or direct contact) from the email address on the account and we will
+  delete it for you.</p>
+</div>
+
+<h2>Also good to know</h2>
+<ul>
+  <li>We attempt to revoke the mailbox token with your provider during deletion. You can always double-check under your
+  <a href="https://myaccount.google.com/permissions">Google account permissions</a> or
+  <a href="https://account.live.com/consent/Manage">Microsoft account permissions</a>.</li>
+  <li>Deleting the app from your phone does <em>not</em> delete your server-side account — use the steps above.</li>
+  <li>The desktop app stores data only on your computer; uninstalling it (or clearing its data folder) removes that data.</li>
+</ul>
+
+<footer>Pipeline — job applications from your inbox. <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a></footer>
+</div>
+</body>
+</html>

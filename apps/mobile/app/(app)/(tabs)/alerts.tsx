@@ -44,7 +44,11 @@ export default function AlertsScreen() {
           <EmptyState title="Nothing needs review" hint="When an email is hard to classify, it will show up here for a quick confirmation." />
         }
         renderItem={({ item }) => (
-          <Pressable onPress={() => router.push(`/(app)/review/${encodeURIComponent(item.threadId)}`)}>
+          <Pressable
+            onPress={() => router.push(`/(app)/review/${encodeURIComponent(item.threadId)}`)}
+            accessibilityRole="button"
+            accessibilityLabel={`Review ${item.company}, ${item.role}`}
+          >
             {({ pressed }) => (
               <Panel style={[{ flexDirection: "row", alignItems: "center", gap: space.md }, pressed && { backgroundColor: color.elev }]}>
                 <Avatar company={item.company} />

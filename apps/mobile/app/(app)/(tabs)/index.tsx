@@ -68,6 +68,9 @@ export default function BoardScreen() {
               <Pressable
                 key={chip.status}
                 onPress={() => setStatus(active ? null : chip.status)}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter: ${statusLabel[chip.status]}, ${chip.count}`}
+                accessibilityState={{ selected: active }}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -110,6 +113,7 @@ export default function BoardScreen() {
       />
       <Pressable
         onPress={() => router.push("/(app)/add-position")}
+        accessibilityRole="button"
         style={({ pressed }) => [
           {
             position: "absolute",
@@ -150,6 +154,8 @@ function CompanyCard({ group, onOpen }: { group: CompanyGroup; onOpen: (threadId
         <Pressable
           key={a.threadId}
           onPress={() => onOpen(a.threadId)}
+          accessibilityRole="button"
+          accessibilityLabel={`${a.role} at ${group.company}, ${statusLabel[a.status]}`}
           style={({ pressed }) => [
             {
               flexDirection: "row",

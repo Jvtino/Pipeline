@@ -80,6 +80,8 @@ export default function ReviewModal() {
                 key={s}
                 disabled={resolve.isPending}
                 onPress={() => resolve.mutate({ threadId, action: "set", status: s }, { onSuccess: done })}
+                accessibilityRole="button"
+                accessibilityLabel={`Set status to ${statusLabel[s]}`}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",

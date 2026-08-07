@@ -106,9 +106,10 @@ export function demoHandle(path: string, init?: { method?: string; body?: string
     const status = (payload.status as Status | undefined) ?? "applied";
     if (!company || !role) return json({ error: "company and role are required" }, 400);
     const threadId = `manual:${Math.random().toString(36).slice(2, 10)}`;
-    // like the server: an explicit appliedOn backdates the record
-    const appliedOn = typeof payload.appliedOn === "string" && !Number.isNaN(Date.parse(payload.appliedOn)) ? payload.appliedOn : null;
-    const date = appliedOn ?? today().slice(0, 10);
+    // like the server: an explicit appliedOn backdates the record — strict
+    // YYYY-MM-DD, anything else falls back to today
+    const appliedOnDay = typeof payload.appliedOn === "string" ? /^(\d{4}-\d{2}-\d{2})/.exec(payload.appliedOn)?.[1] : undefined;
+    const date = appliedOnDay && !Number.isNaN(Date.parse(`${appliedOnDay}T00:00:00Z`)) ? appliedOnDay : today().slice(0, 10);
     const app: Application = {
       id: threadId,
       threadId,

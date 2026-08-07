@@ -1,12 +1,16 @@
 // Onboarding / Connect takeover. Shown on first run or after Disconnect. The
 // provider buttons start the real OAuth flow (which navigates away), so there's
 // no faked scan counter here — the post-connect toast is handled by App via the
-// ?connect= redirect. A subtle "explore with demo data" path keeps the app
-// usable without connecting (the API ships demo data out of the box).
+// ?connect= redirect. Two first-class alternatives sit beside OAuth: tracking
+// by hand (straight into the New Application modal) and demo data. Gmail turns
+// into an honest "coming soon" row when the server flag says it ships dark
+// (launch decision: Microsoft + manual first, Gmail once Google verification
+// lands).
 import { Logo } from "./lib/icons";
-import { IconMail, IconShield } from "./lib/icons";
+import { IconMail, IconPlus, IconShield } from "./lib/icons";
+import type { MetaFeatures } from "./api";
 
-export function Onboarding({ onDemo }: { onDemo: () => void }) {
+export function Onboarding({ features, onDemo, onManual }: { features: MetaFeatures; onDemo: () => void; onManual: () => void }) {
   return (
     <div className="onboarding">
       <div style={{ width: 452, maxWidth: "100%", textAlign: "center" }}>
@@ -23,14 +27,25 @@ export function Onboarding({ onDemo }: { onDemo: () => void }) {
           Pipeline reads your mail <b style={{ color: "#3f4a44" }}>read-only</b> and turns every job-application email into a clean, organized board — automatically.
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 26 }}>
-          <a href="/auth/google/start" style={provBtn}>
-            <IconMail size={18} color="#c06a57" />
-            Connect Gmail
-          </a>
+          {features.gmailConnect ? (
+            <a href="/auth/google/start" style={provBtn}>
+              <IconMail size={18} color="#c06a57" />
+              Connect Gmail
+            </a>
+          ) : (
+            <div style={{ ...provBtn, cursor: "default", opacity: 0.55, boxShadow: "none" }} aria-disabled>
+              <IconMail size={18} color="#c06a57" />
+              Gmail — coming soon
+            </div>
+          )}
           <a href="/auth/microsoft/start" style={provBtn}>
             <IconMail size={18} color="#6c7d96" />
             Connect Outlook
           </a>
+          <button onClick={onManual} style={{ ...provBtn, border: "1px dashed rgba(34,31,26,.22)" }}>
+            <IconPlus size={16} color="#2f9266" />
+            Track by hand — add your applications
+          </button>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 20, font: "500 12px var(--sans)", color: "var(--muted-2)" }}>
           <IconShield size={13} color="#2f9266" />

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseThread, safeParseThread, statusSchema, STATUS_RANK, STATUSES, applicationSchema, boardFromApplications, boardSchema, pageBoard } from "./index";
-import type { Application } from "./index";
+import type { Application, Board } from "./index";
 
 describe("@pipeline/contracts", () => {
   const good = {
@@ -85,5 +85,21 @@ describe("pageBoard", () => {
 
   it("the paged payload still validates against boardSchema", () => {
     expect(boardSchema.safeParse(pageBoard(board(), 2, 0)).success).toBe(true);
+  });
+
+  it("tied platform-fallback groups page identically whatever the input order", () => {
+    // two LinkedIn-relayed threads, same company label, same activity date —
+    // without a unique tiebreak they can swap positions between page requests
+    const fallback = (threadId: string): Application => ({
+      ...mk(threadId, "Linkedin", "2026-03-01"),
+      platformFallback: true,
+    });
+    const forward = boardFromApplications([fallback("t1"), fallback("t2")], "test");
+    const reversed = boardFromApplications([fallback("t2"), fallback("t1")], "test");
+    const pageOf = (b: Board, offset: number) => pageBoard(b, 1, offset).groups[0]?.applications[0]?.threadId;
+    // every offset serves the SAME group from both input orders → no skip, no dup
+    expect(pageOf(forward, 0)).toBe(pageOf(reversed, 0));
+    expect(pageOf(forward, 1)).toBe(pageOf(reversed, 1));
+    expect(new Set([pageOf(forward, 0), pageOf(forward, 1)]).size).toBe(2);
   });
 });

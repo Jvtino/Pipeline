@@ -79,10 +79,13 @@ export async function notifyInterviewReminders(deps: NotifyDeps): Promise<void> 
     // reminders working for records enriched before the ISO field existed.
     const iso = row.enrichment.interviewDateTimeIso ?? row.enrichment.interviewDateTime;
     if (!iso) continue;
-    // Zone-less timestamps are parsed as UTC explicitly — Date.parse would use
-    // the server's local zone, making the reminder windows deploy-dependent.
-    const zoneless = /T\d{2}:\d{2}/.test(iso) && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso);
-    const at = Date.parse(zoneless ? `${iso}Z` : iso);
+    // Zone-less machine timestamps (T- OR space-separated — legacy raws use
+    // both) are pinned to UTC explicitly: Date.parse would read them in the
+    // server's local zone, making reminder windows (and the epoch dedupe key)
+    // deploy- and DST-dependent. Prose that only Date.parse understands still
+    // falls through — approximate by design, and the deploy target is UTC.
+    const zoneless = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2})?)$/.exec(iso);
+    const at = zoneless ? Date.parse(`${zoneless[1]}T${zoneless[2]}Z`) : Date.parse(iso);
     if (Number.isNaN(at) || at <= now) continue;
     const until = at - now;
     const window = until <= HOUR ? "1h" : until <= 24 * HOUR ? "24h" : null;

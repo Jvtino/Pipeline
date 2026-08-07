@@ -109,13 +109,29 @@ const deviceEnvelope = z.object({
   }),
 });
 
-/** Per-device notification preferences (Settings toggles). */
+/** Per-device notification preferences (Settings toggles). Optimistic — a
+ *  native Switch that animates on, snaps back, then flips again after the
+ *  round-trip reads as broken on any slow connection. */
 export function useUpdateDevice() {
   const qc = useQueryClient();
+  type Devices = { devices: { id: string; notifyStatusChanges: boolean; notifyReminders: boolean }[] };
   return useMutation({
     mutationFn: ({ id, ...prefs }: { id: string; notifyStatusChanges?: boolean; notifyReminders?: boolean }) =>
       request(`/api/devices/${encodeURIComponent(id)}`, deviceEnvelope, { method: "PATCH", body: JSON.stringify(prefs) }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["devices"] }),
+    onMutate: async ({ id, ...prefs }) => {
+      await qc.cancelQueries({ queryKey: ["devices"] });
+      const before = qc.getQueryData<Devices>(["devices"]);
+      if (before) {
+        qc.setQueryData<Devices>(["devices"], {
+          devices: before.devices.map((d) => (d.id === id ? { ...d, ...prefs } : d)),
+        });
+      }
+      return { before };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.before) qc.setQueryData(["devices"], ctx.before);
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["devices"] }),
   });
 }
 

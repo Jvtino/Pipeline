@@ -25,9 +25,24 @@ const dayOf = (iso: string): string | null => {
 };
 
 const timeOf = (iso: string): string | undefined => {
-  const m = /T(\d{2}:\d{2})/.exec(iso);
+  const m = /^\d{4}-\d{2}-\d{2}[T ](\d{2}:\d{2})/.exec(iso);
   return m ? m[1] : undefined;
 };
+
+/**
+ * Extracted interview timestamps are shown AS WRITTEN in the email — never
+ * timezone-converted (the extractor keeps the raw text precisely because the
+ * email's zone is unknowable; "14:30" in the invite is the truth). Machine
+ * shapes ("2026-06-12T14:00", "2026-06-12 14:00", with or without zone
+ * suffix) parse into a day + wall-clock time; prose ("Tuesday, June 12 at
+ * 2:30 PM ET") returns null — callers display it raw and skip date math.
+ * Regex-only on purpose: Date.parse of these shapes differs between Hermes
+ * (native) and V8 (the web demo).
+ */
+export function parseInterview(value: string): { day: string; time?: string } | null {
+  const day = dayOf(value);
+  return day ? { day, time: timeOf(value) } : null;
+}
 
 /** Every dated event on the board. Interview events come from the extracted
  *  enrichment; each application also contributes its status milestones. */
@@ -85,11 +100,18 @@ export function localToday(now: Date = new Date()): string {
   return `${now.getFullYear()}-${m}-${d}`;
 }
 
+/** Whole calendar days from `today` to `date` (both YYYY-MM-DD); null when
+ *  either side doesn't parse. Negative = past. */
+export function daysUntil(date: string, today: string): number | null {
+  const days = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+  return Number.isFinite(days) ? days : null;
+}
+
 /** "today" / "tomorrow" / "in 5 days" — calendar-day distance, timezone-free
  *  (both sides are YYYY-MM-DD strings). */
 export function untilLabel(date: string, today: string): string {
-  const days = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
-  if (!Number.isFinite(days) || days <= 0) return "today";
+  const days = daysUntil(date, today);
+  if (days === null || days <= 0) return "today";
   if (days === 1) return "tomorrow";
   return `in ${days} days`;
 }

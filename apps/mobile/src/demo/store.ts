@@ -32,10 +32,12 @@ function seed(): DemoState {
   // one upcoming interview (calendar) and one hesitant classification (review).
   const acme = apps.get("demo:acme");
   if (acme) {
-    const soon = new Date(Date.now() + 26 * 60 * 60 * 1000); // ~tomorrow: inside the 48h "interview soon" window
+    const soon = new Date(Date.now() + 26 * 60 * 60 * 1000); // ~tomorrow: inside the "interview soon" window
     acme.enrichment = {
       ...acme.enrichment,
-      interviewDateTime: `${soon.toISOString().slice(0, 10)}T14:30:00Z`,
+      // no zone suffix — extracted interview times are wall-clock text shown
+      // as written, exactly like the real classifier produces
+      interviewDateTime: `${soon.toISOString().slice(0, 10)}T14:30:00`,
       location: "Berlin · hybrid",
       recruiterName: "Maya Lindqvist",
       recruiterTitle: "Talent Partner",
@@ -100,7 +102,9 @@ export function demoHandle(path: string, init?: { method?: string; body?: string
     const status = (payload.status as Status | undefined) ?? "applied";
     if (!company || !role) return json({ error: "company and role are required" }, 400);
     const threadId = `manual:${Math.random().toString(36).slice(2, 10)}`;
-    const date = today().slice(0, 10);
+    // like the server: an explicit appliedOn backdates the record
+    const appliedOn = typeof payload.appliedOn === "string" && !Number.isNaN(Date.parse(payload.appliedOn)) ? payload.appliedOn : null;
+    const date = appliedOn ?? today().slice(0, 10);
     const app: Application = {
       id: threadId,
       threadId,
@@ -123,7 +127,8 @@ export function demoHandle(path: string, init?: { method?: string; body?: string
     const threadId = decodeURIComponent(patchApp[1]!);
     const app = s.apps.get(threadId);
     const status = payload.status as Status | undefined;
-    if (!app || !status) return json({ error: "application not found" }, app ? 400 : 404);
+    if (!app) return json({ error: "application not found" }, 404);
+    if (!status) return json({ error: "a valid status is required" }, 400);
     const before = coalesced(app).status;
     app.overrideStatus = status;
     app.reviewedAt = today();
@@ -158,6 +163,10 @@ export function demoHandle(path: string, init?: { method?: string; body?: string
     const threadId = decodeURIComponent(review[1]!);
     const app = s.apps.get(threadId);
     if (!app) return json({ error: "application not found" }, 404);
+    // the server 400s on unknown actions — a typo'd action must not silently confirm
+    if (payload.action !== "confirm" && payload.action !== "set") {
+      return json({ error: "action must be 'confirm' or 'set'" }, 400);
+    }
     if (payload.action === "set") {
       const status = payload.status as Status | undefined;
       if (!status) return json({ error: "a valid status is required with action 'set'" }, 400);

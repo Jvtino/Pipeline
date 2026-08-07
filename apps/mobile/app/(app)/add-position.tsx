@@ -69,6 +69,7 @@ export default function AddPositionScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`Status ${statusLabel[s]}`}
                       accessibilityState={{ selected: active }}
+                      hitSlop={6}
                       style={{
                         flexDirection: "row",
                         alignItems: "center",

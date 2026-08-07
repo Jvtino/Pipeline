@@ -2,6 +2,7 @@
 // classifier hesitated (its evidence and confidence), then: "Looks right"
 // keeps the status, or pick the correct one (which also pins it). Push
 // notification taps will land directly here in the next phase.
+import { useRef } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { STATUSES, type Application } from "@pipeline/contracts";
@@ -13,13 +14,22 @@ import { Avatar, Button, EmptyState, Label, Panel, Screen, StatusDot, StatusPill
 import { color, radius, space, statusColor, statusLabel, text } from "../../../src/ui/theme";
 
 export default function ReviewModal() {
+  // expo-router already percent-decoded the param — decoding again corrupts
+  // ids containing "%".
   const { threadId: raw } = useLocalSearchParams<{ threadId: string }>();
-  const threadId = decodeURIComponent(raw ?? "");
+  const threadId = raw ?? "";
   const review = useReview();
   const resolve = useResolveReview();
   const router = useRouter();
 
-  const item: Application | undefined = review.data?.applications.find((a) => a.threadId === threadId);
+  // Snapshot the record once seen: resolving invalidates ["review"], and the
+  // refetch removes this item from the queue while the modal is still animating
+  // out — without the snapshot the content flashes to "Already handled"
+  // mid-dismiss.
+  const seen = useRef<Application | undefined>(undefined);
+  const live = review.data?.applications.find((a) => a.threadId === threadId);
+  if (live && !seen.current) seen.current = live;
+  const item = seen.current ?? live;
 
   if (!item) {
     return (
@@ -86,6 +96,7 @@ export default function ReviewModal() {
                 onPress={() => resolve.mutate({ threadId, action: "set", status: s }, { onSuccess: done })}
                 accessibilityRole="button"
                 accessibilityLabel={`Set status to ${statusLabel[s]}`}
+                hitSlop={6}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",

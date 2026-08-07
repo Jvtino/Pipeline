@@ -222,7 +222,16 @@ function ToggleRow({
         <Text style={text.base}>{label}</Text>
         <Text style={text.faint}>{hint}</Text>
       </View>
-      <Switch value={value} disabled={busy} onValueChange={onChange} trackColor={{ true: color.blue }} thumbColor={color.white} />
+      <Switch
+        value={value}
+        disabled={busy}
+        onValueChange={onChange}
+        // the label/hint are sibling Texts — screen readers need it on the control itself
+        accessibilityLabel={label}
+        accessibilityHint={hint}
+        trackColor={{ true: color.blue }}
+        thumbColor={color.white}
+      />
     </View>
   );
 }

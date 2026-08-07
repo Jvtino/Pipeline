@@ -51,7 +51,7 @@ export default function BoardScreen() {
     <Screen>
       {offline ? (
         <View style={{ backgroundColor: color.blueDeep, paddingVertical: space.xs, alignItems: "center" }}>
-          <Text style={text.faint}>Offline — showing your last sync</Text>
+          <Text style={text.faint}>Can't reach the server — showing your last update</Text>
         </View>
       ) : null}
       <FadeIn style={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: space.md }}>
@@ -87,7 +87,7 @@ export default function BoardScreen() {
           ) : null}
         </View>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
-          {countChips(counts).map((chip) => {
+          {countChips(counts, status).map((chip) => {
             const active = status === chip.status;
             return (
               <Pressable
@@ -96,6 +96,7 @@ export default function BoardScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Filter: ${statusLabel[chip.status]}, ${chip.count}`}
                 accessibilityState={{ selected: active }}
+                hitSlop={6}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -119,8 +120,10 @@ export default function BoardScreen() {
       </FadeIn>
       <FlatList
         data={groups}
-        keyExtractor={(g) => g.company + g.domain}
-        contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: space.xxl }}
+        // Platform-fallback groups ("Myworkday", …) all share the ATS name —
+        // the contract keeps them one-per-thread, so the thread is the key.
+        keyExtractor={(g) => (g.applications[0]?.platformFallback ? `ats:${g.applications[0].threadId}` : g.company + g.domain)}
+        contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: space.xxl, flexGrow: 1 }}
         refreshControl={
           <RefreshControl refreshing={board.isRefetching} onRefresh={() => void board.refetch()} tintColor={color.blue} />
         }
@@ -188,13 +191,16 @@ function CompanyCard({
 }) {
   // one dot per distinct status, board order — the company's story at a glance
   const distinct = [...new Set(group.applications.map((a) => a.status))];
+  // A fallback group's "company" is a shared ATS name — pinning is keyed by
+  // company, so it would pin every record relayed through that platform.
+  const pinnable = !group.applications[0]?.platformFallback;
   return (
     <Panel style={[{ padding: 0, overflow: "hidden" }, isPinned && { borderColor: color.border2 }]}>
       <Pressable
-        onLongPress={() => onTogglePin(group.company)}
+        onLongPress={pinnable ? () => onTogglePin(group.company) : undefined}
         delayLongPress={350}
         accessibilityRole="button"
-        accessibilityLabel={`${group.company}. Long press to ${isPinned ? "unpin" : "pin"}.`}
+        accessibilityLabel={pinnable ? `${group.company}. Long press to ${isPinned ? "unpin" : "pin"}.` : group.company}
         style={{ flexDirection: "row", alignItems: "center", gap: space.md, padding: space.lg }}
       >
         <Avatar company={group.company} />

@@ -40,7 +40,7 @@ const PROMISES = [
   {
     dot: statusColor.offer,
     title: "Private by design",
-    body: "Only derived facts are kept: company, role, status, dates, a short snippet. Never your full emails, never sold, deletable in two taps.",
+    body: "Only derived facts are kept: company, role, status, dates, a short snippet. Never your full emails, never sold — and Settings can delete everything, permanently, whenever you say.",
   },
   {
     dot: statusColor.applied,

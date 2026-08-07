@@ -9,7 +9,14 @@ export interface PendingEntry {
   provider: ProviderId;
   verifier: string;
   userId: string;
+  /** Where the user lands after the callback: the web app (default) or the
+   *  mobile app's universal link. Set on flows started with a connect token. */
+  returnTo?: "web" | "mobile";
 }
+
+/** Namespaces mobile connect-token nonces away from OAuth `state` values —
+ *  both ride the same store so multi-replica deploys need only one Redis. */
+export const CONNECT_TOKEN_PREFIX = "ct:";
 
 export interface PendingStore {
   set(state: string, entry: PendingEntry, ttlMs: number): Promise<void>;
@@ -40,9 +47,9 @@ export function redisPendingStore(redisUrl: string): PendingStore {
       await redis.set(key(state), JSON.stringify(entry), "PX", ttlMs);
     },
     async take(state) {
-      const k = key(state);
-      const v = await redis.get(k);
-      if (v) await redis.del(k);
+      // GETDEL (Redis ≥ 6.2) keeps fetch+remove atomic — a plain GET-then-DEL
+      // lets two replicas both consume the same one-time state/connect-token.
+      const v = await redis.getdel(key(state));
       return v ? (JSON.parse(v) as PendingEntry) : null;
     },
   };

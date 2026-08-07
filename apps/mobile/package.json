@@ -1,0 +1,49 @@
+{
+  "name": "@pipeline/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pipeline mobile app (Expo + React Native). Consumes derived records from @pipeline/api — never scans a mailbox on-device.",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "export": "expo export --platform ios"
+  },
+  "dependencies": {
+    "@clerk/clerk-expo": "^2.19.31",
+    "@expo/metro-runtime": "~57.0.8",
+    "@pipeline/classify": "workspace:*",
+    "@pipeline/contracts": "workspace:*",
+    "@pipeline/tokens": "workspace:*",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@tanstack/query-async-storage-persister": "^5.101.4",
+    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-query-persist-client": "^5.101.4",
+    "expo": "~57.0.11",
+    "expo-constants": "~57.0.9",
+    "expo-device": "~57.0.1",
+    "expo-linear-gradient": "~57.0.1",
+    "expo-linking": "~57.0.5",
+    "expo-notifications": "~57.0.9",
+    "expo-router": "~57.0.11",
+    "expo-secure-store": "~57.0.1",
+    "expo-status-bar": "~57.0.1",
+    "expo-web-browser": "~57.0.2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.2",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "~0.21.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3",
+    "vitest": "^2.1.8"
+  }
+}

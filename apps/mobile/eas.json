@@ -1,0 +1,31 @@
+{
+  "cli": {
+    "version": ">= 13.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "EXPO_PUBLIC_API_URL": "http://localhost:3001" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "env": { "EXPO_PUBLIC_API_URL": "https://pipeline-api.onrender.com" }
+    },
+    "demo": {
+      "distribution": "internal",
+      "channel": "demo",
+      "env": { "EXPO_PUBLIC_DEMO": "1" }
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "env": { "EXPO_PUBLIC_API_URL": "https://pipeline-api.onrender.com" }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

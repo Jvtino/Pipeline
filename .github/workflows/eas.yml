@@ -1,0 +1,43 @@
+# Mobile store builds via EAS — tag-triggered (mobile-v*), like build.yml is for
+# the Electron installers. INERT until the EXPO_TOKEN secret exists (Phase 0:
+# the owner's Expo account); pushes to ordinary branches never build.
+name: Mobile (EAS)
+
+on:
+  push:
+    tags: ["mobile-v*"]
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "EAS build profile"
+        type: choice
+        options: [preview, demo, production]
+        default: preview
+
+jobs:
+  eas-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Guard — EXPO_TOKEN required
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "::error::EXPO_TOKEN is not configured (Phase 0 — Expo account). Skipping build."
+            exit 1
+          fi
+      - name: Install
+        run: pnpm install --filter "@pipeline/mobile..." --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - name: Build shared packages
+        run: pnpm --filter "@pipeline/contracts" --filter "@pipeline/tokens" --filter "@pipeline/classify" build
+      - name: EAS build (both platforms)
+        working-directory: apps/mobile
+        run: pnpm dlx eas-cli build --non-interactive --platform all --profile "${{ github.event.inputs.profile || 'production' }}"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

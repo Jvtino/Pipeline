@@ -5,9 +5,12 @@
 // already in place), and incremental sync are the next steps (plan §8/§10).
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import { boardSchema } from "@pipeline/contracts";
 import {
   getBoardForUser,
+  getUser,
+  upsertUser,
   setUserPlan,
   getMailConnections,
   rebuildSyncedApplications,
@@ -22,8 +25,12 @@ import type { HttpTransport } from "@pipeline/providers";
 import { initStore, seedDemoForUser, resolveMasterKey } from "./store";
 import { loadProviderConfigs } from "./config";
 import { registerOAuthRoutes } from "./oauth-routes";
-import { registerAuthRoutes } from "./auth-routes";
+import { registerAuthRoutes, resolveDevLoginEnabled } from "./auth-routes";
 import { registerProRoutes } from "./pro-routes";
+import { clerkConfigFromEnv, createBearerVerifier, clerkIdentityDeleter, type BearerVerifier } from "./clerk";
+import { registerMobileRoutes } from "./mobile-routes";
+import { expoPushGateway } from "./push";
+import { notifyTransitions, notifyInterviewReminders, type NotifyDeps } from "./notifications";
 import { memoryPendingStore, redisPendingStore } from "./pending-store";
 import { backgroundSyncStatus, setBackgroundSync } from "./background-sync";
 import { startSyncScheduler } from "./scheduler";
@@ -34,6 +41,7 @@ import {
   verifySession,
   readCookie,
   requireUser,
+  rateLimited,
   SESSION_COOKIE,
   type RequestWithUser,
 } from "./auth";
@@ -45,11 +53,18 @@ export interface ServerOptions {
   // restart. Defaults to off, so tests stay ephemeral + isolated. Hosted
   // deployments leave this off and supply the secrets/DATABASE_URL via env.
   local?: boolean;
+  // Bearer identity verifier (mobile clients). Injected in tests; defaults to
+  // the Clerk JWKS verifier when CLERK_ISSUER is set, else bearer auth is off.
+  verifyBearer?: BearerVerifier;
 }
 
 export async function buildServer(opts: ServerOptions = {}) {
   const local = opts.local ?? false;
-  const app = Fastify({ logger: true });
+  // trustProxy: hosted deploys sit behind Render's router (and Vercel's /api
+  // rewrite), so req.ip must come from X-Forwarded-For or every client shares
+  // the proxy's address — which would make the per-IP rate limits one global
+  // bucket. Harmless locally (no proxy → header absent).
+  const app = Fastify({ logger: true, trustProxy: true });
   app.register(cors, { origin: true });
 
   const store = await initStore(local);
@@ -70,9 +85,67 @@ export async function buildServer(opts: ServerOptions = {}) {
     }
   });
 
-  // Resolve the authenticated user from the session cookie on every request.
+  // Rate limiting is opt-in per route (config.rateLimit) — registered here so
+  // sensitive routes (auth, sync, devices) can throttle without slowing reads.
+  await app.register(rateLimit, { global: false });
+
+  // Resolve the authenticated user on every request: a Bearer token (mobile,
+  // verified against the IdP's JWKS) outranks the legacy session cookie
+  // (web/desktop) — both land on the same `req.user` seam.
   const sessionSecret = resolveSessionSecret(local);
+  const verifyBearer = opts.verifyBearer ?? (() => {
+    const cfg = clerkConfigFromEnv();
+    return cfg ? createBearerVerifier(cfg) : null;
+  })();
+
+  // First-sight provisioning, deduplicated by IN-FLIGHT promise (not a done-set):
+  // a phone's first launch fires several API calls in parallel with the same
+  // token, and seedDemoForUser is check-then-act — concurrent racers would seed
+  // duplicate demo timeline events. Sharing one promise per user id makes every
+  // concurrent request await the same provisioning pass. Account deletion must
+  // evict its entry (see /api/account) or a deleted user's still-valid token
+  // would skip re-provisioning and hit FK failures on writes.
+  const provisioning = new Map<string, Promise<{ id: string; email: string }>>();
+  const ensureBearerUser = (identity: { id: string; email: string }) => {
+    const inFlight = provisioning.get(identity.id);
+    if (inFlight) return inFlight;
+    const work = (async () => {
+      const existing = await getUser(store.db, identity.id);
+      if (existing) {
+        return { ...identity, email: existing.email }; // DB email is authoritative once created
+      }
+      try {
+        await upsertUser(store.db, { id: identity.id, email: identity.email });
+      } catch {
+        // The email already belongs to a different (legacy cookie-era) user id.
+        // Deliberately do NOT link the accounts — a per-subject sentinel keeps
+        // the UNIQUE email column valid and the identities separate.
+        identity = { ...identity, email: `${identity.id}@clerk.local` };
+        await upsertUser(store.db, { id: identity.id, email: identity.email });
+      }
+      await seedDemoForUser(store.db, identity.id); // a first board is never empty
+      return identity;
+    })();
+    // Cache the settled promise for process lifetime; drop it on failure so a
+    // transient DB error doesn't poison the user forever.
+    provisioning.set(
+      identity.id,
+      work.catch((err) => {
+        provisioning.delete(identity.id);
+        throw err;
+      }),
+    );
+    return provisioning.get(identity.id)!;
+  };
+
   app.addHook("preHandler", async (req) => {
+    if (verifyBearer) {
+      const identity = await verifyBearer(req.headers.authorization);
+      if (identity) {
+        (req as RequestWithUser).user = await ensureBearerUser(identity);
+        return;
+      }
+    }
     const user = verifySession(sessionSecret, readCookie(req, SESSION_COOKIE));
     if (user) (req as RequestWithUser).user = user;
   });
@@ -80,7 +153,7 @@ export async function buildServer(opts: ServerOptions = {}) {
   registerAuthRoutes(app, {
     db: store.db,
     sessionSecret,
-    devLoginEnabled: process.env.DISABLE_DEV_LOGIN !== "true",
+    devLoginEnabled: resolveDevLoginEnabled(process.env, local),
     onNewUser: seedDemoForUser,
   });
 
@@ -94,7 +167,7 @@ export async function buildServer(opts: ServerOptions = {}) {
   });
 
   // Trigger an incremental sync of the signed-in user's connected mailboxes.
-  app.post("/api/sync", async (req, reply) => {
+  app.post("/api/sync", rateLimited(12), async (req, reply) => {
     const user = requireUser(req, reply);
     if (!user) return reply;
     return syncAllConnections({ db: store.db, masterKey, userId: user.id, configs, transport: opts.transport });
@@ -105,7 +178,7 @@ export async function buildServer(opts: ServerOptions = {}) {
   // runs a full sync so only mail that passes the CURRENT relevance gate is
   // re-listed. This is the recovery path after a bad sync floods the board with
   // non-application mail — the gate fix stops new floods; this clears an old one.
-  app.post("/api/resync", async (req, reply) => {
+  app.post("/api/resync", rateLimited(6), async (req, reply) => {
     const user = requireUser(req, reply);
     if (!user) return reply;
     // No mailbox to rebuild from → safe no-op (don't clear the seeded demo board).
@@ -233,13 +306,45 @@ export async function buildServer(opts: ServerOptions = {}) {
     publicUrl: process.env.PUBLIC_URL ?? "http://localhost:3001",
     webUrl: process.env.WEB_URL ?? "http://localhost:5173",
     pending,
+    mobileReturnUrl: process.env.MOBILE_REDIRECT_URL,
   });
 
-  // Background sync scheduler — opt-in via SYNC_INTERVAL_MS (off in tests/dev by default).
+  // Mobile endpoints: devices/push, server-side writes, review queue, connect
+  // tokens (shares the OAuth pending store), account deletion, meta/flags.
+  registerMobileRoutes(app, {
+    db: store.db,
+    masterKey,
+    configs,
+    transport: opts.transport,
+    pending,
+    forgetUser: (userId) => void provisioning.delete(userId),
+    deleteIdentity: clerkIdentityDeleter() ?? undefined,
+  });
+
+  // Background sync scheduler — opt-in via SYNC_INTERVAL_MS (off in tests/dev
+  // by default; the dedicated worker process is the preferred home). Push
+  // notifications ride the transition stream here too — the DB dedupe ledger
+  // makes overlap with the worker send-once safe.
   const intervalMs = Number(process.env.SYNC_INTERVAL_MS ?? 0);
   if (intervalMs > 0) {
-    const stop = startSyncScheduler({ db: store.db, masterKey, configs, transport: opts.transport }, intervalMs, (m) => app.log.info(m));
-    app.addHook("onClose", async () => stop());
+    const notify: NotifyDeps = { db: store.db, gateway: expoPushGateway(), log: (m) => app.log.info(m) };
+    const stop = startSyncScheduler(
+      {
+        db: store.db,
+        masterKey,
+        configs,
+        transport: opts.transport,
+        onTransitions: (userId, transitions) => notifyTransitions(notify, userId, transitions),
+      },
+      intervalMs,
+      (m) => app.log.info(m),
+    );
+    const reminderHandle = setInterval(() => void notifyInterviewReminders(notify).catch((e) => app.log.warn(e)), Math.min(intervalMs, 5 * 60 * 1000));
+    if (typeof reminderHandle.unref === "function") reminderHandle.unref();
+    app.addHook("onClose", async () => {
+      clearInterval(reminderHandle);
+      stop();
+    });
   }
 
   return app;

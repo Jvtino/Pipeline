@@ -96,3 +96,12 @@ export function requireUser(req: FastifyRequest, reply: FastifyReply): AuthUser 
   }
   return u;
 }
+
+/** Per-route rate-limit options (@fastify/rate-limit is registered global:false,
+ *  so only routes that opt in throttle). RATE_LIMIT_MAX overrides every route's
+ *  ceiling — tests use a tiny value to exercise the 429 path. */
+export function rateLimited(max: number): { config: { rateLimit: { max: number; timeWindow: string } } } {
+  const override = Number(process.env.RATE_LIMIT_MAX);
+  const effective = Number.isFinite(override) && override > 0 ? override : max;
+  return { config: { rateLimit: { max: effective, timeWindow: "1 minute" } } };
+}

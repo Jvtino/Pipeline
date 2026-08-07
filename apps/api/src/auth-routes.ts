@@ -4,7 +4,7 @@
 // IdP populates `req.user` in the preHandler instead.
 import type { FastifyInstance } from "fastify";
 import { getUser, upsertUser, setUserPlan, type Database } from "@pipeline/db";
-import { signSession, sessionCookie, clearSessionCookie, type RequestWithUser } from "./auth";
+import { signSession, sessionCookie, clearSessionCookie, rateLimited, type RequestWithUser } from "./auth";
 
 export interface AuthRouteDeps {
   db: Database;
@@ -13,10 +13,26 @@ export interface AuthRouteDeps {
   onNewUser?: (db: Database, userId: string) => Promise<void>;
 }
 
+/**
+ * Whether the passwordless dev login is available — FAIL-CLOSED in production:
+ *   - DISABLE_DEV_LOGIN=true wins everywhere (explicit off);
+ *   - local single-user mode keeps it (it IS that build's login, bound to one machine);
+ *   - NODE_ENV=production requires an explicit ENABLE_DEV_LOGIN=true (staging escape hatch);
+ *   - dev/test default stays on.
+ * Public deploy paths (render.yaml, Dockerfile) set NODE_ENV=production, so a
+ * hosted instance can no longer expose passwordless login by mere omission.
+ */
+export function resolveDevLoginEnabled(env: NodeJS.ProcessEnv, local: boolean): boolean {
+  if (env.DISABLE_DEV_LOGIN === "true") return false;
+  if (local) return true;
+  if (env.NODE_ENV === "production") return env.ENABLE_DEV_LOGIN === "true";
+  return true;
+}
+
 const PLANS = new Set(["free", "pro", "teams"]);
 
 export function registerAuthRoutes(app: FastifyInstance, d: AuthRouteDeps): void {
-  app.post("/auth/dev/login", async (req, reply) => {
+  app.post("/auth/dev/login", rateLimited(30), async (req, reply) => {
     if (!d.devLoginEnabled) return reply.code(404).send({ error: "not found" });
     const email = ((req.body as { email?: string } | undefined)?.email ?? "").trim().toLowerCase();
     if (!email.includes("@")) return reply.code(400).send({ error: "a valid email is required" });

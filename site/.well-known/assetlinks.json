@@ -1,0 +1,11 @@
+[
+  {
+    "_comment": "Android App Links for the Pipeline mobile app. Replace the sha256_cert_fingerprints value with the release signing certificate fingerprint (EAS credentials page) from Phase 0.",
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.pipeline.mobile",
+      "sha256_cert_fingerprints": ["REPLACE:WITH:RELEASE:CERT:FINGERPRINT"]
+    }
+  }
+]

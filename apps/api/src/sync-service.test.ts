@@ -116,6 +116,72 @@ describe("syncAllConnections", () => {
   });
 });
 
+describe("onTransitions hook (push-notification feed)", () => {
+  const conn = () =>
+    saveMailConnection(h.db, mk, {
+      id: "conn1",
+      userId: "u1",
+      provider: "google",
+      email: "u1@gmail.com",
+      secret: { access_token: "AT", expires_in: 3600, obtained_at: Date.now() },
+    });
+  const deps = (makeSource: SourceFactory, onTransitions: (userId: string, t: unknown[]) => void | Promise<void>) => ({
+    db: h.db,
+    masterKey: mk,
+    userId: "u1",
+    configs: { google: { clientId: "c", clientSecret: "s" } },
+    makeSource,
+    onTransitions: onTransitions as never,
+  });
+
+  it("stays silent on the backfill round, then feeds delta transitions", async () => {
+    await conn();
+    let round = 0;
+    const makeSource: SourceFactory = () => ({
+      async fetch() {
+        round += 1;
+        return round === 1
+          ? { threads: [acmeThread("thank you for applying")], cursor: "h1" }
+          : { threads: [acmeThread("thank you for applying", "we'd like to schedule an interview")], cursor: "h2" };
+      },
+    });
+    const calls: { userId: string; transitions: unknown[] }[] = [];
+    const d = deps(makeSource, (userId, transitions) => void calls.push({ userId, transitions }));
+
+    await syncAllConnections(d); // backfill: a first sync would "transition" everything — no calls
+    expect(calls).toEqual([]);
+
+    await syncAllConnections(d); // delta: applied → interview
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.userId).toBe("u1");
+    expect(calls[0]!.transitions).toMatchObject([{ from: "applied", to: "interview", isNew: false, overridden: false }]);
+
+    await syncAllConnections(d); // unchanged delta: no transition, no call
+    expect(calls).toHaveLength(1);
+  });
+
+  it("a throwing hook never fails the sync", async () => {
+    await conn();
+    let round = 0;
+    const makeSource: SourceFactory = () => ({
+      async fetch() {
+        round += 1;
+        return round === 1
+          ? { threads: [acmeThread("thank you for applying")], cursor: "h1" }
+          : { threads: [acmeThread("thank you for applying", "we'd like to schedule an interview")], cursor: "h2" };
+      },
+    });
+    const d = deps(makeSource, () => {
+      throw new Error("push provider down");
+    });
+    await syncAllConnections(d);
+    const summary = await syncAllConnections(d);
+    expect(summary.results[0]!.error).toBeUndefined();
+    expect(summary.results[0]!.result?.upserted).toBe(1);
+    expect((await getBoardForUser(h.db, "u1", "live")).counts.interview).toBe(1);
+  });
+});
+
 describe("syncAllUsers (scheduler fan-out)", () => {
   it("syncs every user that has a connected mailbox", async () => {
     await upsertUser(h.db, { id: "u2", email: "u2@x.com" });

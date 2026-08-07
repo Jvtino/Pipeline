@@ -43,7 +43,9 @@ describe("local mode persists across restarts", () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it("keeps the session + board after a simulated relaunch", async () => {
+  // Two full server boots against on-disk PGlite — legitimately slow on a loaded
+  // CI runner, so it gets a real budget instead of vitest's 5s default.
+  it("keeps the session + board after a simulated relaunch", { timeout: 30_000 }, async () => {
     // First launch: sign in, board is seeded.
     const a = await buildServer({ local: true });
     let cookie: string;

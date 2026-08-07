@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy Policy — Pipeline</title>
+<meta name="description" content="What Pipeline accesses, what it stores, and what never leaves your mailbox." />
+<style>
+  :root{--bg:#07090e;--panel:#0c111b;--border:rgba(255,255,255,.08);--text:#e8edf5;--dim:#9aa6b8;--faint:#61708a;--blue2:#5ea0ff;--amber:#f5c542}
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+  body{background:radial-gradient(1100px 560px at 50% -10%, rgba(47,129,247,.16), transparent 62%), var(--bg);color:var(--text);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+  a{color:var(--blue2);text-decoration:none}a:hover{text-decoration:underline}
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 64px}
+  header{display:flex;align-items:center;gap:12px;padding:26px 0}
+  .brand{font-weight:700;font-size:18px}
+  nav{margin-left:auto;display:flex;gap:20px;font-size:14px;color:var(--dim)}
+  h1{font-size:34px;letter-spacing:-.5px;margin:26px 0 6px}
+  h2{font-size:20px;margin:34px 0 10px}
+  p,li{color:var(--dim)}
+  strong{color:var(--text)}
+  .draft{display:inline-block;border:1px solid rgba(245,197,66,.5);color:var(--amber);border-radius:999px;padding:3px 12px;font-size:13px;margin:8px 0 0}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin:18px 0}
+  footer{border-top:1px solid var(--border);margin-top:48px;padding-top:18px;font-size:14px;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <span class="brand">Pipeline</span>
+  <nav><a href="index.html">Home</a><a href="terms.html">Terms</a><a href="delete-account.html">Delete account</a></nav>
+</header>
+
+<h1>Privacy Policy</h1>
+<p>Last updated: 2026-08-07</p>
+<p class="draft">DRAFT — review with legal counsel before public launch</p>
+
+<div class="card">
+  <p><strong>The short version.</strong> Pipeline reads your mailbox <strong>read-only</strong>, finds job-application
+  emails, and keeps only the <strong>derived facts</strong> needed to show your board: company, role, status, dates, and a
+  short snippet (at most 600 characters). We never store your full emails, never send email from your account, and never
+  sell or share your data with advertisers. Ever.</p>
+</div>
+
+<h2>Two ways to run Pipeline</h2>
+<p><strong>Desktop app (on your device).</strong> The downloadable desktop app talks to your mail provider directly from
+your computer. Your credentials and derived data stay on that computer; we operate no server in that path.</p>
+<p><strong>Hosted service &amp; mobile app (our server).</strong> The web and phone apps use a Pipeline server that scans your
+connected mailbox for you and stores the derived records described below. The phone app itself <strong>never holds your
+mail credentials</strong> — connecting a mailbox happens in your browser, and the resulting access token is stored only on
+the server, encrypted (per-record envelope encryption; AES-256-GCM).</p>
+
+<h2>What we access</h2>
+<ul>
+  <li><strong>Google (Gmail):</strong> the <code>gmail.readonly</code> scope — read-only access used solely to identify and
+  classify job-application messages. Google API data use complies with the
+  <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+  including its Limited Use requirements.</li>
+  <li><strong>Microsoft (Outlook/Hotmail/Live):</strong> the delegated <code>Mail.Read</code> permission, read-only.</li>
+</ul>
+<p>Pipeline cannot send, modify, or delete your email.</p>
+
+<h2>What we store (hosted &amp; mobile)</h2>
+<ul>
+  <li><strong>Account:</strong> your sign-in email address (managed by our sign-in provider) and plan.</li>
+  <li><strong>Derived application records:</strong> company, role, status, dates, a snippet of at most 600 characters per
+  message, and attachment <em>metadata</em> (file name, type, size — never file contents).</li>
+  <li><strong>Mailbox tokens:</strong> envelope-encrypted at rest; deleted when you disconnect the mailbox.</li>
+  <li><strong>Device registrations:</strong> if you enable notifications, an anonymous push token and your notification
+  preferences. Notifications carry no email content.</li>
+</ul>
+<p><strong>What we never store:</strong> full email bodies, attachments, your contacts list, or your mail password.</p>
+
+<h2>Deleting your data</h2>
+<p>Delete your account at any time from the mobile app (Settings → Danger zone) or as described on the
+<a href="delete-account.html">delete account</a> page. Deletion removes every server-side record — applications,
+timelines, connected mailboxes and their tokens, devices — immediately and irreversibly. We also attempt to revoke the
+mailbox token with your provider; you can always revoke it yourself in your Google or Microsoft account settings.</p>
+
+<h2>Processors</h2>
+<p>The hosted service runs on infrastructure and service providers acting on our instructions: cloud hosting for the API
+and database, a sign-in provider for authentication, and a push-delivery service for notifications. Each receives only
+what its function requires; none may use your data for their own purposes.</p>
+
+<h2>Contact</h2>
+<p>Questions or requests: open an issue on the project repository, or contact the developer directly.</p>
+
+<footer>Pipeline — job applications from your inbox. <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a></footer>
+</div>
+</body>
+</html>

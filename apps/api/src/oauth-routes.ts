@@ -18,10 +18,10 @@ import {
   type ProviderId,
   type HttpTransport,
 } from "@pipeline/providers";
-import { saveMailConnection, type Database } from "@pipeline/db";
+import { saveMailConnection, getUser, type Database } from "@pipeline/db";
 import type { FastifyRequest } from "fastify";
 import type { ProviderConfigs } from "./config";
-import type { PendingStore } from "./pending-store";
+import { CONNECT_TOKEN_PREFIX, type PendingStore } from "./pending-store";
 
 const PENDING_TTL_MS = 10 * 60 * 1000; // an OAuth round-trip should finish well within 10 min
 
@@ -34,6 +34,10 @@ export interface OAuthDeps {
   publicUrl: string; // where the API is reachable (for the redirect_uri)
   webUrl: string; // where to send the user back after connect
   pending: PendingStore;
+  /** Where a MOBILE-started flow lands after the callback — a universal link the
+   *  phone app owns (https://<domain>/connect/done), so the system browser hands
+   *  control back to the app. Defaults to `${webUrl}/connect/done`. */
+  mobileReturnUrl?: string;
 }
 
 function isProvider(p: string): p is ProviderId {
@@ -44,35 +48,82 @@ function isProvider(p: string): p is ProviderId {
 // one place so the start/callback handlers stay consistent (and typo-proof).
 type ConnectStatus = "ok" | "error" | "unconfigured";
 
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+/** Mobile connect confirmation interstitial (see the connect-CSRF note at the
+ *  call site). Deliberately dependency-free inline HTML in the desktop theme. */
+function confirmPage(provider: ProviderId, ownerEmail: string, authUrl: string): string {
+  const providerName = provider === "google" ? "Google" : "Microsoft";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect mailbox — Pipeline</title></head>
+<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#07090e;color:#e8edf5;font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+<div style="max-width:420px;padding:32px;text-align:center">
+<h1 style="font-size:20px;margin:0 0 12px">Connect a ${providerName} mailbox</h1>
+<p style="color:#9aa6b8;margin:0 0 8px">The mailbox you pick next will be attached to the Pipeline account</p>
+<p style="font-weight:600;margin:0 0 20px">${escapeHtml(ownerEmail)}</p>
+<p style="color:#9aa6b8;font-size:13px;margin:0 0 24px">Not your account? Close this page — someone may have sent you this link to read your email.</p>
+<a href="${escapeHtml(authUrl)}" style="display:inline-block;background:#2f81f7;color:#fff;text-decoration:none;padding:12px 28px;border-radius:16px;font-weight:600">Continue with ${providerName}</a>
+</div></body></html>`;
+}
+
 export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
   const transport = d.transport ?? fetchTransport;
   const redirectUri = (p: ProviderId) => `${d.publicUrl}/auth/${p}/callback`;
-  const connectBack = (status: ConnectStatus) => `${d.webUrl}?connect=${status}`;
+  const mobileReturnUrl = d.mobileReturnUrl ?? `${d.webUrl}/connect/done`;
+  // Web flows land on the web app; mobile-started flows land on the universal
+  // link the phone app owns, so the system browser hands control back to it.
+  const connectBack = (status: ConnectStatus, returnTo?: "web" | "mobile") =>
+    returnTo === "mobile" ? `${mobileReturnUrl}?connect=${status}` : `${d.webUrl}?connect=${status}`;
 
   app.get("/auth/:provider/start", async (req, reply) => {
     // These are browser navigations, so on any failure send the user back to the
     // app with a reason (a toast) rather than dumping raw JSON in the tab.
     const { provider } = req.params as { provider: string };
-    if (!isProvider(provider)) return reply.redirect(connectBack("error"));
-    const userId = d.resolveUserId(req);
-    if (!userId) return reply.redirect(connectBack("error"));
+    const q = req.query as Record<string, string | undefined>;
+    // A mobile-minted connect token (POST /api/connect-token) identifies the user
+    // when the flow runs in the system browser, which carries no cookie/bearer.
+    const isMobile = typeof q.ct === "string" && q.ct.length > 0;
+    if (!isProvider(provider)) return reply.redirect(connectBack("error", isMobile ? "mobile" : "web"));
+    let userId: string | null;
+    let returnTo: "web" | "mobile";
+    if (isMobile) {
+      const entry = await d.pending.take(`${CONNECT_TOKEN_PREFIX}${q.ct}`); // one-time use
+      userId = entry && entry.provider === provider ? entry.userId : null;
+      returnTo = "mobile";
+    } else {
+      userId = d.resolveUserId(req);
+      returnTo = "web";
+    }
+    if (!userId) return reply.redirect(connectBack("error", returnTo));
     const conf = d.configs[provider];
     if (!conf?.clientId || (PROVIDERS[provider].needsSecret && !conf.clientSecret)) {
-      return reply.redirect(connectBack("unconfigured"));
+      return reply.redirect(connectBack("unconfigured", returnTo));
     }
     const verifier = pkceVerifier();
     const state = randomBytes(16).toString("base64url");
-    await d.pending.set(state, { provider, verifier, userId }, PENDING_TTL_MS);
-    return reply.redirect(buildAuthUrl(provider, conf.clientId, redirectUri(provider), pkceChallenge(verifier), state));
+    await d.pending.set(state, { provider, verifier, userId, returnTo }, PENDING_TTL_MS);
+    const authUrl = buildAuthUrl(provider, conf.clientId, redirectUri(provider), pkceChallenge(verifier), state);
+    if (isMobile) {
+      // A connect token is a transferable bearer nonce: anyone holding the link
+      // could complete consent and the mailbox would attach to the MINTER's
+      // account (connect-CSRF). The web flow is immune (start is bound to the
+      // session cookie); the mobile flow can't be, so before handing off to the
+      // provider we show which Pipeline account will own the mailbox — a wrong
+      // email here is the victim's signal to stop.
+      const owner = await getUser(d.db, userId);
+      return reply.type("text/html; charset=utf-8").send(confirmPage(provider, owner?.email ?? "your account", authUrl));
+    }
+    return reply.redirect(authUrl);
   });
 
   app.get("/auth/:provider/callback", async (req, reply) => {
     const { provider } = req.params as { provider: string };
     const q = req.query as Record<string, string | undefined>;
     const pend = q.state ? await d.pending.take(q.state) : null;
+    const returnTo = pend?.returnTo ?? "web";
 
     if (!isProvider(provider) || !q.code || !pend || pend.provider !== provider) {
-      return reply.redirect(connectBack("error"));
+      return reply.redirect(connectBack("error", returnTo));
     }
     try {
       const conf = d.configs[provider]!;
@@ -90,10 +141,10 @@ export function registerOAuthRoutes(app: FastifyInstance, d: OAuthDeps): void {
         email,
         secret: tokens,
       });
-      return reply.redirect(connectBack("ok"));
+      return reply.redirect(connectBack("ok", returnTo));
     } catch (err) {
       app.log.error(err);
-      return reply.redirect(connectBack("error"));
+      return reply.redirect(connectBack("error", returnTo));
     }
   });
 }

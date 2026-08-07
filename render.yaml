@@ -14,6 +14,12 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      # Dev login is now FAIL-CLOSED under NODE_ENV=production; this deploy's web
+      # app still signs in through it (demo experience), so it stays EXPLICITLY
+      # enabled here. ⚠ REMOVE this key the day Clerk auth goes live on web —
+      # public launch must not ship passwordless login.
+      - key: ENABLE_DEV_LOGIN
+        value: "true"
       - key: DATABASE_URL
         fromDatabase:
           name: pipeline-db
@@ -40,9 +46,43 @@ services:
         sync: false
       - key: MS_CLIENT_ID
         sync: false
-      # Background mailbox re-sync every 5 minutes.
+      # Background mailbox re-sync every 5 minutes. NOTE: once the dedicated
+      # worker below is enabled, REMOVE this key from the web service so exactly
+      # one process syncs.
       - key: SYNC_INTERVAL_MS
         value: "300000"
+
+  # ── Dedicated background worker (sync + push) ──────────────────────────────
+  # 💰 MONEY GATE — deliberately commented out. Render worker services have no
+  # free tier, so enabling this starts a paid plan (~$7+/mo). Per the mobile
+  # plan's spend rule, the owner approves the cost first, then: uncomment this
+  # block, remove SYNC_INTERVAL_MS from the web service above, and set the same
+  # secret env values here.
+  # - type: worker
+  #   name: pipeline-worker
+  #   runtime: node
+  #   plan: starter
+  #   buildCommand: corepack enable && corepack prepare pnpm@10.33.0 --activate && pnpm install --filter "@pipeline/api..." && pnpm --filter "@pipeline/api..." build
+  #   startCommand: pnpm --filter @pipeline/api worker
+  #   envVars:
+  #     - key: NODE_VERSION
+  #       value: "22"
+  #     - key: NODE_ENV
+  #       value: production
+  #     - key: DATABASE_URL
+  #       fromDatabase:
+  #         name: pipeline-db
+  #         property: connectionString
+  #     - key: PIPELINE_MASTER_KEY
+  #       sync: false
+  #     - key: GOOGLE_CLIENT_ID
+  #       sync: false
+  #     - key: GOOGLE_CLIENT_SECRET
+  #       sync: false
+  #     - key: MS_CLIENT_ID
+  #       sync: false
+  #     - key: SYNC_INTERVAL_MS
+  #       value: "300000"
 
 databases:
   - name: pipeline-db

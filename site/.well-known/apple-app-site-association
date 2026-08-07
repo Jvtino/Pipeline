@@ -1,0 +1,12 @@
+{
+  "_comment": "Universal links for the Pipeline mobile app (mail-OAuth return + deep links). Replace TEAMID with the Apple Developer Team ID from Phase 0, then serve this file at https://<domain>/.well-known/apple-app-site-association with Content-Type application/json and NO redirect.",
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.pipeline.mobile",
+        "paths": ["/connect/done", "/application/*"]
+      }
+    ]
+  }
+}

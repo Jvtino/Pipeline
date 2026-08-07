@@ -5,6 +5,8 @@
 // does; a store build (with EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY set) never uses it.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { API_URL } from "../api/client";
+import { resetDemo } from "../demo/store";
+import { DEMO } from "./mode";
 
 export interface DevSession {
   isLoaded: boolean;
@@ -21,6 +23,12 @@ export function DevAuthProvider({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
+    if (DEMO) {
+      // Demo build: no network at all. Start signed OUT so the sign-in screen
+      // is part of the tour; "signing in" is instant and local.
+      setLoaded(true);
+      return;
+    }
     // Probe the cookie session once at startup.
     (async () => {
       try {
@@ -38,6 +46,10 @@ export function DevAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (address: string) => {
+    if (DEMO) {
+      setEmail(address.trim().toLowerCase() || "demo@pipeline.local");
+      return;
+    }
     const res = await fetch(`${API_URL}/auth/dev/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -51,6 +63,11 @@ export function DevAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (DEMO) {
+      resetDemo(); // a fresh tour next time
+      setEmail(null);
+      return;
+    }
     await fetch(`${API_URL}/auth/logout`, { method: "POST" }).catch(() => {});
     setEmail(null);
   }, []);

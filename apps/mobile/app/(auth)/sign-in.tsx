@@ -7,7 +7,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Text, TextInput, View } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { useSignIn } from "@clerk/clerk-expo";
-import { AUTH_MODE } from "../../src/auth/mode";
+import { AUTH_MODE, DEMO } from "../../src/auth/mode";
 import { useDevSession } from "../../src/auth/dev";
 import { Button, Panel, Screen } from "../../src/ui/components";
 import { color, space, text } from "../../src/ui/theme";
@@ -120,6 +120,21 @@ function DevSignIn() {
       setBusy(false);
     }
   };
+
+  if (DEMO) {
+    return (
+      <Shell subtitle="Job applications, from your inbox">
+        <Text style={text.dim}>
+          This is a live demo with a sample inbox — nine fictional applications, ready to explore. Nothing you do here
+          touches real email.
+        </Text>
+        <Button title={busy ? "Opening…" : "Try the demo"} onPress={submit} disabled={busy} />
+        <Text style={text.faint}>
+          In the real app this screen offers email/password plus Google, Microsoft and Apple sign-in.
+        </Text>
+      </Shell>
+    );
+  }
 
   return (
     <Shell subtitle="Development build — dev sign-in">

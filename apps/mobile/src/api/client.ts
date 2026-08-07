@@ -4,6 +4,8 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import type { z } from "zod";
+import { DEMO } from "../auth/mode";
+import { demoHandle } from "../demo/store";
 
 /** API origin. Dev default targets the local API; a real build sets
  *  EXPO_PUBLIC_API_URL (Android emulators reach the host via 10.0.2.2). */
@@ -41,6 +43,15 @@ export function setAuthHeaderProvider(fn: GetAuthHeaders): void {
 }
 
 export async function request<S extends z.ZodTypeAny>(path: string, schema: S, init?: RequestInit): Promise<z.infer<S>> {
+  if (DEMO) {
+    // Demo build: the "server" is the local demo store — same paths, same
+    // envelopes, still schema-validated so demo and prod exercise one contract.
+    // Static import (not dynamic) so single-file demo bundles need no chunk fetch.
+    const r = demoHandle(path, { method: init?.method as string | undefined, body: init?.body as string | undefined });
+    if (r.status === 401) throw new AuthError();
+    if (r.status >= 400) throw new ApiError(r.status, (r.body as { error?: string })?.error ?? `request failed (${r.status})`);
+    return schema.parse(r.body) as z.infer<S>;
+  }
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {

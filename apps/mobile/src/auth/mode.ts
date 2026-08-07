@@ -6,4 +6,9 @@
 //     exists on non-production servers); the session rides the native cookie
 //     jar. Lets the app run end-to-end before the Clerk account exists.
 export const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
-export const AUTH_MODE: "clerk" | "dev" = CLERK_PUBLISHABLE_KEY ? "clerk" : "dev";
+
+/** Demo build: no network at all — the data layer routes to the in-memory demo
+ *  store (src/demo). For try-it-in-a-browser previews and store screenshots. */
+export const DEMO = process.env.EXPO_PUBLIC_DEMO === "1";
+
+export const AUTH_MODE: "clerk" | "dev" = CLERK_PUBLISHABLE_KEY && !DEMO ? "clerk" : "dev";

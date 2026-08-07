@@ -349,10 +349,13 @@ export function Applications(ctx: Ctx) {
 
       {open && (
         <CompanyExpand
-          card={open.card}
+          // live card, not the click-time snapshot — an inline confirm refetches
+          // the board and the open panel's badge must clear with it
+          card={cards.find((c) => c.company === open.card.company) ?? open.card}
           from={open.rect}
           onClose={() => setOpen(null)}
           onOpenApp={(id, rect) => openDetail(id, rect)}
+          onConfirm={ctx.confirmClassification}
         />
       )}
     </>
@@ -363,7 +366,7 @@ export function Applications(ctx: Ctx) {
  *  centered panel listing its positions (via the shared ExpandMorph). Each
  *  position opens the existing detail drawer — this is what ties
  *  Companies ↔ Applications together. */
-function CompanyExpand({ card, from, onClose, onOpenApp }: { card: CompanyCardData; from: DOMRect; onClose: () => void; onOpenApp: (id: string, rect: DOMRect) => void }) {
+function CompanyExpand({ card, from, onClose, onOpenApp, onConfirm }: { card: CompanyCardData; from: DOMRect; onClose: () => void; onOpenApp: (id: string, rect: DOMRect) => void; onConfirm: (id: string) => void }) {
   return (
     <ExpandMorph from={from} height={560} vhMargin={80} zIndex={45} onClosed={onClose}>
       {(beginClose, enter) => (
@@ -393,6 +396,17 @@ function CompanyExpand({ card, from, onClose, onOpenApp }: { card: CompanyCardDa
                   </div>
                   <div style={{ font: "500 11.5px var(--mono)", color: "var(--muted-2)", marginTop: 3 }}>{a.dateLabel} · {a.source}</div>
                 </div>
+                {a.needsReview && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // the row itself opens the detail drawer
+                      onConfirm(a.id);
+                    }}
+                    style={{ padding: "6px 11px", background: "#fff", border: "1px solid rgba(192,138,42,.4)", borderRadius: 8, font: "600 11px var(--sans)", color: "#9a6a16", cursor: "pointer", flex: "0 0 auto", whiteSpace: "nowrap" }}
+                  >
+                    Looks right
+                  </button>
+                )}
                 <StatusPill status={a.status} sm />
                 <span style={{ color: "var(--faint-2)", flex: "0 0 auto" }}>›</span>
               </div>

@@ -12,7 +12,7 @@ import {
   type Database,
   type StatusTransition,
 } from "@pipeline/db";
-import type { PushGateway, PushMessage } from "./push";
+import type { PushGateway, PushMessage, SendOutcome } from "./push";
 
 export interface NotifyDeps {
   db: Database;
@@ -29,58 +29,85 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-/**
- * Deliver one logical notification to every opted-in device.
- *
- * THROWS ONLY WHEN NOTHING WAS SENT (device lookup or the gateway call itself
- * failed) — that's the contract callers rely on to decide whether releasing
- * the dedupe claim is safe. Post-send bookkeeping (disabling tokens the
- * gateway reported dead) is best-effort: the push already went out, so a
- * failure there must never look like a failed delivery and must never cost
- * the user a re-send.
- */
-async function deliver(deps: NotifyDeps, userId: string, kind: "transition" | "interview", make: (token: string) => PushMessage): Promise<void> {
-  const devices = await listActiveDevices(deps.db, userId);
-  const wanted = devices.filter((d) => (kind === "interview" ? d.notifyReminders : d.notifyStatusChanges));
-  if (!wanted.length) return;
-  const outcomes = await deps.gateway.send(wanted.map((d) => make(d.expoPushToken)));
-  for (const o of outcomes) {
-    if (!o.deviceNotRegistered) continue;
-    try {
-      await disableDeviceByToken(deps.db, o.token);
-      deps.log?.(`push: disabled dead token ${o.token.slice(0, 12)}…`);
-    } catch (e) {
-      deps.log?.(`push: couldn't disable dead token (will retry next send): ${errText(e)}`);
-    }
-  }
-}
-
 const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 /**
- * Claim → send → (on a failed send) give the claim back. The ledger is
- * claim-first so send-once holds under concurrent ticks; this pairs it with a
- * release so a transient gateway outage costs a retry, not the notification.
- * Returns false when the claim was already taken (someone else sent it).
+ * Deliver one logical notification, claiming the send-once ledger PER DEVICE.
+ *
+ * Per device is the only honest granularity. The gateway reports success or
+ * failure for each token separately and sends in chunks of 100, so a batch can
+ * come back half-delivered — one claim covering the whole batch would either
+ * strand the devices that missed out (claim stands, nobody retries) or
+ * re-notify the ones that already got it (claim released, everyone re-sent).
+ *
+ * Each outcome decides the fate of its own claim:
+ *   delivered              → claim stands; that device is never told twice
+ *   transient failure      → claim released; a later tick retries THAT device
+ *   device not registered  → claim stands, token disabled (nothing to retry)
+ *
+ * The gateway reports failures rather than throwing, so `ok` is the signal
+ * that matters; a throw is handled too, for gateways that do throw.
  */
 async function claimAndSend(
   deps: NotifyDeps,
   claim: { userId: string; kind: "transition" | "interview"; dedupeKey: string },
   make: (token: string) => PushMessage,
-): Promise<boolean> {
-  const claimed = await recordPushOnce(deps.db, claim);
-  if (!claimed) return false;
-  try {
-    await deliver(deps, claim.userId, claim.kind, make);
-  } catch (e) {
-    // deliver() only throws before anything left the building, so the claim is
-    // safe to hand back — a later tick will try this notification again.
-    deps.log?.(`push: send failed, releasing claim ${claim.dedupeKey}: ${errText(e)}`);
-    await releasePushClaim(deps.db, claim.dedupeKey).catch((releaseError) => {
-      deps.log?.(`push: claim release failed for ${claim.dedupeKey}: ${errText(releaseError)}`);
-    });
+): Promise<void> {
+  const devices = await listActiveDevices(deps.db, claim.userId);
+  const wanted = devices.filter((d) => (claim.kind === "interview" ? d.notifyReminders : d.notifyStatusChanges));
+  if (!wanted.length) return;
+
+  const keyFor = (token: string) => `${claim.dedupeKey}:${token}`;
+  const release = (token: string) =>
+    releasePushClaim(deps.db, keyFor(token)).catch((e) =>
+      deps.log?.(`push: claim release failed for ${token.slice(0, 12)}…: ${errText(e)}`),
+    );
+
+  // Claim first (that's what makes send-once hold under overlapping ticks),
+  // then send only to the devices whose claim we won.
+  const fresh: typeof wanted = [];
+  for (const d of wanted) {
+    if (await recordPushOnce(deps.db, { userId: claim.userId, kind: claim.kind, dedupeKey: keyFor(d.expoPushToken) })) {
+      fresh.push(d);
+    }
   }
-  return true;
+  if (!fresh.length) return; // every device already has this one
+
+  let outcomes: SendOutcome[];
+  try {
+    outcomes = await deps.gateway.send(fresh.map((d) => make(d.expoPushToken)));
+  } catch (e) {
+    // Nothing is known to have landed — hand every claim back.
+    deps.log?.(`push: send threw, releasing ${fresh.length} claim(s): ${errText(e)}`);
+    for (const d of fresh) await release(d.expoPushToken);
+    return;
+  }
+
+  for (const o of outcomes) {
+    if (o.deviceNotRegistered) {
+      try {
+        await disableDeviceByToken(deps.db, o.token);
+        deps.log?.(`push: disabled dead token ${o.token.slice(0, 12)}…`);
+      } catch (e) {
+        deps.log?.(`push: couldn't disable dead token (will retry next send): ${errText(e)}`);
+      }
+    } else if (!o.ok) {
+      // Transport blip, rate limit, oversized payload — nothing landed on this
+      // device, so let a later tick try it again.
+      deps.log?.(`push: not delivered to ${o.token.slice(0, 12)}… — releasing for retry`);
+      await release(o.token);
+    }
+  }
+
+  // A gateway that answered for fewer tokens than it was given leaves those
+  // devices un-notified; releasing their claims keeps them retryable.
+  const reported = new Set(outcomes.map((o) => o.token));
+  for (const d of fresh) {
+    if (!reported.has(d.expoPushToken)) {
+      deps.log?.(`push: no outcome reported for ${d.expoPushToken.slice(0, 12)}… — releasing for retry`);
+      await release(d.expoPushToken);
+    }
+  }
 }
 
 /**

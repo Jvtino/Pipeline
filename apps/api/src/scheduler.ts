@@ -14,8 +14,9 @@ export function startSyncScheduler(
     if (running) return; // skip if the previous tick is still going
     running = true;
     try {
-      const r = await syncAllUsers(deps);
-      log(`sync scheduler: synced ${r.users} user(s)`);
+      const r = await syncAllUsers({ ...deps, log });
+      const failed = r.summaries.filter((s) => s.error).length;
+      log(`sync scheduler: synced ${r.users} user(s)${failed ? ` (${failed} failed — see above)` : ""}`);
     } catch (e) {
       log(`sync scheduler error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {

@@ -13,7 +13,7 @@ import { useConnectToken, useDeleteAccount, useUpdateDevice } from "../../../src
 import { currentPushToken } from "../../../src/notifications";
 import { hapticSuccess, hapticWarn } from "../../../src/ui/feedback";
 import { shareApplicationsCsv } from "../../../src/lib/export";
-import { API_URL } from "../../../src/api/client";
+import { API_URL, AuthError } from "../../../src/api/client";
 import { AUTH_MODE } from "../../../src/auth/mode";
 import { useSession } from "../../../src/auth/session";
 import { Button, Label, Panel, Screen } from "../../../src/ui/components";
@@ -54,8 +54,13 @@ export default function SettingsScreen() {
     try {
       await shareApplicationsCsv();
       hapticSuccess();
-    } catch {
-      setExportError("Couldn't build your export — check your connection and try again.");
+    } catch (e) {
+      // an expired session is not a network problem — say which it is
+      setExportError(
+        e instanceof AuthError
+          ? "Your session ended — sign in again to export."
+          : "Couldn't build your export — check your connection and try again.",
+      );
     } finally {
       setExporting(false);
     }

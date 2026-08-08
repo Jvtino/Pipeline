@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseThread, safeParseThread, statusSchema, STATUS_RANK, STATUSES, applicationSchema, boardFromApplications, boardSchema, pageBoard } from "./index";
+import { parseThread, safeParseThread, statusSchema, STATUS_RANK, STATUSES, applicationSchema, boardFromApplications, boardSchema, pageBoard, csvCell } from "./index";
 import type { Application, Board } from "./index";
 
 describe("@pipeline/contracts", () => {
@@ -101,5 +101,23 @@ describe("pageBoard", () => {
     expect(pageOf(forward, 0)).toBe(pageOf(reversed, 0));
     expect(pageOf(forward, 1)).toBe(pageOf(reversed, 1));
     expect(new Set([pageOf(forward, 0), pageOf(forward, 1)]).size).toBe(2);
+  });
+});
+
+describe("csvCell — the escaping every surface shares", () => {
+  it("neutralizes formula-injection prefixes (email content reaches spreadsheets)", () => {
+    // prefixed AND fully quoted — the value contains quotes of its own
+    expect(csvCell('=HYPERLINK("https://evil.example")')).toBe('"\'=HYPERLINK(""https://evil.example"")"');
+    expect(csvCell("+SUM(1,2)")).toBe('"\'+SUM(1,2)"'); // quoted too: it contains a comma
+    expect(csvCell("-2")).toBe("'-2");
+    expect(csvCell("@cmd")).toBe("'@cmd");
+  });
+
+  it("quotes per RFC 4180 and leaves ordinary text alone", () => {
+    expect(csvCell("Acme Robotics")).toBe("Acme Robotics");
+    expect(csvCell("Data, Analyst")).toBe('"Data, Analyst"');
+    expect(csvCell('he said "hi"')).toBe('"he said ""hi"""');
+    expect(csvCell(null)).toBe("");
+    expect(csvCell(undefined)).toBe("");
   });
 });

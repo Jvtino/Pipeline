@@ -22,6 +22,8 @@ const defaultSourceFactory: SourceFactory = (p, token, transport) =>
 export interface SyncSummary {
   connections: number;
   results: { email: string; provider: string; result?: SyncResult; error?: string }[];
+  /** A whole-user failure, outside any single mailbox — no provider to blame. */
+  error?: string;
 }
 
 export interface SyncDeps {
@@ -35,6 +37,9 @@ export interface SyncDeps {
    *  Never invoked for backfill rounds — a first sync would "transition" every
    *  record at once and flood the phone. */
   onTransitions?: (userId: string, transitions: StatusTransition[]) => void | Promise<void>;
+  /** Operator log. Isolating a per-user failure keeps the tick alive, but a
+   *  swallowed error nobody can see is its own bug — this is how it surfaces. */
+  log?: (msg: string) => void;
 }
 
 export async function syncAllConnections(deps: SyncDeps): Promise<SyncSummary> {
@@ -97,11 +102,17 @@ export async function syncAllUsers(deps: Omit<SyncDeps, "userId">): Promise<{ us
   for (const userId of userIds) {
     // Per-user isolation: syncAllConnections already guards each mailbox, but a
     // failure OUTSIDE that loop (connection lookup, the demo-data cleanup) would
-    // otherwise abort every remaining user's sync for this tick.
+    // otherwise abort every remaining user's sync for this tick. It is LOGGED,
+    // not just captured — the scheduler doesn't read summaries, so a user
+    // failing every tick would otherwise be completely silent.
     try {
       summaries.push(await syncAllConnections({ ...deps, userId }));
     } catch (e) {
-      summaries.push({ connections: 0, results: [{ email: "", provider: "google", error: e instanceof Error ? e.message : String(e) }] });
+      const error = e instanceof Error ? e.message : String(e);
+      deps.log?.(`sync: user ${userId} failed outside any mailbox — ${error}`);
+      // No provider is attributable here (the failure is outside the provider
+      // loop), so the summary says so rather than naming an innocent one.
+      summaries.push({ connections: 0, results: [], error });
     }
   }
   return { users: userIds.length, summaries };

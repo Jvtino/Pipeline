@@ -273,4 +273,4 @@ export function boardFromApplications(apps: Application[], source: string): Boar
   return { groups, counts, source };
 }
 
-export { toCsv } from "./export";
+export { toCsv, csvCell } from "./export.js"; // .js specifier: the emitted ESM must resolve under bare Node too

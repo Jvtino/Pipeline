@@ -11,6 +11,9 @@ import type { Overlay, Plan, Screen, OverlaySettings, ViewState, AppMeta } from 
 import type { UiStatus } from "./lib/status";
 import { STATUS } from "./lib/status";
 import type { Status as ApiStatus } from "@pipeline/contracts";
+// Deep import on purpose: the CSV helpers are a zero-dependency module, so the
+// browser bundle gets the shared escaping WITHOUT dragging zod along for it.
+import { csvCell } from "@pipeline/contracts/export";
 import { ensureSession, getMe, getBoard, getDocuments, runSync, resync, getConnections, deleteConnection, patchApplication, createApplication, confirmReview, getMetaFeatures, postJson, type Mailbox, type MetaFeatures, type SyncedDoc, type SyncSummary } from "./api";
 import { loadOverlay, saveOverlay, defaultOverlay } from "./lib/overlay";
 import { flattenBoard, buildNotifications } from "./lib/derive";
@@ -414,10 +417,44 @@ export function App() {
   }, [setOverlay, flash]);
 
   const exportCsv = useCallback(() => {
-    const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const header = ["Company", "Role", "Status", "Source", "Applied", "Last activity", "Next step"];
-    const lines = [header, ...apps.map((a) => [a.company, a.role, STATUS[a.status].label, a.source, a.appliedIso ?? "", a.lastActivityIso ?? "", a.nextStep])];
-    const csv = lines.map((r) => r.map((c) => cell(String(c))).join(",")).join("\n");
+    // Escaping comes from @pipeline/contracts — the API route and the phone use
+    // the same cell(), so a crafted sender name ("=HYPERLINK(…)") can't become
+    // a live formula in anyone's spreadsheet. The COLUMNS deliberately differ:
+    // this export covers what the web user actually sees, which includes
+    // browser-only manual rows and the 7-status presentation the server
+    // doesn't model, plus the extracted facts the other exports carry.
+    const header = [
+      "Company",
+      "Role",
+      "Status",
+      "Source",
+      "Applied",
+      "Last activity",
+      "Next step",
+      "Interview (as written)",
+      "Location",
+      "Compensation",
+      "Recruiter",
+      "Recruiter email",
+    ];
+    const lines = [
+      header,
+      ...apps.map((a) => [
+        a.company,
+        a.role,
+        STATUS[a.status].label,
+        a.source,
+        a.appliedIso ?? "",
+        a.lastActivityIso ?? "",
+        a.nextStep,
+        a.enrichment?.interviewDateTime ?? "",
+        a.enrichment?.location ?? "",
+        a.enrichment?.compensation ?? "",
+        [a.enrichment?.recruiterName, a.enrichment?.recruiterTitle].filter(Boolean).join(" · "),
+        a.enrichment?.recruiterEmail ?? "",
+      ]),
+    ];
+    const csv = lines.map((r) => r.map((c) => csvCell(String(c))).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;

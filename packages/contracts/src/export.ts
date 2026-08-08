@@ -10,7 +10,13 @@ import type { Application } from "./index";
    what a user downloads and what the demo shows are byte-identical.
    ========================================================================== */
 
-function cell(value: string | null | undefined): string {
+/**
+ * One CSV cell, safe to hand a spreadsheet. Exported because surfaces differ in
+ * WHICH columns they export (the web adds its overlay-only rows and
+ * presentation statuses) but must never differ in HOW a value is escaped —
+ * that's the part with a security consequence.
+ */
+export function csvCell(value: string | null | undefined): string {
   let v = String(value ?? "");
   // Spreadsheet formula-injection guard: company/role/snippet come from EMAIL
   // CONTENT — a sender could craft "=HYPERLINK(...)" and Excel/Sheets would
@@ -18,6 +24,8 @@ function cell(value: string | null | undefined): string {
   if (/^[=+\-@\t\r]/.test(v)) v = `'${v}`;
   return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
+
+const cell = csvCell;
 
 export function toCsv(apps: Application[]): string {
   const header = [
